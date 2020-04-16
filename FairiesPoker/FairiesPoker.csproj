@@ -283,7 +283,9 @@
     <None Include="Resources\prf.jpg" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="bin\Debug\UI_TB\btn2.png" />
     <Content Include="game.ico" />
+    <None Include="Resources\btn2.bmp" />
     <None Include="Resources\backIMG.png" />
     <None Include="Resources\Pla.jpg" />
     <None Include="Resources\ChatHall1.jpg" />
