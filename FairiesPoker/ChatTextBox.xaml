@@ -1,0 +1,19 @@
+﻿<UserControl x:Class="FairiesPoker.ChatTextBox"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:FairiesPoker"
+             mc:Ignorable="d" Width="414" Height="378">
+    <Grid>
+        <RichTextBox x:Name="richTextBox" HorizontalAlignment="Left" Height="378" Margin="0,0,0,-0.4" VerticalAlignment="Top" Width="414" Opacity="0.5
+                     " BorderBrush="#FFFFA200" FontWeight="Bold" FontStyle="Italic" FontSize="16" IsReadOnly="True" BorderThickness="3" Background="#FF747474">
+            <FlowDocument>
+                <Paragraph>
+                    <Run Text=""/>
+                </Paragraph>
+            </FlowDocument>
+        </RichTextBox>
+
+    </Grid>
+</UserControl>
