@@ -242,7 +242,7 @@ namespace FPSever_Program
                     if (first)
                     {
                         first = false;
-                        if (MessageBox.Show("服务器确认运行后端口号和IP将不能更改，您确认继续嘛？", "警告", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+                        if (MessageBox.Show("服务器确认运行后端口号和IP将不能更改，您确认继续？", "警告", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
                         {
                             IPEndPoint data = new IPEndPoint(IPAddress.Any, Convert.ToInt32(TXTPort.Text));
                             socketData.Bind(data);
