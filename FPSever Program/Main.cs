@@ -216,8 +216,8 @@ namespace FPSever_Program
                 Thread.Sleep(10000);
             })
             { IsBackground = true }.Start();
-            Server = new UdpClient(13588);
-            endPoint = new IPEndPoint(IPAddress.Any, 13588);
+            Server = new UdpClient(12588);
+            endPoint = new IPEndPoint(IPAddress.Any, 12588);
             db = new Sqlconn();
             th1 = new Thread(UDPServer);
             th1.IsBackground = true;

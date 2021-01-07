@@ -72,6 +72,7 @@ namespace FairiesPoker
 
         private void button1_Click(object sender, EventArgs e)
         {
+            button1.Enabled = false;
             if (textBox1.Text==welcomecode)
             {
                 button2.Enabled = true;
@@ -85,34 +86,14 @@ namespace FairiesPoker
 
         private void button2_Click(object sender, EventArgs e)
         {
-            nm = textBox2.Text;
-            SqlCommand com = new SqlCommand("select * from UserT where UserName=@Name");
-            com.Parameters.Add("Name", SqlDbType.NVarChar);
-            com.Parameters["Name"].Value = nm;
-            SqlDataReader reader = com.ExecuteReader();
-            if (reader.HasRows)
-            {
-                MessageBox.Show("该用户名已被占用，请换一个试试呢","Warning",MessageBoxButtons.OK,MessageBoxIcon.Warning);
-            }
-            else
-            {
-                button2.Enabled = false;
-                button3.Enabled = true;
-            }
+            button2.Enabled = false;
+            button3.Enabled = true;
+            registervalues.Add("UserName", textBox2.Text);
         }
 
         private void Register_Shown(object sender, EventArgs e)
         {
-            try
-            {
-                connection = new SqlConnection("Server=AMD-R9-3900x;Database=FPServerDB;User id=sa;PWD=CYJjzr2014*");
-                connection.Open();
-            }
-            catch (Exception)
-            {
-                MessageBox.Show("未能连接到数据库服务器！","Error",MessageBoxButtons.OK,MessageBoxIcon.Error);
-                this.Close();
-            }
+            registervalues.Add("Type", "Register");
         }
 
         private void button3_Click(object sender, EventArgs e)
@@ -126,22 +107,12 @@ namespace FairiesPoker
                 // 将得到的字符串使用十六进制类型格式。格式后的字符是小写的字母，如果使用大写（X）则格式后的字符是大写字符
                 pwd = pwd + encryptname[i].ToString("X");
             }
-            socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            ip = IPAddress.Parse(con.IPAddress);
-            endPoint = new IPEndPoint(ip, 8088);
-            Dictionary<string, string> Reg = new Dictionary<string, string>();
-            Reg.Add("Type","Register");
-            Reg.Add("UserName", nm);
-            Reg.Add("PwdMD5", pwd);
-            string send = JsonConvert.SerializeObject(Reg);
-            byte[] newsend = Encoding.UTF8.GetBytes(send);
-            socket.SendTo(newsend, endPoint);
             textBox3.Enabled = false;
             button5.Enabled = true;
             button6.Enabled = true;
             textBox4.Enabled = true;
             checkBox1.Enabled = true;
-            Thread.Sleep(300);
+            registervalues.Add("PwdMD5", pwd);
         }
 
         private void button6_Click(object sender, EventArgs e)
@@ -150,13 +121,7 @@ namespace FairiesPoker
             textBox4.Enabled = false;
             if (standard)
             {
-                SqlCommand com = new SqlCommand("update UserT set Picture = @ImageList where UserName = @Uname", connection);
-                com.Parameters.Add("ImageList", SqlDbType.Image);
-                com.Parameters["ImageList"].Value = pictureBox1.BackgroundImage;
-                com.Parameters.Add("Uname", SqlDbType.NVarChar);
-                com.Parameters["Uname"].Value = textBox2.Text;
-                com.ExecuteNonQuery();
-                connection.Close();
+
             }
             else
             {
@@ -165,26 +130,26 @@ namespace FairiesPoker
                 byte[] imagebytes = new byte[fs.Length];
                 BinaryReader br = new BinaryReader(fs);
                 imagebytes = br.ReadBytes(Convert.ToInt32(fs.Length));
-                SqlCommand com = new SqlCommand("update UserT set Picture = @ImageList where UserName = @Uname", connection);
-                com.Parameters.Add("ImageList", SqlDbType.Image);
-                com.Parameters["ImageList"].Value = imagebytes;
-                com.Parameters.Add("Uname", SqlDbType.NVarChar);
-                com.Parameters["Uname"].Value = textBox2.Text;
-                com.ExecuteNonQuery();
-                connection.Close();
             }
+            button4.Enabled = true;
         }
 
         private void button4_Click(object sender, EventArgs e)
         {
             try
             {
-                MessageBox.Show("注册成功！\r\n"+"用户名："+textBox2.Text+"\r\n请牢记您的密码！","Congratulations!",MessageBoxButtons.OK,MessageBoxIcon.Information);
+                socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                ip = IPAddress.Parse(con.IPAddress);
+                IPEndPoint endPoint = new IPEndPoint(ip, con.Port);
+                string send = JsonConvert.SerializeObject(registervalues);
+                byte[] newsend = Encoding.UTF8.GetBytes(send);
+                socket.SendTo(newsend, endPoint);
+                MessageBox.Show("注册成功！\r\n" + "用户名：" + textBox2.Text + "\r\n请牢记您的密码！", "Congratulations!", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 this.Close();
             }
-            catch 
+            catch (SocketException)
             {
-
+                MessageBox.Show("错误：未能连接上服务器！","Error",MessageBoxButtons.OK,MessageBoxIcon.Error);
             }
         }
         private void Register_Load(object sender, EventArgs e)
