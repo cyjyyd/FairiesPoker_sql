@@ -4,81 +4,52 @@
         <name>Nancy.Hosting.Self</name>
     </assembly>
     <members>
-        <member name="T:Nancy.Hosting.Self.IgnoredHeaders">
+        <member name="T:Nancy.Hosting.Self.AutomaticUrlReservationCreationFailureException">
             <summary>
-                A helper class that checks for a header against a list of headers that should be ignored
-                when populating the headers of an <see cref="T:System.Net.HttpListenerResponse"/> object.
+            Exception for when automatic address reservation creation fails.
+            Provides the user with manual instructions.
             </summary>
         </member>
-        <member name="M:Nancy.Hosting.Self.IgnoredHeaders.IsIgnored(System.String)">
+        <member name="P:Nancy.Hosting.Self.AutomaticUrlReservationCreationFailureException.Message">
             <summary>
-                Determines if a header is ignored when populating the headers of an
-                <see cref="T:System.Net.HttpListenerResponse"/> object.
+            Gets a message that describes the current exception.
             </summary>
-            <param name="headerName">The name of the header.</param>
-            <returns><c>true</c> if the header is ignored; otherwise, <c>false</c>.</returns>
-        </member>
-        <member name="T:Nancy.Hosting.Self.UrlReservations">
-            <summary>
-            Configuration for automatic url reservation creation
-            </summary>
-        </member>
-        <member name="P:Nancy.Hosting.Self.UrlReservations.CreateAutomatically">
-            <summary>
-            Gets or sets a value indicating whether url reservations
-            are automatically created when necessary.
-            Defaults to false.
-            </summary>
-        </member>
-        <member name="P:Nancy.Hosting.Self.UrlReservations.User">
-            <summary>
-            Gets or sets a value for the user to use to create the url reservations for.
-            Defaults to the "Everyone" group.
-            </summary>
-        </member>
-        <member name="T:Nancy.Hosting.Self.UacHelper">
-            <summary>
-            Helpers for UAC
-            </summary>
-        </member>
-        <member name="M:Nancy.Hosting.Self.UacHelper.RunElevated(System.String,System.String)">
-            <summary>
-            Run an executable elevated
-            </summary>
-            <param name="file">File to execute</param>
-            <param name="args">Arguments to pass to the executable</param>
-            <returns>True if successful, false otherwise</returns>
+            <returns>
+            The error message that explains the reason for the exception, or an empty string("").
+            </returns>
+            <filterpriority>1</filterpriority>
         </member>
         <member name="T:Nancy.Hosting.Self.HostConfiguration">
             <summary>
-            Host configuration for the self host
+            Host configuration for the self host.
             </summary>
         </member>
         <member name="P:Nancy.Hosting.Self.HostConfiguration.RewriteLocalhost">
             <summary>
-            Gets or sets a property that determines if localhost uris are 
-            rewritten to htp://+:port/ style uris to allow for listening on 
-            all ports, but requiring either a url reservation, or admin
-            access
+            Gets or sets a property that determines if localhost URIs are 
+            rewritten to http://+:port/ style URIs to allow for listening on 
+            all IP addresses, but requiring either a URL reservation, or admin
+            access.
             Defaults to true.
             </summary>
         </member>
         <member name="P:Nancy.Hosting.Self.HostConfiguration.UrlReservations">
             <summary>
-            Configuration around automatically creating url reservations
+            Configuration around automatically creating URL reservations.
             </summary>
         </member>
         <member name="P:Nancy.Hosting.Self.HostConfiguration.AllowChunkedEncoding">
             <summary>
             Gets or sets a property that determines if Transfer-Encoding: Chunked is allowed
-            for the response instead of Content-Length (default: true).
+            for the response instead of Content-Length.
+            Defaults to true.
             </summary>
         </member>
         <member name="P:Nancy.Hosting.Self.HostConfiguration.UnhandledExceptionCallback">
             <summary>
             Gets or sets a property that provides a callback to be called
-            if there's an unhandled exception in the self host.
-            Note: this will *not* be called for normal nancy Exceptions
+            if there is an unhandled exception in the self host.
+            Note: this will *not* be called for normal Nancy exceptions
             that are handled by the Nancy handlers.
             Defaults to writing to debug out.
             </summary>
@@ -94,11 +65,52 @@
         </member>
         <member name="P:Nancy.Hosting.Self.HostConfiguration.AllowAuthorityFallback">
             <summary>
-            Gets or sets a property determining if base uri matching can fall back to just
-            using Authority (Schema + Host + Port) as base uri if it cannot match anything in
+            Gets or sets a property determining if base URI matching can fall back to just
+            using Authority (Schema + Host + Port) as base URI if it cannot match anything in
             the known list. This should only be set to True if you have issues with port forwarding
             (e.g. on Azure).
+            Defaults to false.
             </summary>
+        </member>
+        <member name="P:Nancy.Hosting.Self.HostConfiguration.MaximumConnectionCount">
+            <summary>
+            Gets or sets a property determining how many total connections the NancyHost can maintain simultaneously.
+            Higher values mean more connections can be maintained at a slower average response times; while fewer
+            connections will be rejected.
+            Lower values will result in fewer conections, yet will be maintained at a faster average response time.
+            Defaults to the approximate number of processor threads.
+            </summary>
+        </member>
+        <member name="P:Nancy.Hosting.Self.HostConfiguration.ProcessorThreadCount">
+            <summary>
+            Gets approximate processor thread count by halfing the Logical Core count to 
+            account for hyper-threading.
+            </summary>
+        </member>
+        <member name="M:Nancy.Hosting.Self.HostConfiguration.#ctor">
+            <summary>
+            Initializes the default configuration.
+            MaximumConnectionCount by default is half of the Logical Core count.
+            </summary>
+            <remarks>
+            If the system running NancyHost is not using hyper-threading you may want to consider
+            supplying your own values for MaximumConnectionCount as the default assumes 
+            hyperthreading is being utilized.
+            </remarks>
+        </member>
+        <member name="T:Nancy.Hosting.Self.IgnoredHeaders">
+            <summary>
+                A helper class that checks for a header against a list of headers that should be ignored
+                when populating the headers of an <see cref="T:System.Net.HttpListenerResponse"/> object.
+            </summary>
+        </member>
+        <member name="M:Nancy.Hosting.Self.IgnoredHeaders.IsIgnored(System.String)">
+            <summary>
+                Determines if a header is ignored when populating the headers of an
+                <see cref="T:System.Net.HttpListenerResponse"/> object.
+            </summary>
+            <param name="headerName">The name of the header.</param>
+            <returns><c>true</c> if the header is ignored; otherwise, <c>false</c>.</returns>
         </member>
         <member name="T:Nancy.Hosting.Self.NancyHost">
             <summary>
@@ -192,24 +204,40 @@
             <param name="user">User to add the reservation for</param>
             <returns>True if successful, false otherwise.</returns>
         </member>
-        <member name="T:Nancy.Hosting.Self.AutomaticUrlReservationCreationFailureException">
+        <member name="T:Nancy.Hosting.Self.UacHelper">
             <summary>
-            Exception for when automatic address reservation creation fails.
-            Provides the user with manual instructions.
+            Helpers for UAC
             </summary>
         </member>
-        <member name="P:Nancy.Hosting.Self.AutomaticUrlReservationCreationFailureException.Message">
+        <member name="M:Nancy.Hosting.Self.UacHelper.RunElevated(System.String,System.String)">
             <summary>
-            Gets a message that describes the current exception.
+            Run an executable elevated
             </summary>
-            <returns>
-            The error message that explains the reason for the exception, or an empty string("").
-            </returns>
-            <filterpriority>1</filterpriority>
+            <param name="file">File to execute</param>
+            <param name="args">Arguments to pass to the executable</param>
+            <returns>True if successful, false otherwise</returns>
         </member>
         <member name="T:Nancy.Hosting.Self.UriExtensions">
             <summary>
             Extension methods for working with <see cref="T:System.Uri"/> instances.
+            </summary>
+        </member>
+        <member name="T:Nancy.Hosting.Self.UrlReservations">
+            <summary>
+            Configuration for automatic url reservation creation
+            </summary>
+        </member>
+        <member name="P:Nancy.Hosting.Self.UrlReservations.CreateAutomatically">
+            <summary>
+            Gets or sets a value indicating whether url reservations
+            are automatically created when necessary.
+            Defaults to false.
+            </summary>
+        </member>
+        <member name="P:Nancy.Hosting.Self.UrlReservations.User">
+            <summary>
+            Gets or sets a value for the user to use to create the url reservations for.
+            Defaults to the "Everyone" group.
             </summary>
         </member>
     </members>

@@ -158,7 +158,7 @@ namespace FairiesPoker
                 {
                     RoomID = roomidgen();
                 }
-                string sqlstr = string.Format("insert into RoomT values({0},'{1}',null,null,{2},null,null,1,0,0,null,null,null,null)", RoomID, u.UserName, UID);//TO DO
+                string sqlstr = string.Format("insert into RoomT values({0},'{1}',null,null,{2},null,null,1,0,0,0)", RoomID, u.UserName, UID);//TO DO
                 db.getsqlcom(sqlstr);
 
             }
@@ -500,5 +500,10 @@ namespace FairiesPoker
             label.Text = state;
         }
         #endregion
+
+        private void button7_Click(object sender, EventArgs e)
+        {
+
+        }
     }
 }

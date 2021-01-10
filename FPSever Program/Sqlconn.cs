@@ -10,7 +10,7 @@ namespace FPSever_Program
 {
     class Sqlconn
     {
-        public static string Str_sqlcon = "Server=AMD-R9-3900x;Database=FPServerDB;User id=sa;PWD=CYJjzr2014*";
+        public static string Str_sqlcon = "Server=AMD_Ryzen;Database=FPServerDB;User id=sa;PWD=CYJjzr2014*";
         public static SqlConnection Conn;
         public static SqlConnection Getcon()
         {

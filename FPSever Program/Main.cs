@@ -370,7 +370,7 @@ namespace FPSever_Program
                     int coin = 0;
                     int exp = 0;
                     int level = Judgelevel(exp);
-                    string sqlstr = String.Format("insert into UserT values ({0},'{1}','{2}','{3}',null,0,{4},{5},{6},0,null,null,null,null);",id,Uname,Pwd,Regtime,exp,coin,level);
+                    string sqlstr = String.Format("insert into UserT values ({0},'{1}','{2}','{3}',{4},{5},{6},null,0);",id,Uname,Pwd,Regtime,exp,coin,level);
                     db.getsqlcom(sqlstr);
                 }
                 else if (data["Type"] == "Login")
@@ -497,7 +497,7 @@ namespace FPSever_Program
                 {
                     if (data.ContainsKey("ToUser"))
                     {
-                        string sqlstr = string.Format("insert into ChatT values({0},{1},{2},'{3}','{4}','{5}',null,null,null,null)", NameID[data["UserName"]], NameID[data["TOUser"]], data["RoomID"], DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), data["Chat"], data["Bgroup"]);
+                        string sqlstr = string.Format("insert into ChatT values({0},{1},{2},'{3}','{4}','{5}')", NameID[data["UserName"]], NameID[data["TOUser"]], data["RoomID"], DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), data["Chat"], data["Bgroup"]);
                         db.getsqlcom(sqlstr);
                         Dictionary<string, string> send = new Dictionary<string, string>();
                         send.Add("Type", "Message2");
@@ -512,7 +512,7 @@ namespace FPSever_Program
                     }
                     else
                     {
-                        string sqlstr = string.Format("insert into ChatT values({0},{1},{2},'{3}','{4}','{5}',null,null,null,null)", NameID[data["UserName"]], "null", data["RoomID"], DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), data["Chat"], data["Bgroup"]);
+                        string sqlstr = string.Format("insert into ChatT values({0},{1},{2},'{3}','{4}','{5}')", NameID[data["UserName"]], "null", data["RoomID"], DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), data["Chat"], data["Bgroup"]);
                         db.getsqlcom(sqlstr);
                         Dictionary<string, string> send = new Dictionary<string, string>();
                         send.Add("Type", "Message1");
