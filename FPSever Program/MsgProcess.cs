@@ -30,9 +30,15 @@ namespace FPSever_Program
         /// <param name="buffer">要发送的字节数组</param>
         public static void SendAllClient(ComboBox comboBoxClient, Dictionary<string, Socket> dicSocket, byte[] buffer)
         {
-            for (int i = 0; i < comboBoxClient.Items.Count; i++)
+            try
             {
-                dicSocket[comboBoxClient.Items[i].ToString()].Send(buffer);
+                for (int i = 0; i < comboBoxClient.Items.Count; i++)
+                {
+                    dicSocket[comboBoxClient.Items[i].ToString()].Send(buffer);
+                }
+            }
+            catch
+            {
             }
         }
 

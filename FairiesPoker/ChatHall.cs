@@ -10,9 +10,13 @@ using System.Threading;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using System.Data.SqlClient;
+using Nancy.Json;
+using FairiesPoker;
+
 public delegate void FangJianWeituo1(string name, int level, int status, int exp, bool visible, int cst);
 public delegate void IconWeituo(Image img, PictureBox pic, bool stat);
 public delegate void StateWeituo(Label label,string state);
+public delegate void StrWeituo(string str);
 
 namespace FairiesPoker
 {
@@ -24,6 +28,8 @@ namespace FairiesPoker
         [DllImport("kernel32")]//返回取得字符串缓冲区的长度
         private static extern long GetPrivateProfileString(string section, string key, string def, StringBuilder retVal, int size, string filePath);
         Dictionary<string, string> userdata;
+        Dictionary<string, string> chathalldata;
+        Dictionary<int, string> RoomJsonData;
         string iniFilePath = Application.StartupPath + "\\config.ini";
         string UserName;
         string roomposition;
@@ -36,11 +42,13 @@ namespace FairiesPoker
         int UID;
         bool inroom;
         bool isconnected;
+        bool isfirstconfig=true;
         private FangJianWeituo1 RoomUI;
         private IconWeituo IconUI;
         private StateWeituo stateUI;
-        Sqlconn db = new Sqlconn();
+        private StrWeituo Strapp;
         Socket SocketClient;
+        Socket SocketSend;
         IPAddress ip;
         IPEndPoint ep;
         Thread th1;
@@ -92,7 +100,9 @@ namespace FairiesPoker
             RoomUI = new FangJianWeituo1(RoomUISet);
             IconUI = new IconWeituo(Iconset);
             stateUI = new StateWeituo(Statset);
-
+            Strapp = new StrWeituo(ShowChatMsg);
+            comboBox1.SelectedIndex = 0;
+            Control.CheckForIllegalCrossThreadCalls = false;
         }
         private void ChatHall_Load(object sender, EventArgs e)
         {
@@ -125,14 +135,54 @@ namespace FairiesPoker
             else
             {
                 logout.Add("RoomPosition", "Null");
+                logout.Add("UserName", u.UserName);
             }
             byte[] send = mp.SendCon(logout);
             SocketClient.Send(send);
+            SocketClient.Disconnect(false);
+            SocketClient.Dispose();
         }
 
         private void button11_Click(object sender, EventArgs e)
         {
-
+            try
+            {
+                Dictionary<string, string> chat = new Dictionary<string, string>();
+                if (comboBox1.SelectedItem.ToString() == "所有人")
+                {
+                    chat.Add("Type", "Message");
+                    chat.Add("UserName", u.UserName);
+                    chat.Add("RoomID", "1");
+                    chat.Add("Chat", textBox1.Text);
+                    chat.Add("Bgroup", "EveryOne");
+                    byte[] send = mp.SendCon(chat);
+                    SocketClient.Send(send);
+                }
+                else if (comboBox1.SelectedItem.ToString() == "房间频道")
+                {
+                    chat.Add("Type", "Message");
+                    chat.Add("UserName", u.UserName);
+                    chat.Add("RoomID", Convert.ToString(RoomID));
+                    chat.Add("Chat", textBox1.Text);
+                    chat.Add("Bgroup", "Room");
+                    byte[] send = mp.SendCon(chat);
+                    SocketClient.Send(send);
+                }
+                else
+                {
+                    chat.Add("Type", "Message");
+                    chat.Add("UserName", u.UserName);
+                    chat.Add("TOUser", comboBox1.SelectedItem.ToString());
+                    chat.Add("RoomID", "0");
+                    chat.Add("Chat", textBox1.Text);
+                    chat.Add("Bgroup", "Private");
+                    byte[] send = mp.SendCon(chat);
+                    SocketClient.Send(send);
+                }
+            }
+            catch
+            {
+            }
         }
 
         private void button8_Click(object sender, EventArgs e)
@@ -152,15 +202,10 @@ namespace FairiesPoker
         {
             if (button5.Text == "开房间")
             {
+                Dictionary<string, string> temp = new Dictionary<string, string>();
+                temp.Add("Type","NewRoom");
+                temp.Add("UserName", u.UserName);
                 button5.Text = "邀请";
-                RoomID = roomidgen();
-                while (roomidcheck(RoomID))
-                {
-                    RoomID = roomidgen();
-                }
-                string sqlstr = string.Format("insert into RoomT values({0},'{1}',null,null,{2},null,null,1,0,0,0)", RoomID, u.UserName, UID);//TO DO
-                db.getsqlcom(sqlstr);
-
             }
             else if (button5.Text == "邀请")
             {
@@ -216,46 +261,7 @@ namespace FairiesPoker
 
         private void timer2_Tick(object sender, EventArgs e)
         {
-            toolStripStatusLabel1.Text = "正在刷新在线玩家以及房间数据......";
-            toolStripProgressBar1.Value = 70;
-            string sqlstr = "select UserName From UserT where State=1";
-            string sqlstr2 = "select RoomCName From RoomT";
-            SqlDataReader UR = db.getcom(sqlstr);
-            SqlDataReader rr = db.getcom(sqlstr2);
-            if (UR.HasRows)
-            {
-                while (UR.Read())
-                {
-                    if (onlineListBox1.listBox.Items.Contains(UR[0].ToString()))
-                    {
 
-                    }
-                    else
-                    {
-                        onlineListBox1.listBox.Items.Add(UR[0]);
-                    }
-                }
-            }
-            toolStripStatusLabel1.Text = "在线玩家数据刷新完成，正在刷新房间数据......";
-            toolStripProgressBar1.Value = 80;
-            Thread.Sleep(100);
-            if (rr.HasRows)
-            {
-                while (rr.Read())
-                {
-                    if (roomListbox1.listBox.Items.Contains(rr[0].ToString()))
-                    {
-
-                    }
-                    else
-                    {
-                        roomListbox1.listBox.Items.Add(rr[0]);
-                    }
-
-                }
-            }
-            toolStripStatusLabel1.Text = "已经就绪！";
-            toolStripProgressBar1.Value = 100;
         }
         #endregion
         #region 后台线程及委托
@@ -293,130 +299,159 @@ namespace FairiesPoker
             label2.Text = userdata["Coin"];
             label3.Text = "Lv:" + userdata["CurrentLevel"];
             UID = Convert.ToInt32(userdata["ID"]);
+            toolStripStatusLabel1.Text = "已经建立与服务器的连接！正在传输数据.......";
+            toolStripProgressBar1.Value = 60;
+            Dictionary<string, string> request = new Dictionary<string, string>();
+            request.Add("Type", "Request");
+            request.Add("UserName", u.UserName);
+            byte[] nsendr = mp.SendCon(request);
+            SocketClient.Send(nsendr);
+            byte[] recbyte = new byte[2048];
+            int rr = SocketClient.Receive(recbyte);
+            chathalldata = mp.ReCon(recbyte, 0, rr);
+            toolStripProgressBar1.Value = 80;
+            toolStripStatusLabel1.Text = "正在解析数据";
+            configcht(chathalldata);
+            toolStripProgressBar1.Value = 100;
+            isfirstconfig = false;
             th1 = new Thread(TClient);
             th1.IsBackground = true;
             th1.Start(SocketClient);
-            toolStripStatusLabel1.Text = "已经建立与服务器的连接！正在传输数据.......";
-            toolStripProgressBar1.Value = 60;timer2.Start();
+        }
+        void configcht(Dictionary<string,string> data)
+        {
+            toolStripStatusLabel1.Text = "数据最后更新于：" + data["LastUpdate"];
+            onlineListBox1.listBox.Items.Clear();int count = 0;
+            RoomJsonData = new Dictionary<int, string>();
+            foreach (KeyValuePair<string,string> item in data)
+            {
+                if(isnumeric(item.Key))
+                {
+                    onlineListBox1.listBox.Items.Add(item.Key + ":" + item.Value);
+                }
+                if (item.Key.Equals("RoomData" + count.ToString()))
+                {
+                    RoomJsonData.Add(count, item.Value);
+                    count++;
+                }
+            }
+            configroom(RoomJsonData);
+        }
+        void configroom(Dictionary<int,string>roomdata)
+        {
+            foreach (KeyValuePair<int,string> item in roomdata)
+            {
+                Dictionary<string, string> room = JsonConvert.DeserializeObject<Dictionary<string, string>>(item.Value);
+                roomListbox1.listBox.Items.Add(room["RoomID"] + ":" + room["RoomCName"]+":"+statjudge(Convert.ToInt32(room["GameStatus"])));
+            }
+        }
+        public string statjudge(int i)
+        {
+            switch (i)
+            {
+                case 0:return "满员";
+                    break;
+                case 1:return "游戏中";
+                    break;
+                case 2:return "可加入";
+                    break;
+                default:return "未知";
+                    break;
+            }
+        }
+        public bool isnumeric(string str)
+        {
+            char[] ch = new char[str.Length];
+            ch = str.ToCharArray();
+            for (int i = 0; i < str.Length; i++)
+            {
+                if (ch[i] < 48 || ch[i] > 57)
+                {
+                    return false;
+                }
+            }
+            return true;
         }
         void TClient(object o)
         {
-            Socket SocketReceive = o as Socket;
+                Socket SocketReceive = o as Socket;
             while (true)
             {
-                byte[] jbyte = new byte[1024 * 1024 * 5];
-                int r = SocketReceive.Receive(jbyte);
-                Dictionary<string, string> data = mp.ReCon(jbyte, 0, r);
-                if (data["Type"]=="Message1")
+                try
                 {
-                    ShowChatMsg(data["Time"] + ":" + data["From"] + ":" + data["Message"]);
-                }
-                else if (data["Type"]=="Message2")
-                {
-                    ShowChatMsg(data["Time"] + ":" + data["From"] + "→" + data["TO"] + ":" + data["Message"]);
-                }
-                else if (data["Type"]=="Message3")
-                {
-                    ShowChatMsg(data["Time"] + ":" + "系统消息:" + data["Message"]);
-                }
-                else if (data["Type"]=="JoinRoom")
-                {
-                    List<string> member = new List<string>();
-                    string sqlstr = string.Format("select RoomCName,RoomPName,RoomP2Name from RoomT where ID = {0}", data["RoomID"]);
-                    SqlDataReader dataReader = db.getcom(sqlstr);
-                    dataReader.Read();
-                    for (int i = 0; i < 3; i++)
+                    byte[] jbyte = new byte[1024 * 1024 * 5];
+                    int r = SocketReceive.Receive(jbyte);
+                    Dictionary<string, string> data = mp.ReCon(jbyte, 0, r);
+                    if (data["Type"] == "Message1")
                     {
-                        if (dataReader[i] != System.DBNull.Value)
+                        label1.Invoke(Strapp, data["Time"] + ":" + data["From"] + ":" + data["Message"]);
+                    }
+                    else if (data["Type"] == "Message2")
+                    {
+                        ShowChatMsg(data["Time"] + ":" + data["From"] + "→" + data["TO"] + ":" + data["Message"]);
+                    }
+                    else if (data["Type"] == "Message3")
+                    {
+                        ShowChatMsg(data["Time"] + ":" + "系统消息:" + data["Message"]);
+                    }
+                    else if (data["Type"] == "JoinRoom")
+                    {
+
+                    }
+                    else if (data["Type"] == "QuitRoom")
+                    {
+                        if (data["UserName"] == labelnm1.Text)
                         {
-                            member.Add(dataReader[i].ToString().Trim());
+                            labelp1.Invoke(RoomUI, "", 0, "空闲", 0, false, 1);
+                            pictureBoxp1.Invoke(IconUI, Properties.Resources.backIMG, pictureBoxp1, false);
+                        }
+                        else if (data["UserName"] == labelnm2.Text)
+                        {
+                            labelp2.Invoke(RoomUI, "", 0, "空闲", 0, false, 2);
+                            pictureBoxp2.Invoke(IconUI, Properties.Resources.backIMG, pictureBoxp2, false);
+                        }
+                        else if (data["UserName"] == labelnm3.Text)
+                        {
+                            labelp3.Invoke(RoomUI, "", 0, "空闲", 0, false, 3);
+                            pictureBoxp3.Invoke(IconUI, Properties.Resources.backIMG, pictureBoxp3, false);
                         }
                     }
-                    for (int i = 0; i < member.Count; i++)
+                    else if (data["Type"] == "CState")//更改状态
                     {
-                        string sqlstr2 = string.Format("select UserName,Exp,CurrentLevel,State from UserT where UserName='{0}'", member[i]);
-                        SqlDataReader dataReader1 = db.getcom(sqlstr2);
-                        dataReader1.Read();
-                        switch (i)
+                        if (data["UserName"] == labelnm1.Text)
                         {
-                            case 0:
-                                labelp1.Invoke(RoomUI, dataReader1[0].ToString().Trim(), Convert.ToInt32(dataReader1[2]), Convert.ToInt32(dataReader1[3]), Convert.ToInt32(dataReader1[1]), true, 1);
-                                if (File.Exists(Application.StartupPath + "\\ico\\" + dataReader1[0].ToString().Trim() + ".jpg"))
-                                {
-                                    pictureBoxp1.Invoke(IconUI, Image.FromFile(Application.StartupPath + "\\ico\\" + dataReader1[0].ToString().Trim() + ".jpg"), pictureBoxp1, true);
-                                }
-                                else icondown(dataReader1[0].ToString().Trim());
-                                break;
-                            case 1:
-                                labelp2.Invoke(RoomUI, dataReader1[0].ToString().Trim(), Convert.ToInt32(dataReader1[2]), Convert.ToInt32(dataReader1[3]), Convert.ToInt32(dataReader1[1]), true, 2);
-                                if (File.Exists(Application.StartupPath + "\\ico\\" + dataReader1[0].ToString().Trim() + ".jpg"))
-                                {
-                                    pictureBoxp1.Invoke(IconUI, Image.FromFile(Application.StartupPath + "\\ico\\" + dataReader1[0].ToString().Trim() + ".jpg"), pictureBoxp2, true);
-                                }
-                                else icondown(dataReader1[0].ToString().Trim());
-                                break;
-                            case 2:
-                                labelp3.Invoke(RoomUI, dataReader1[0].ToString().Trim(), Convert.ToInt32(dataReader1[2]), Convert.ToInt32(dataReader1[3]), Convert.ToInt32(dataReader1[1]), true, 3);
-                                if (File.Exists(Application.StartupPath + "\\ico\\" + dataReader1[0].ToString().Trim() + ".jpg"))
-                                {
-                                    pictureBoxp1.Invoke(IconUI, Image.FromFile(Application.StartupPath + "\\ico\\" + dataReader1[0].ToString().Trim() + ".jpg"), pictureBoxp3, true);
-                                }
-                                else icondown(dataReader1[0].ToString().Trim());
-                                break;
-                            default:
-                                break;
+
+                        }
+                        else if (data["UserName"] == labelnm2.Text)
+                        {
+
+                        }
+                        else if (data["UserName"] == labelnm3.Text)
+                        {
+
                         }
                     }
-                }
-                else if (data["Type"] == "QuitRoom")
-                {
-                    if (data["UserName"]==labelnm1.Text)
+                    else if (data["Type"] == "GState")
                     {
-                        labelp1.Invoke(RoomUI, "", 0, "空闲", 0, false, 1);                        
-                        pictureBoxp1.Invoke(IconUI, Properties.Resources.backIMG, pictureBoxp1, false);
-                    }
-                    else if (data["UserName"]==labelnm2.Text)
-                    {
-                        labelp2.Invoke(RoomUI, "", 0, "空闲", 0, false, 2);
-                        pictureBoxp2.Invoke(IconUI, Properties.Resources.backIMG, pictureBoxp2, false);
-                    }
-                    else if (data["UserName"]==labelnm3.Text)
-                    {
-                        labelp3.Invoke(RoomUI, "", 0, "空闲", 0, false, 3);
-                        pictureBoxp3.Invoke(IconUI, Properties.Resources.backIMG, pictureBoxp3, false);
-                    }
-                }
-                else if (data["Type"] == "CState")//更改状态
-                {
-                    if (data["UserName"] == labelnm1.Text)
-                    {
+                        if (data["UserName"] == labelnm1.Text)
+                        {
 
-                    }
-                    else if (data["UserName"] == labelnm2.Text)
-                    {
+                        }
+                        else if (data["UserName"] == labelnm2.Text)
+                        {
 
+                        }
+                        else if (data["UserName"] == labelnm3.Text)
+                        {
+
+                        }
                     }
-                    else if (data["UserName"] == labelnm3.Text)
+                    else if (data["Type"] == "OnlineCheck")
                     {
 
                     }
                 }
-                else if (data["Type"] == "GState")
-                {
-                    if (data["UserName"] == labelnm1.Text)
-                    {
-
-                    }
-                    else if (data["UserName"] == labelnm2.Text)
-                    {
-
-                    }
-                    else if (data["UserName"] == labelnm3.Text)
-                    {
-
-                    }
-                }
-                else if (data["Type"] == "OnlineCheck")
+                catch
                 {
 
                 }
@@ -424,40 +459,11 @@ namespace FairiesPoker
         }
         void icondown(string uname)
         {
-            string icopath = Application.StartupPath + "\\ico\\" + uname + ".jpg";
-            byte[] imagebytes = null;
-            string sqlstr = $"select Picture from UserT where UserName = '{uname}'";
-            SqlDataReader dr = db.getcom(sqlstr);
-            while (dr.Read())
-            {
-                imagebytes = (byte[])dr.GetValue(1);
-            }
-            dr.Close();
-            MemoryStream ms = new MemoryStream(imagebytes);
-            Bitmap bmpt = new Bitmap(ms);
-            pictureBox1.BackgroundImage = bmpt;
-            FileStream fs = new FileStream(icopath, FileMode.Create, FileAccess.ReadWrite);
-            fs.Write(imagebytes, 0, imagebytes.Length); fs.Close();
+            pictureBox1.BackgroundImage = Image.FromFile(Application.StartupPath + "\\ico\\default.jpg");
         }
         void onlinecheck()
         {
 
-        }
-        int roomidgen()
-        {
-            Random r = new Random();
-            return r.Next(10000, 99999);
-        }
-        bool roomidcheck(int rid)
-        {
-            string sqlstr = string.Format("select * from RoomT where RoomID={0}", rid.ToString());
-            SqlDataReader dataReader = db.getcom(sqlstr);
-            dataReader.Read();
-            if (dataReader.HasRows)
-            {
-                return true;
-            }
-            else return false;
         }
         public void RoomUISet(string name, int level, int status, int exp, bool visible, int cst)
         {
@@ -502,6 +508,11 @@ namespace FairiesPoker
         #endregion
 
         private void button7_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
         {
 
         }

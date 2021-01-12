@@ -190,7 +190,6 @@
     <Compile Include="Settings.Designer.cs">
       <DependentUpon>Settings.cs</DependentUpon>
     </Compile>
-    <Compile Include="Sqlconn.cs" />
     <Compile Include="UI.cs" />
     <Compile Include="User.cs" />
     <Compile Include="win.cs">

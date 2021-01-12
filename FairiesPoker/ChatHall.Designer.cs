@@ -701,12 +701,12 @@
             this.comboBox1.Font = new System.Drawing.Font("宋体", 14F, System.Drawing.FontStyle.Bold);
             this.comboBox1.FormattingEnabled = true;
             this.comboBox1.Items.AddRange(new object[] {
-            "EveryOne"});
+            "所有人"});
             this.comboBox1.Location = new System.Drawing.Point(336, 447);
             this.comboBox1.Name = "comboBox1";
             this.comboBox1.Size = new System.Drawing.Size(114, 27);
             this.comboBox1.TabIndex = 80;
-            this.comboBox1.Text = "EveryOne";
+            this.comboBox1.SelectedIndexChanged += new System.EventHandler(this.comboBox1_SelectedIndexChanged);
             // 
             // elementHost2
             // 

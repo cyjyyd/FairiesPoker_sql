@@ -9,6 +9,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Runtime.Remoting.Messaging;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -16,7 +17,6 @@ namespace FPSever_Program
 {
     public partial class Main : Form
     {
-
         #region 所有变量
         [DllImport("kernel32")]//返回0表示失败，非0为成功
         private static extern long WritePrivateProfileString(string section, string key, string val, string filePath);
@@ -216,8 +216,8 @@ namespace FPSever_Program
                 Thread.Sleep(10000);
             })
             { IsBackground = true }.Start();
-            Server = new UdpClient(12588);
-            endPoint = new IPEndPoint(IPAddress.Any, 12588);
+            Server = new UdpClient(13588);
+            endPoint = new IPEndPoint(IPAddress.Any, 13588);
             db = new Sqlconn();
             th1 = new Thread(UDPServer);
             th1.IsBackground = true;
@@ -658,7 +658,8 @@ namespace FPSever_Program
                     }
                     string sqlstr3 = string.Format("update UserT set State=0 where UserName='{0}'", data["UserName"]);
                     db.getsqlcom(sqlstr3);
-
+                    showlogmsg(DateTime.Now.ToString() + ":" + data["UserName"] + ":已退出！");
+                    break;
                 }
                 else if (data["Type"] == "OnlineCheck")
                 {
@@ -672,6 +673,36 @@ namespace FPSever_Program
                     {
                         NameOnline[data["UserName"]] = DateTime.Now;
                     }
+                }
+                else if (data["Type"]== "Request")
+                {
+                    Dictionary<string, string> dat = new Dictionary<string, string>();
+                    dat.Add("LastUpdate", DateTime.Now.ToString());
+                    string sqlstr = "select ID,UserName from UserT where State=1";
+                    SqlDataReader iuReader = db.getcom(sqlstr);
+                    while (iuReader.Read())
+                    {
+                        dat.Add(iuReader[0].ToString().Trim(), iuReader[1].ToString().Trim());
+                    }
+                    string sqlstr2 = "select * from RoomT";
+                    SqlDataReader rreader = db.getcom(sqlstr2);
+                    if(rreader.HasRows)
+                    {
+                        Dictionary<string, string> room = new Dictionary<string, string>();
+                        int count = 0;
+                        while (rreader.Read())
+                        {                     
+                            for (int i = 0; i < rreader.FieldCount; i++)
+                            {
+                                room.Add(rreader.GetName(i), rreader[i].ToString().Trim());
+                            }
+                            dat.Add("RoomData" + count.ToString(), JsonConvert.SerializeObject(room));
+                            room.Clear();
+                            count++;
+                        }
+                    }
+                    byte[] send = mp.SendCon(dat);
+                    SocketClient.Send(send);
                 }
             }          
         }
