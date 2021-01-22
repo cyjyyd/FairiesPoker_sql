@@ -179,6 +179,7 @@ namespace FairiesPoker
                     byte[] send = mp.SendCon(chat);
                     SocketClient.Send(send);
                 }
+                textBox1.Clear();
             }
             catch
             {
@@ -205,6 +206,7 @@ namespace FairiesPoker
                 Dictionary<string, string> temp = new Dictionary<string, string>();
                 temp.Add("Type","NewRoom");
                 temp.Add("UserName", u.UserName);
+
                 button5.Text = "邀请";
             }
             else if (button5.Text == "邀请")
@@ -509,7 +511,26 @@ namespace FairiesPoker
 
         private void button7_Click(object sender, EventArgs e)
         {
-
+            if (roomListbox1.listBox.SelectedIndex==-1)
+            {
+                MessageBox.Show("请在左侧选择你要加入的房间！","Info",MessageBoxButtons.OK,MessageBoxIcon.Information);
+            }
+            else if (roomListbox1.listBox.SelectedItem.ToString().Contains("满员"))
+            {
+                MessageBox.Show("该房间已经满员！", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else if (roomListbox1.listBox.SelectedItem.ToString().Contains("游戏中"))
+            {
+                MessageBox.Show("该房间正在游戏中！", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                Dictionary<string, string> theroom = JsonConvert.DeserializeObject<Dictionary<string, string>>(RoomJsonData[roomListbox1.listBox.SelectedIndex]);
+                Dictionary<string, string> send = new Dictionary<string, string>();
+                send.Add("Type", "JoinRoom");
+                send.Add("RoomID",theroom["RoomID"]);
+                //Client to do:完善发送数据包格式
+            }
         }
 
         private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
