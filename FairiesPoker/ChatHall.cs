@@ -30,6 +30,7 @@ namespace FairiesPoker
         Dictionary<string, string> userdata;
         Dictionary<string, string> chathalldata;
         Dictionary<int, string> RoomJsonData;
+        Dictionary<string, string> playerdata;
         string iniFilePath = Application.StartupPath + "\\config.ini";
         string UserName;
         string roomposition;
@@ -288,6 +289,7 @@ namespace FairiesPoker
             }
             toolStripStatusLabel1.Text = "正在获取用户信息......";
             toolStripProgressBar1.Value = 40;
+            playerdata = new Dictionary<string, string>();
             Dictionary<string, string> Data = new Dictionary<string, string>();
             Data.Add("Type", "Userdata");
             Data.Add("UserName", u.UserName);
@@ -398,7 +400,24 @@ namespace FairiesPoker
                     }
                     else if (data["Type"] == "JoinRoom")
                     {
-
+                        if (data["State"]=="Failed")
+                        {
+                            toolStripStatusLabel1.Text = "进入房间失败！房间已经满员！";
+                            inroom = false;
+                        }
+                        else if (data["State"]=="Success")
+                        {
+                            playerdata.Add("M1", data["RoomCID"]);
+                            if (data.ContainsKey("RoomPID"))
+                            {
+                                playerdata.Add("P1",data["RoomPID"]);
+                            }
+                            if (data.ContainsKey("RoomP2ID"))
+                            {
+                                playerdata.Add("P2", data["RoomP2ID"]);
+                            }
+                        }
+                        //to do:UI界面显示
                     }
                     else if (data["Type"] == "QuitRoom")
                     {
@@ -529,7 +548,8 @@ namespace FairiesPoker
                 Dictionary<string, string> send = new Dictionary<string, string>();
                 send.Add("Type", "JoinRoom");
                 send.Add("RoomID",theroom["RoomID"]);
-                //Client to do:完善发送数据包格式
+                send.Add("UserName", u.UserName);
+                send.Add("ID", UID.ToString());
             }
         }
 
