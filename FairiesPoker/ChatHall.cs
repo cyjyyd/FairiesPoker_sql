@@ -544,16 +544,48 @@ namespace FairiesPoker
             }
             else
             {
-                Dictionary<string, string> theroom = JsonConvert.DeserializeObject<Dictionary<string, string>>(RoomJsonData[roomListbox1.listBox.SelectedIndex]);
+
+                string[] selectedata = roomListbox1.listBox.SelectedItem.ToString().Split(':');
+                Dictionary<string, string> theroom = JsonConvert.DeserializeObject<Dictionary<string, string>>(RoomJsonData[Convert.ToInt32(selectedata[0])]);//bug：选择正确的房间
                 Dictionary<string, string> send = new Dictionary<string, string>();
                 send.Add("Type", "JoinRoom");
                 send.Add("RoomID",theroom["RoomID"]);
                 send.Add("UserName", u.UserName);
                 send.Add("ID", UID.ToString());
+                SocketClient.Send(mp.SendCon(send));
+                button8.Enabled = true;
+                button10.Enabled = true;
             }
         }
 
         private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void button2_Click(object sender, EventArgs e)
+        {
+            CloseWindow();
+            Main m = new Main();
+            m.Show();
+            this.Close();
+        }
+
+        private void button3_Click(object sender, EventArgs e)
+        {
+            this.WindowState = FormWindowState.Minimized;
+        }
+
+        private void button10_Click(object sender, EventArgs e)
+        {
+            button8.Enabled = false;
+            button9.Enabled = false;
+            button10.Enabled = false;
+            u2.clear();
+            u3.clear();
+        }
+
+        private void button9_Click(object sender, EventArgs e)
         {
 
         }
