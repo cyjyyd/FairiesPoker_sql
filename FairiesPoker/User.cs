@@ -8,14 +8,22 @@ namespace FairiesPoker
 {
     class User
     {
-        private string username;
-        private int exp;
+        private string username="";
+        private int id;
+        private int exp = 0;
         private int expmax;
-        private int dandlion;
-        private string token;
+        private int dandlion = 0;
+        private int currentlevel = 0;
+        private int gamecount = 0;
+        private int state = 0;
         public User()
         {
             expmax = 10000;
+        }
+        public int ID
+        {
+            get { return id; }
+            set { id = value; }
         }
         public string UserName
         {
@@ -27,6 +35,16 @@ namespace FairiesPoker
             get { return exp; }
             set { exp = value; }
         }
+        public int State
+        {
+            get { return state; }
+            set { state = value; }
+        }
+        public int Gamecount
+        {
+            get { return gamecount; }
+            set { gamecount = value; }
+        }
         public int Expmax
         {
             get { return expmax; }
@@ -36,11 +54,21 @@ namespace FairiesPoker
             get { return dandlion; }
             set { dandlion = value; }
         }
-        public string Token
+        public int Currentlevel
         {
-            get { return token; }
-            set { token = value; }
+            get { return currentlevel; }
+            set { currentlevel = value; }
         }
+        public void clear()
+        {
+            username = "";
+            id=0;
+            exp = 0;
+            dandlion = 0;
+            currentlevel = 0;
+            gamecount = 0;
+            state = 0;
+    }
         public int judgelevel (int exp)
         {
             if (exp <= 100)

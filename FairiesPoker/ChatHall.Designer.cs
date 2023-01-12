@@ -123,6 +123,7 @@
             this.button3.TabIndex = 20;
             this.button3.Text = "一";
             this.button3.UseVisualStyleBackColor = false;
+            this.button3.Click += new System.EventHandler(this.button3_Click);
             // 
             // button2
             // 
@@ -140,6 +141,7 @@
             this.button2.TabIndex = 19;
             this.button2.Text = "＾";
             this.button2.UseVisualStyleBackColor = false;
+            this.button2.Click += new System.EventHandler(this.button2_Click);
             // 
             // button1
             // 
@@ -599,6 +601,7 @@
             this.button9.TabIndex = 72;
             this.button9.Text = "开始";
             this.button9.UseVisualStyleBackColor = true;
+            this.button9.Click += new System.EventHandler(this.button9_Click);
             // 
             // button10
             // 
@@ -613,6 +616,7 @@
             this.button10.TabIndex = 73;
             this.button10.Text = "离开";
             this.button10.UseVisualStyleBackColor = true;
+            this.button10.Click += new System.EventHandler(this.button10_Click);
             // 
             // label15
             // 

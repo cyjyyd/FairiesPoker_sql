@@ -133,7 +133,7 @@ namespace FairiesPoker
                     ip = IPAddress.Parse(con.IPAddress);
                     string send = JsonConvert.SerializeObject(Log);
                     byte[] newsend = Encoding.UTF8.GetBytes(send);
-                    IPEndPoint endPoint = new IPEndPoint(ip, 13588);
+                    IPEndPoint endPoint = new IPEndPoint(ip, con.Port+1000);
                     socket.SendTo(newsend, endPoint);
                     Thread.Sleep(500);
                     byte[] jbyte = new byte[256];

@@ -88,6 +88,7 @@ namespace FairiesPoker
         {
             button2.Enabled = false;
             button3.Enabled = true;
+            textBox2.Enabled = false;
             registervalues.Add("UserName", textBox2.Text);
         }
 
@@ -113,6 +114,7 @@ namespace FairiesPoker
             textBox4.Enabled = true;
             checkBox1.Enabled = true;
             registervalues.Add("PwdMD5", pwd);
+            textBox3.Enabled = false;
         }
 
         private void button6_Click(object sender, EventArgs e)
@@ -140,7 +142,7 @@ namespace FairiesPoker
             {
                 socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
                 ip = IPAddress.Parse(con.IPAddress);
-                IPEndPoint endPoint = new IPEndPoint(ip, con.Port);
+                IPEndPoint endPoint = new IPEndPoint(ip, con.Port+1000);
                 string send = JsonConvert.SerializeObject(registervalues);
                 byte[] newsend = Encoding.UTF8.GetBytes(send);
                 socket.SendTo(newsend, endPoint);

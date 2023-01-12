@@ -17,6 +17,8 @@ public delegate void FangJianWeituo1(string name, int level, int status, int exp
 public delegate void IconWeituo(Image img, PictureBox pic, bool stat);
 public delegate void StateWeituo(Label label,string state);
 public delegate void StrWeituo(string str);
+public delegate void BarWeituo(string str, int progress);
+public delegate void OnlineWeituo(Dictionary<string,string> data);
 
 namespace FairiesPoker
 {
@@ -35,19 +37,23 @@ namespace FairiesPoker
         string UserName;
         string roomposition;
         User u = new User();
+        User u2 = new User();
+        User u3 = new User();
         UI ui = new UI();
         MsgProcess mp = new MsgProcess();
         config con = new config();
         string filePath = "";
         int RoomID;
         int UID;
-        bool inroom;
+        bool inroom=false;
         bool isconnected;
         bool isfirstconfig=true;
         private FangJianWeituo1 RoomUI;
         private IconWeituo IconUI;
         private StateWeituo stateUI;
         private StrWeituo Strapp;
+        private BarWeituo BarUpdate;
+        private OnlineWeituo Olupdate;
         Socket SocketClient;
         Socket SocketSend;
         IPAddress ip;
@@ -102,6 +108,8 @@ namespace FairiesPoker
             IconUI = new IconWeituo(Iconset);
             stateUI = new StateWeituo(Statset);
             Strapp = new StrWeituo(ShowChatMsg);
+            BarUpdate = new BarWeituo(BarSet);
+            Olupdate = new OnlineWeituo(configcht);
             comboBox1.SelectedIndex = 0;
             Control.CheckForIllegalCrossThreadCalls = false;
         }
@@ -207,13 +215,26 @@ namespace FairiesPoker
                 Dictionary<string, string> temp = new Dictionary<string, string>();
                 temp.Add("Type","NewRoom");
                 temp.Add("UserName", u.UserName);
-
+                temp.Add("ID", UID.ToString());
+                byte[] con = mp.SendCon(temp);
+                SocketClient.Send(con);
                 button5.Text = "邀请";
+                button8.Enabled = true;
+                button9.Enabled = true;
+                button10.Enabled = true;
+                button7.Enabled = false;
             }
             else if (button5.Text == "邀请")
             {
-                //TODO:直发消息
 
+                Dictionary<string, string> chat = new Dictionary<string, string>(); 
+                chat.Add("Type", "Message");
+                chat.Add("UserName", u.UserName);
+                chat.Add("RoomID", Convert.ToString(RoomID));
+                chat.Add("Chat","房间空闲中，邀请空闲的玩家来参与游戏！");
+                chat.Add("Bgroup", "EveryOne");
+                byte[] send = mp.SendCon(chat);
+                SocketClient.Send(send);
             }
         }
 
@@ -230,6 +251,11 @@ namespace FairiesPoker
         public void ShowChatMsg(string str)
         {
             chatTextBox1.richTextBox.AppendText(str + "\r\n");
+        }
+        public void BarSet(string str,int progress)
+        {
+            toolStripProgressBar1.Value = progress;
+            toolStripStatusLabel1.Text = str;
         }
         private void button4_Click(object sender, EventArgs e)
         {
@@ -287,8 +313,7 @@ namespace FairiesPoker
             {
                 icondown(u.UserName);
             }
-            toolStripStatusLabel1.Text = "正在获取用户信息......";
-            toolStripProgressBar1.Value = 40;
+            BarSet("正在获取用户信息......", 40);
             playerdata = new Dictionary<string, string>();
             Dictionary<string, string> Data = new Dictionary<string, string>();
             Data.Add("Type", "Userdata");
@@ -298,13 +323,18 @@ namespace FairiesPoker
             byte[] rbyte = new byte[1024];
             int r = SocketClient.Receive(rbyte);
             userdata = mp.ReCon(rbyte, 0, r);
-            label1.Text = userdata["UserName"];
-            label4.Text = userdata["Exp"] + "/10000";
-            label2.Text = userdata["Coin"];
-            label3.Text = "Lv:" + userdata["CurrentLevel"];
-            UID = Convert.ToInt32(userdata["ID"]);
-            toolStripStatusLabel1.Text = "已经建立与服务器的连接！正在传输数据.......";
-            toolStripProgressBar1.Value = 60;
+            u.Exp = Convert.ToInt32(userdata["Exp"]);
+            u.Dandlion = Convert.ToInt32(userdata["Coin"]);
+            u.Currentlevel = Convert.ToInt32(userdata["CurrentLevel"]);
+            u.ID = Convert.ToInt32(userdata["ID"]);
+            u.Gamecount = Convert.ToInt32(userdata["GameCount"]);
+            u.State = Convert.ToInt32(userdata["State"]);
+            label1.Text = u.UserName;
+            label4.Text = Convert.ToString(u.Exp) + "/10000";
+            label2.Text = Convert.ToString(u.Dandlion);
+            label3.Text = "Lv:" + Convert.ToString(u.Currentlevel);
+            UID = u.ID;
+            BarSet("已经建立与服务器的连接！正在传输数据.......", 60);
             Dictionary<string, string> request = new Dictionary<string, string>();
             request.Add("Type", "Request");
             request.Add("UserName", u.UserName);
@@ -313,10 +343,8 @@ namespace FairiesPoker
             byte[] recbyte = new byte[2048];
             int rr = SocketClient.Receive(recbyte);
             chathalldata = mp.ReCon(recbyte, 0, rr);
-            toolStripProgressBar1.Value = 80;
-            toolStripStatusLabel1.Text = "正在解析数据";
+            BarSet("正在解析数据", 80);
             configcht(chathalldata);
-            toolStripProgressBar1.Value = 100;
             isfirstconfig = false;
             th1 = new Thread(TClient);
             th1.IsBackground = true;
@@ -324,8 +352,9 @@ namespace FairiesPoker
         }
         void configcht(Dictionary<string,string> data)
         {
-            toolStripStatusLabel1.Text = "数据最后更新于：" + data["LastUpdate"];
-            onlineListBox1.listBox.Items.Clear();int count = 0;
+            label2.Invoke(BarUpdate, "数据最后更新于：" + data["LastUpdate"], 100);
+            onlineListBox1.listBox.Items.Clear();
+            roomListbox1.listBox.Items.Clear();
             RoomJsonData = new Dictionary<int, string>();
             foreach (KeyValuePair<string,string> item in data)
             {
@@ -333,10 +362,9 @@ namespace FairiesPoker
                 {
                     onlineListBox1.listBox.Items.Add(item.Key + ":" + item.Value);
                 }
-                if (item.Key.Equals("RoomData" + count.ToString()))
+                if (item.Key.Contains("RoomData"))
                 {
-                    RoomJsonData.Add(count, item.Value);
-                    count++;
+                    RoomJsonData.Add(Convert.ToInt32(item.Key.Replace("RoomData","")), item.Value);
                 }
             }
             configroom(RoomJsonData);
@@ -378,7 +406,7 @@ namespace FairiesPoker
         }
         void TClient(object o)
         {
-                Socket SocketReceive = o as Socket;
+            Socket SocketReceive = o as Socket;
             while (true)
             {
                 try
@@ -407,6 +435,7 @@ namespace FairiesPoker
                         }
                         else if (data["State"]=="Success")
                         {
+                            inroom = true;
                             playerdata.Add("M1", data["RoomCID"]);
                             if (data.ContainsKey("RoomPID"))
                             {
@@ -416,24 +445,48 @@ namespace FairiesPoker
                             {
                                 playerdata.Add("P2", data["RoomP2ID"]);
                             }
+                            Udata(playerdata);
                         }
-                        //to do:UI界面显示
+                        labelp3.Invoke(RoomUI, u.UserName, u.Currentlevel, u.State, u.Exp, true, 3);
+                        pictureBoxp3.Invoke(IconUI, Properties.Resources.backIMG, pictureBoxp3, true);
+                        if (u3.UserName!="")
+                        {
+                            labelp1.Invoke(RoomUI, u2.UserName, u2.Currentlevel, u2.State, u2.Exp, true, 1);
+                            pictureBoxp2.Invoke(IconUI, Properties.Resources.backIMG, pictureBoxp1, true);
+                        }
+                        if (u2.UserName!="")
+                        {
+                            labelp2.Invoke(RoomUI, u3.UserName, u3.Currentlevel, u3.State, u3.Exp, true, 2);
+                            pictureBoxp2.Invoke(IconUI, Properties.Resources.backIMG, pictureBoxp2, true);
+                        }
+                        //to do:测试功能运行是否正常
+                    }
+                    else if (data["Type"]=="NewRoom")
+                    {
+                        Thread.Sleep(500);
+                        Dictionary<string, string> request = new Dictionary<string, string>();
+                        request.Add("Type", "Request");
+                        request.Add("UserName", u.UserName);
+                        byte[] nsendr = mp.SendCon(request);
+                        SocketReceive.Send(nsendr);
+                        labelp3.Invoke(RoomUI, u.UserName, u.Currentlevel, u.State, u.Exp, true, 3);
+                        pictureBoxp3.Invoke(IconUI, Properties.Resources.backIMG, pictureBoxp3, true);
                     }
                     else if (data["Type"] == "QuitRoom")
                     {
                         if (data["UserName"] == labelnm1.Text)
                         {
-                            labelp1.Invoke(RoomUI, "", 0, "空闲", 0, false, 1);
+                            labelp1.Invoke(RoomUI, "", 0, 0, 0, false, 1);
                             pictureBoxp1.Invoke(IconUI, Properties.Resources.backIMG, pictureBoxp1, false);
                         }
                         else if (data["UserName"] == labelnm2.Text)
                         {
-                            labelp2.Invoke(RoomUI, "", 0, "空闲", 0, false, 2);
+                            labelp2.Invoke(RoomUI, "", 0, 0, 0, false, 2);
                             pictureBoxp2.Invoke(IconUI, Properties.Resources.backIMG, pictureBoxp2, false);
                         }
                         else if (data["UserName"] == labelnm3.Text)
                         {
-                            labelp3.Invoke(RoomUI, "", 0, "空闲", 0, false, 3);
+                            labelp3.Invoke(RoomUI, "", 0, 0, 0, false, 3);
                             pictureBoxp3.Invoke(IconUI, Properties.Resources.backIMG, pictureBoxp3, false);
                         }
                     }
@@ -441,7 +494,7 @@ namespace FairiesPoker
                     {
                         if (data["UserName"] == labelnm1.Text)
                         {
-
+                            
                         }
                         else if (data["UserName"] == labelnm2.Text)
                         {
@@ -471,6 +524,11 @@ namespace FairiesPoker
                     {
 
                     }
+                    else if (data["Type"]=="Request")
+                    {
+                        label2.Invoke(BarUpdate, "更新数据中......",80);
+                        label1.Invoke(Olupdate, data);
+                    }
                 }
                 catch
                 {
@@ -478,6 +536,55 @@ namespace FairiesPoker
                 }
             }
         }
+        void Udata(Dictionary<string,string> userdata)
+        {
+            if (userdata.ContainsKey("M1"))
+            {
+                Dictionary<string, string> Master = JsonConvert.DeserializeObject<Dictionary<string, string>>(userdata["M1"]);
+                Uconvert(Master);
+            }
+            if (userdata.ContainsKey("P1"))
+            {
+                Dictionary<string,string> Player = JsonConvert.DeserializeObject<Dictionary<string, string>>(userdata["P1"]);
+                Uconvert(Player);
+            }
+            if (userdata.ContainsKey("P2"))
+            {
+                Dictionary<string, string> Player2 = JsonConvert.DeserializeObject<Dictionary<string, string>>(userdata["P2"]);
+                Uconvert(Player2);
+            }
+        }
+        void Uconvert(Dictionary<string,string> udata)
+        {
+            if (udata["UserName"].Equals(u.UserName))
+            {
+
+            }
+            else
+            {
+                if (u2.UserName=="")
+                {
+                    u2.UserName = udata["UserName"];
+                    u2.ID = Convert.ToInt32(udata["ID"]);
+                    u2.Gamecount = Convert.ToInt32(udata["GameCount"]);
+                    u2.Exp = Convert.ToInt32(udata["Exp"]);
+                    u2.Dandlion = Convert.ToInt32(udata["Coin"]);
+                    u2.Currentlevel = Convert.ToInt32(udata["CurrentLevel"]);
+                    u2.State = Convert.ToInt32(udata["State"]);
+                }
+                else if (u3.UserName=="")
+                {
+                    u3.UserName = udata["UserName"];
+                    u3.ID = Convert.ToInt32(udata["ID"]);
+                    u3.Gamecount = Convert.ToInt32(udata["GameCount"]);
+                    u3.Exp = Convert.ToInt32(udata["Exp"]);
+                    u3.Dandlion = Convert.ToInt32(udata["Coin"]);
+                    u3.Currentlevel = Convert.ToInt32(udata["CurrentLevel"]);
+                    u3.State = Convert.ToInt32(udata["State"]);
+                }
+            }
+        }
+
         void icondown(string uname)
         {
             pictureBox1.BackgroundImage = Image.FromFile(Application.StartupPath + "\\ico\\default.jpg");
@@ -513,7 +620,7 @@ namespace FairiesPoker
             {
                 case 0:return "离线";
                 case 1:return "在线";
-                case 17:return "准备";
+                case 2:return "准备";
                 default: return "未知";
             }
         }
@@ -543,7 +650,7 @@ namespace FairiesPoker
                 MessageBox.Show("该房间正在游戏中！", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             else
-            {
+            {   
 
                 string[] selectedata = roomListbox1.listBox.SelectedItem.ToString().Split(':');
                 Dictionary<string, string> theroom = JsonConvert.DeserializeObject<Dictionary<string, string>>(RoomJsonData[Convert.ToInt32(selectedata[0])]);//bug：选择正确的房间

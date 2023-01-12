@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.SqlClient;
 using System.Diagnostics;
 using System.Drawing;
@@ -312,29 +313,7 @@ namespace FPSever_Program
         }
         private void timer1_Tick(object sender, EventArgs e)
         {
-           /* foreach (string item in NameOnline.Keys)
-            {
-                TimeSpan ts = DateTime.Now - NameOnline[item];//issue
-                if (ts.TotalSeconds > 30)
-                {
-                    string sqlstr = string.Format("update UserT set State=0 where UserName='{0}'", item);
-                    db.getsqlcom(sqlstr);
-                    comboBoxClientName.Items.Remove(item);
-                }
-                else if(ts.TotalSeconds<30)
-                {
-                    string sqlstr = string.Format("update UserT set State=1 where UserName='{0}'", item);
-                    db.getsqlcom(sqlstr);
-                    if (comboBoxClientName.Items.Contains(item))
-                    {
-
-                    }
-                    else
-                    {
-                        comboBoxClientName.Items.Add(item);
-                    }
-                }
-            }*/
+            lalClientNum.Text = "客户端在线数量:" + dicSocket.Count.ToString();
         }
         private void btnSendFile_Click(object sender, EventArgs e)
         {
@@ -363,14 +342,16 @@ namespace FPSever_Program
                 Dictionary<string,string> data = JsonConvert.DeserializeObject<Dictionary<string,string>>(strinfo);
                 if (data["Type"] == "Register")
                 {
-                    int id = int.Parse(data["ID"]);
+                    string sqltyp = "select ID from UserT";
+                    DataSet cor = db.GetDataSet(sqltyp,"UserT");
+                    int id = cor.Tables[0].Rows.Count+10000000;
                     string Uname = data["UserName"];
                     string Pwd = data["PwdMD5"];
                     string Regtime =DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                     int coin = 0;
                     int exp = 0;
                     int level = Judgelevel(exp);
-                    string sqlstr = String.Format("insert into UserT values ({0},'{1}','{2}','{3}',{4},{5},{6},null,0);",id,Uname,Pwd,Regtime,exp,coin,level);
+                    string sqlstr = String.Format("insert into UserT values ({0},'{1}','{2}','{3}',0,{4},{5},{6},null,0);",id,Uname,Pwd,Regtime,exp,coin,level);//TO DO:头像上传和下载
                     db.getsqlcom(sqlstr);
                 }
                 else if (data["Type"] == "Login")
@@ -391,6 +372,8 @@ namespace FPSever_Program
                             NameOnline.Add(data["UserName"], DateTime.Now);
                             string sqlstr2 = string.Format("update UserT set State=1 where UserName='{0}'",data["UserName"]);
                             showlogmsg(DateTime.Now.ToString()+":"+data["UserName"]+":已登录");
+                            string sql2 = string.Format("update UserT set State=1 where UserName='{0}'", data["UserName"]);
+                            db.getsqlcom(sql2);
 
                         }
                         else
@@ -464,10 +447,8 @@ namespace FPSever_Program
                 Dictionary<string, string> data = mp.ReCon(jbyte, 0, r);
                 if (data["Type"] == "Userdata")
                 {
-                    string sqlstr = string.Format("select ID,UserName,GameCount,Exp,Coin,CurrentLevel from UserT where UserName='{0}'", data["UserName"]);
+                    string sqlstr = string.Format("select ID,UserName,GameCount,Exp,Coin,CurrentLevel,State from UserT where UserName='{0}'", data["UserName"]);
                     SqlDataReader dataReader = db.getcom(sqlstr);
-                    string sql2 = string.Format("update UserT set State=1 where UserName='{0}'", data["UserName"]);
-                    db.getsqlcom(sql2);
                     Dictionary<string, string> result = new Dictionary<string, string>();
                     if (dataReader.HasRows)
                     {
@@ -478,6 +459,7 @@ namespace FPSever_Program
                         result.Add("Exp", dataReader[3].ToString().Trim());
                         result.Add("Coin", dataReader[4].ToString().Trim());
                         result.Add("CurrentLevel", dataReader[5].ToString().Trim());
+                        result.Add("State", dataReader[6].ToString().Trim());
                         byte[] newsend = mp.SendCon(result);
                         SocketClient.Send(newsend);
                         string sqlstr3 = string.Format("update UserT set Lastlogin='{0}' where UserName = '{1}'", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), data["UserName"]);
@@ -520,42 +502,51 @@ namespace FPSever_Program
                         send.Add("Message", data["Chat"]);
                         send.Add("Time", DateTime.Now.ToString());
                         byte[] newsend = mp.SendCon(send);
-                        MsgProcess.SendAllClient(comboBoxClient, dicSocket,newsend);
+                        MsgProcess.SendAllClient(comboBoxClient, dicSocket, newsend);
                         ShowGroupMsg(DateTime.Now.ToString() + ":" + data["UserName"] + ":" + data["Chat"]);
                     }
                 }
-                else if (data["Type"] == "JoinRoom")
+                else if (data["Type"] == "NewRoom")
                 {
+                    string sqltyp = "select RoomID from RoomT";
+                    DataSet cor = db.GetDataSet(sqltyp, "UserT");
+                    int id = cor.Tables[0].Rows.Count + 10000;
+                    string str = string.Format("insert into RoomT values({0},'{1}',null,null,{2},null,null,null,null,null,2)", id, data["UserName"], data["ID"]);
+                    db.getsqlcom(str);
                     Dictionary<string, string> room = new Dictionary<string, string>();
-                    string str = string.Format("select * from RoomT where RoomID={0}",data["RoomID"]);
+                    room.Add("Type", "NewRoom");
+                    byte[] newsend = mp.SendCon(room);
+                    SocketClient.Send(newsend);
+                    showlogmsg2(DateTime.Now.ToString() + ":" + data["UserName"] + ":创建房间！");
+                }
+                else if (data["Type"] == "JoinRoom")//to do:传递客户端更新Json所需的数据
+                {
+                    string str = string.Format("select * from RoomT where RoomID={0}", data["RoomID"]);
+                    Dictionary<string, string> room = new Dictionary<string, string>();
                     SqlDataReader sdr = db.getcom(str);
                     if (sdr.HasRows)
                     {
                         while (sdr.Read())
                         {
-                            while (sdr.Read())
+                            for (int i = 0; i < sdr.FieldCount; i++)
                             {
-                                for (int i = 0; i < sdr.FieldCount; i++)
-                                {
-                                    room.Add(sdr.GetName(i), sdr[i].ToString().Trim());
-                                }
+                                room.Add(sdr.GetName(i), sdr[i].ToString().Trim());
                             }
                         }
-                    }
-                    if (room["RoomPName"].Length==0)
+                    if (room["RoomPName"].Length == 0)
                     {
                         room["RoomPName"] = data["UserName"];
                         room["RoomPID"] = data["ID"];
                         room["RoomPState"] = "1";
-                        string sqlstr = string.Format("update RoomT set RoomPName={0},RoomPID={1},RoomPState={2} where RoomID={3}", room["RoomPName"], room["RoomPID"], room["RoomPState"],room["RoomID"]);
+                        string sqlstr = string.Format("update RoomT set RoomPName='{0}',RoomPID={1},RoomPState={2} where RoomID={3}", room["RoomPName"], room["RoomPID"], room["RoomPState"], room["RoomID"]);
                         db.getsqlcom(sqlstr);
                     }
-                    else if (room["RoomP2Name"].Length==0)
+                    else if (room["RoomP2Name"].Length == 0)
                     {
                         room["RoomP2Name"] = data["UserName"];
                         room["RoomP2ID"] = data["ID"];
                         room["RoomP2State"] = "1";
-                        string sqlstr = string.Format("update RoomT set RoomP2Name={0},RoomP2ID={1},RoomP2State={2} where RoomID={3}", room["RoomPName"], room["RoomPID"], room["RoomPState"], room["RoomID"]);
+                        string sqlstr = string.Format("update RoomT set RoomP2Name='{0}',RoomP2ID={1},RoomP2State={2} where RoomID={3}", room["RoomPName"], room["RoomPID"], room["RoomPState"], room["RoomID"]);
                         db.getsqlcom(sqlstr);
                     }
                     else
@@ -564,20 +555,19 @@ namespace FPSever_Program
                         failsend.Add("Type", "JoinRoom");
                         failsend.Add("State", "Failed");
                         failsend.Add("RoomID", data["RoomID"]);
-                        failsend.Add("Reason", "full");
+                        failsend.Add("Reason", "Full");
                         byte[] fsend = mp.SendCon(failsend);
                     }
-                    if (room["RoomPName"]!=null&&room["RoomP2Name"]!=null)
+                    if (room["RoomPName"].Length!=0 && room["RoomP2Name"].Length != 0)
                     {
                         room["GameStatus"] = "0";
-                        string sqlstr = string.Format("update RoomT set GameStatus={0} where RoomID={1}",room["RoomID"],room["GameStatus"]);
+                        string sqlstr = string.Format("update RoomT set GameStatus={0} where RoomID={1}", room["RoomID"], room["GameStatus"]);
                         db.getsqlcom(sqlstr);
                     }
                     Dictionary<string, string> send = new Dictionary<string, string>();
                     send.Add("Type", "JoinRoom");
                     send.Add("State", "Success");
-                    send.Add("RoomID", data["RoomID"]);
-                    string sqlstr3 = string.Format("select * from UserT where ID={0}", room["RoomCID"]);
+                    string sqlstr3 = string.Format("select ID,UserName,GameCount,Exp,Coin,CurrentLevel,State from UserT where ID={0}", room["RoomCID"]);
                     SqlDataReader src = db.getcom(sqlstr3);
                     while (src.Read())
                     {
@@ -586,11 +576,11 @@ namespace FPSever_Program
                         {
                             Uinfo.Add(src.GetName(i), src[i].ToString().Trim());
                         }
-                        send.Add(room["RoomCID"],JsonConvert.SerializeObject(Uinfo));
+                        send.Add(room["RoomCID"], JsonConvert.SerializeObject(Uinfo));
                     }
-                    if (room["RoomPName"]!=null)
+                        if (room["RoomPName"].Length != 0)
                     {
-                        string sql2 = string.Format("select * from UserT where ID={0}", room["RoomPID"]);
+                        string sql2 = string.Format("select ID,UserName,GameCount,Exp,Coin,CurrentLevel,State from UserT where ID={0}", room["RoomPID"]);
                         SqlDataReader sqlr2 = db.getcom(sql2);
                         while (sqlr2.Read())
                         {
@@ -602,9 +592,9 @@ namespace FPSever_Program
                             send.Add(room["RoomPID"], JsonConvert.SerializeObject(Uinfo));
                         }
                     }
-                    if (room["RoomP2Name"]!=null)
+                        if (room["RoomP2Name"].Length != 0)
                     {
-                        string sql3 = string.Format("select * from UserT where ID={0}", room["RoomP2ID"]);
+                        string sql3 = string.Format("select ID,UserName,GameCount,Exp,Coin,CurrentLevel,State from UserT where ID={0}", room["RoomP2ID"]);
                         SqlDataReader sqlr3 = db.getcom(sql3);
                         while (sqlr3.Read())
                         {
@@ -624,11 +614,23 @@ namespace FPSever_Program
                     {
                         for (int i = 0; i < 3; i++)
                         {
-                            if (dataReader[i]!=System.DBNull.Value)
+                            if (dataReader[i] != System.DBNull.Value)
                             {
-                                dicSocket[dicNameAndClient[dataReader[i].ToString().Trim()]].Send(newsend);
+                                dicSocket[dicNameAndClient[dataReader[i].ToString().Trim()]].Send(newsend);//TO DO :正确送到
                             }
                         }
+                    }
+                        MsgProcess.SendAllClient(comboBoxClient, dicSocket, UpdateRequest());
+                }
+                    else
+                    {
+                        Dictionary<string, string> failsend = new Dictionary<string, string>();
+                        failsend.Add("Type", "JoinRoom");
+                        failsend.Add("State", "Failed");
+                        failsend.Add("RoomID", data["RoomID"]);
+                        failsend.Add("Reason", "RoomNotFound");
+                        byte[] fsend = mp.SendCon(failsend);
+                        SocketClient.Send(fsend);
                     }
                 }
                 else if (data["Type"] == "QuitRoom")
@@ -707,6 +709,14 @@ namespace FPSever_Program
                 }
                 else if (data["Type"] == "Logout")
                 {
+                    string clientAdd = SocketClient.RemoteEndPoint.ToString();
+                    string name = dicClientAndName[clientAdd];
+                    //删除这个客户端在集合中所存储的键和值
+                    dicSocket.Remove(clientAdd);
+                    dicClientAndName.Remove(clientAdd);
+                    dicNameAndClient.Remove(name);
+                    comboBoxClient.Items.Remove(clientAdd);
+                    comboBoxClientName.Items.Remove(name);
                     IDName.Remove(NameID[data["UserName"]]);
                     NameID.Remove(data["UserName"]);
                     NameOnline.Remove(data["UserName"]);
@@ -760,35 +770,40 @@ namespace FPSever_Program
                 }
                 else if (data["Type"]== "Request")
                 {
-                    Dictionary<string, string> dat = new Dictionary<string, string>();
-                    dat.Add("LastUpdate", DateTime.Now.ToString());
-                    string sqlstr = "select ID,UserName from UserT where State=1";
-                    SqlDataReader iuReader = db.getcom(sqlstr);
-                    while (iuReader.Read())
-                    {
-                        dat.Add(iuReader[0].ToString().Trim(), iuReader[1].ToString().Trim());
-                    }
-                    string sqlstr2 = "select * from RoomT";
-                    SqlDataReader rreader = db.getcom(sqlstr2);
-                    if(rreader.HasRows)
-                    {
-                        Dictionary<string, string> room = new Dictionary<string, string>();
-                        int count = 0;
-                        while (rreader.Read())
-                        {                     
-                            for (int i = 0; i < rreader.FieldCount; i++)
-                            {
-                                room.Add(rreader.GetName(i), rreader[i].ToString().Trim());
-                            }
-                            dat.Add("RoomData" + count.ToString(), JsonConvert.SerializeObject(room));
-                            room.Clear();
-                            count++;
-                        }
-                    }
-                    byte[] send = mp.SendCon(dat);
-                    SocketClient.Send(send);
+                    SocketClient.Send(UpdateRequest());
                 }
             }          
+        }
+        public byte[] UpdateRequest()
+        {
+            Dictionary<string, string> dat = new Dictionary<string, string>();
+            dat.Add("Type", "Request");
+            dat.Add("LastUpdate", DateTime.Now.ToString());
+            string sqlstr = "select ID,UserName from UserT where State>0";
+            SqlDataReader iuReader = db.getcom(sqlstr);
+            while (iuReader.Read())
+            {
+                dat.Add(iuReader[0].ToString().Trim(), iuReader[1].ToString().Trim());
+            }
+            string sqlstr2 = "select * from RoomT";
+            SqlDataReader rreader = db.getcom(sqlstr2);
+            if (rreader.HasRows)
+            {
+                Dictionary<string, string> room = new Dictionary<string, string>();
+                int count = 0;
+                while (rreader.Read())
+                {
+                    for (int i = 0; i < rreader.FieldCount; i++)
+                    {
+                        room.Add(rreader.GetName(i), rreader[i].ToString().Trim());
+                    }
+                    dat.Add("RoomData" + rreader[0].ToString(), JsonConvert.SerializeObject(room));
+                    room.Clear();
+                    count++;
+                }
+            }
+            byte[] send = mp.SendCon(dat);
+            return send;
         }
 
         public static int Judgelevel(int exp)
