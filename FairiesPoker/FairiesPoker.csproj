@@ -15,6 +15,7 @@
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <NuGetPackageImportStamp>
     </NuGetPackageImportStamp>
+    <TargetFrameworkProfile />
     <PublishUrl>publish\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Disk</InstallFrom>
@@ -30,7 +31,6 @@
     <UseApplicationTrust>false</UseApplicationTrust>
     <PublishWizardCompleted>true</PublishWizardCompleted>
     <BootstrapperEnabled>true</BootstrapperEnabled>
-    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -82,6 +82,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <SignAssembly>false</SignAssembly>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
   <PropertyGroup>
     <AssemblyOriginatorKeyFile>FairiesPoker_TemporaryKey.pfx</AssemblyOriginatorKeyFile>
@@ -124,15 +125,6 @@
     <Compile Include="AboutBox1.Designer.cs">
       <DependentUpon>AboutBox1.cs</DependentUpon>
     </Compile>
-    <Compile Include="ChatHall.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="ChatHall.Designer.cs">
-      <DependentUpon>ChatHall.cs</DependentUpon>
-    </Compile>
-    <Compile Include="ChatTextBox.xaml.cs">
-      <DependentUpon>ChatTextBox.xaml</DependentUpon>
-    </Compile>
     <Compile Include="Chupai.cs" />
     <Compile Include="ComputerChuPai.cs" />
     <Compile Include="config.cs" />
@@ -155,30 +147,61 @@
     <Compile Include="Login.Designer.cs">
       <DependentUpon>Login.cs</DependentUpon>
     </Compile>
+    <Compile Include="Model\GameModel.cs" />
+    <Compile Include="Model\Models.cs" />
     <Compile Include="MsgProcess.cs" />
-    <Compile Include="OnlineListBox.xaml.cs">
-      <DependentUpon>OnlineListBox.xaml</DependentUpon>
-    </Compile>
+    <Compile Include="Net\ClientPeer.cs" />
+    <Compile Include="Net\EncodeTool.cs" />
+    <Compile Include="Net\HandlerBase.cs" />
+    <Compile Include="Net\Impl\AccountHandler.cs" />
+    <Compile Include="Net\Impl\ChatHandler.cs" />
+    <Compile Include="Net\Impl\FightHandler.cs" />
+    <Compile Include="Net\Impl\MatchHandler.cs" />
+    <Compile Include="Net\Impl\UserHandler.cs" />
+    <Compile Include="Net\NetManager.cs" />
+    <Compile Include="Net\SocketMsg.cs" />
     <Compile Include="picshow.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="picshow.Designer.cs">
       <DependentUpon>picshow.cs</DependentUpon>
     </Compile>
+    <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
+    <Compile Include="Protocol\Code\AccountCode.cs" />
+    <Compile Include="Protocol\Code\ChatCode.cs" />
+    <Compile Include="Protocol\Code\FightCode.cs" />
+    <Compile Include="Protocol\Code\MatchCode.cs" />
+    <Compile Include="Protocol\Code\OpCode.cs" />
+    <Compile Include="Protocol\Code\UserCode.cs" />
+    <Compile Include="Protocol\Constant\CardColor.cs" />
+    <Compile Include="Protocol\Constant\CardType.cs" />
+    <Compile Include="Protocol\Constant\CardWeight.cs" />
+    <Compile Include="Protocol\Constant\Constant.cs" />
+    <Compile Include="Protocol\Constant\Identity.cs" />
+    <Compile Include="Protocol\Dto\AccountDto.cs" />
+    <Compile Include="Protocol\Dto\ChatDto.cs" />
+    <Compile Include="Protocol\Dto\Fight\CardDto.cs" />
+    <Compile Include="Protocol\Dto\Fight\DealDto.cs" />
+    <Compile Include="Protocol\Dto\Fight\GrabDto.cs" />
+    <Compile Include="Protocol\Dto\Fight\OverDto.cs" />
+    <Compile Include="Protocol\Dto\Fight\PlayerDto.cs" />
+    <Compile Include="Protocol\Dto\MatchRoomDto.cs" />
+    <Compile Include="Protocol\Dto\UserDto.cs" />
+    <Compile Include="Protocol\obj\Debug\.NETFramework,Version=v4.5.2.AssemblyAttributes.cs" />
+    <Compile Include="Protocol\obj\Debug\.NETFramework,Version=v4.8.AssemblyAttributes.cs" />
+    <Compile Include="Protocol\obj\Debug\TemporaryGeneratedFile_036C0B5B-1481-4323-8D20-8F5ADCB23D92.cs" />
+    <Compile Include="Protocol\obj\Debug\TemporaryGeneratedFile_5937a670-0e60-4077-877b-f7221da3dda1.cs" />
+    <Compile Include="Protocol\obj\Debug\TemporaryGeneratedFile_E7A71F73-0F8D-4B9B-B56E-8E70B10BC5D3.cs" />
     <Compile Include="Register.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Register.Designer.cs">
       <DependentUpon>Register.cs</DependentUpon>
-    </Compile>
-    <Compile Include="Room.cs" />
-    <Compile Include="RoomListbox.xaml.cs">
-      <DependentUpon>RoomListbox.xaml</DependentUpon>
     </Compile>
     <Compile Include="Settings.cs">
       <SubType>Form</SubType>
@@ -204,13 +227,8 @@
     </Compile>
     <Compile Include="Pai.cs" />
     <Compile Include="Program.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="AboutBox1.resx">
       <DependentUpon>AboutBox1.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="ChatHall.resx">
-      <DependentUpon>ChatHall.cs</DependentUpon>
-      <SubType>Designer</SubType>
     </EmbeddedResource>
     <EmbeddedResource Include="DdzMian.resx">
       <DependentUpon>DdzMian.cs</DependentUpon>
@@ -246,6 +264,19 @@
     </None>
     <None Include="app.config" />
     <None Include="FairiesPoker_TemporaryKey.pfx" />
+    <None Include="Model\GameModel.cs.meta" />
+    <None Include="Model\Models.cs.meta" />
+    <None Include="Net\ClientPeer.cs.meta" />
+    <None Include="Net\EncodeTool.cs.meta" />
+    <None Include="Net\HandlerBase.cs.meta" />
+    <None Include="Net\Impl.meta" />
+    <None Include="Net\Impl\AccountHandler.cs.meta" />
+    <None Include="Net\Impl\ChatHandler.cs.meta" />
+    <None Include="Net\Impl\FightHandler.cs.meta" />
+    <None Include="Net\Impl\MatchHandler.cs.meta" />
+    <None Include="Net\Impl\UserHandler.cs.meta" />
+    <None Include="Net\NetManager.cs.meta" />
+    <None Include="Net\SocketMsg.cs.meta" />
     <None Include="packages.config" />
     <None Include="Properties\app.manifest" />
     <None Include="Properties\Settings.settings">
@@ -262,6 +293,10 @@
     <None Include="Properties\App.config" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Protocol\obj\Debug\DesignTimeResolveAssemblyReferencesInput.cache" />
+    <None Include="Protocol\obj\Debug\Protocol.csproj.AssemblyReference.cache" />
+    <None Include="Protocol\obj\Debug\Protocol.csproj.CoreCompileInputs.cache" />
+    <None Include="Protocol\Protocol.csproj" />
     <None Include="Resources\loading.png" />
   </ItemGroup>
   <ItemGroup>
@@ -289,6 +324,11 @@
     <None Include="Resources\prf.jpg" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="Protocol\bin\Debug\Protocol.dll" />
+    <Content Include="Protocol\bin\Debug\Protocol.pdb" />
+    <Content Include="Protocol\obj\Debug\Protocol.csproj.FileListAbsolute.txt" />
+    <Content Include="Protocol\obj\Debug\Protocol.dll" />
+    <Content Include="Protocol\obj\Debug\Protocol.pdb" />
     <None Include="bin\Debug\UI_TB\btn2.png" />
     <Content Include="game.ico" />
     <None Include="Resources\btn2.bmp" />
@@ -360,18 +400,9 @@
     </COMReference>
   </ItemGroup>
   <ItemGroup>
-    <Page Include="ChatTextBox.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="OnlineListBox.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="RoomListbox.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
+    <Folder Include="Protocol\bin\Release\" />
+    <Folder Include="Protocol\obj\Debug\TempPE\" />
+    <Folder Include="Protocol\Properties\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

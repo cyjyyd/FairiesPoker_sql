@@ -29,8 +29,6 @@ namespace FairiesPoker
             InitializeComponent();
             CheckForIllegalCrossThreadCalls = false;
             Opacity = 0; timer1.Start();
-            th1 = new Thread(loginset);
-            th1.IsBackground = true;
         }
         #region 读Ini文件
         public string ReadIniData(string Section, string Key, string NoText, string iniFilePath)
@@ -112,61 +110,6 @@ namespace FairiesPoker
         }
         private void button1_Click(object sender, EventArgs e)
         {
-            try
-            {
-                if (check())
-                {
-                    Dictionary<string, string> Log = new Dictionary<string, string>();
-                    string nm = textBox1.Text;
-                    string pwd=null;
-                    MD5 md5 = new MD5CryptoServiceProvider();
-                    byte[] password = Encoding.Default.GetBytes(textBox2.Text);
-                    byte[] encryptpassword = md5.ComputeHash(password);
-                    for (int i = 0;i<encryptpassword.Length;i++)
-                    {
-                        pwd = pwd + encryptpassword[i].ToString("X");
-                    }
-                    Log.Add("Type", "Login");
-                    Log.Add("UserName", nm);
-                    Log.Add("PwdMD5", pwd);
-                    socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-                    ip = IPAddress.Parse(con.IPAddress);
-                    string send = JsonConvert.SerializeObject(Log);
-                    byte[] newsend = Encoding.UTF8.GetBytes(send);
-                    IPEndPoint endPoint = new IPEndPoint(ip, con.Port+1000);
-                    socket.SendTo(newsend, endPoint);
-                    Thread.Sleep(500);
-                    byte[] jbyte = new byte[256];
-                    int r = socket.Receive(jbyte);
-                    string res = Encoding.UTF8.GetString(jbyte, 0, r);
-                    Dictionary<string, string> data = JsonConvert.DeserializeObject<Dictionary<string, string>>(res);
-                    if (data["Result"].Equals("IncorrectPwd"))
-                    {
-                        MessageBox.Show("登录失败!密码错误！");
-                    }
-                    else if (data["Result"].Equals("Correct"))
-                    {
-                        ChatHall ch = new ChatHall(nm);
-                        CloseWindow();
-                        ch.Show();this.Close();
-                    }
-                    else if (data["Result"].Equals("NosuchUserName"))
-                    {
-                        MessageBox.Show("用户名不存在！");
-                    }
-                }
-                else
-                {
-                    MessageBox.Show("请输入用户名或密码！", "error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
-            catch (Exception)
-            {
-                MessageBox.Show("Error404:找不到服务器","Error",MessageBoxButtons.OK,MessageBoxIcon.Error);
-            }
-        }
-        void loginset()
-        {
 
         }
         private bool check()
@@ -217,7 +160,7 @@ namespace FairiesPoker
 
         private void linkLabel2_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            MessageBox.Show("该功能还在抢修中，预计下个版本修复");
+
         }
     }
 }
