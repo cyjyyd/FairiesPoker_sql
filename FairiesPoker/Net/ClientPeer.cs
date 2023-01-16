@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net.Sockets;
 
 /// <summary>
@@ -27,7 +28,7 @@ public class ClientPeer
         }
         catch (Exception e)
         {
-
+            Debug.WriteLine("在线功能初始化失败！");
         }
     }
 
@@ -36,14 +37,14 @@ public class ClientPeer
         try
         {
             socket.Connect(ip, port);
-            Console.WriteLine("连接服务器成功！");
+            Debug.WriteLine("连接服务器成功！");
 
             //开始异步接收数据
             startReceive();
         }
         catch(Exception e)
         {
-            Console.WriteLine(e.Message);
+            Debug.WriteLine(e.Message);
         }
     }
 
@@ -68,7 +69,7 @@ public class ClientPeer
     {
         if (socket == null && socket.Connected == false)
         {
-            Console.WriteLine("没有连接成功，无法发送数据");
+            Debug.WriteLine("没有连接成功，无法发送数据");
             return;
         }
 

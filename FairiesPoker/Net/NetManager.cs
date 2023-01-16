@@ -12,15 +12,27 @@ public class NetManager
 {
     bool debug = true;
     public static NetManager Instance = null;
-    public static IPHostEntry IPinfo = Dns.GetHostEntry("www.fairybcd.top");
-    private ClientPeer client = new ClientPeer(IPinfo.AddressList[0].ToString(), 40960);
+    public static IPHostEntry IPinfo;
+    private ClientPeer client;
 
-    private void Start()
+    public void Start()
     {
+        debug = true;
+        if (debug)
+        {
+            IPinfo = Dns.GetHostEntry("127.0.0.1");
+            client = new ClientPeer(IPinfo.AddressList[0].ToString(), 40960);
+
+        }
+        else
+        {
+            IPinfo = Dns.GetHostEntry("www.fairybcd.top");
+            client = new ClientPeer(IPinfo.AddressList[0].ToString(), 40960);
+        }
         client.Connect();
     }
 
-    private void Update()
+    public void Update()
     {
         if (client == null)
             return;
@@ -44,7 +56,7 @@ public class NetManager
     /// <summary>
     /// 接受网络的消息
     /// </summary>
-    private void processSocketMsg(SocketMsg msg)
+    public void processSocketMsg(SocketMsg msg)
     {
         switch (msg.OpCode)
         {
@@ -72,7 +84,17 @@ public class NetManager
 
 
     #region 处理客户端内部 给服务器发消息的 事件
-
+    public void Execute(int eventCode, object message)
+    {
+        switch (eventCode)
+        {
+            case 0:
+                client.Send(message as SocketMsg);
+                break;
+            default:
+                break;
+        }
+    }
     #endregion
 }
 

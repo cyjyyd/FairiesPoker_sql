@@ -13,70 +13,67 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Windows.Shapes;
 using Newtonsoft.Json;
+using Protocol.Code;
+using Protocol.Dto;
+
 namespace FairiesPoker
 {
     public partial class Register : Form
     {
-        Socket socket;
-        IPAddress ip;
-        IPEndPoint endPoint;
+        SocketMsg Msg;
         string nm;
         string pwd;
+        int avatarid = 0;
         bool standard = false;
+        NetManager netManager;
         config con = new config();
         const string welcomecode = "westerndigital";
         SqlConnection connection;
         Dictionary<string, string> registervalues = new Dictionary<string, string>();
-        public Register()
+        public Register(NetManager netManager)
         {
             InitializeComponent();
+            this.netManager = netManager;
         }
         OpenFileDialog ofd = new OpenFileDialog();
-        private void button5_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                ofd.Title = "请选择您要发送的文件";
-                ofd.Filter = "JPEG图像文件|*.jpg";
-                ofd.ShowDialog();
-                textBox4.Text = ofd.FileName;
-                pictureBox1.BackgroundImage = Image.FromFile(ofd.FileName);
-            }
-            catch (Exception)
-            {
-                MessageBox.Show("读取文件时发生错误！","Error",MessageBoxButtons.OK,MessageBoxIcon.Error);
-            }
-        }
 
         private void checkBox1_CheckedChanged(object sender, EventArgs e)
         {
-            if (checkBox1.Checked)
+            try
             {
-                standard = true;
-                button5.Enabled = false;
-                textBox4.Enabled = false;
-                pictureBox1.BackgroundImage = Properties.Resources.Pla;
-            }
-            else
-            {
-                button5.Enabled = true;
-                textBox4.Enabled = true;
-                standard = false;
-                if (textBox4.Text!="")
+                if (checkBox1.Checked)
                 {
-                    pictureBox1.BackgroundImage = Image.FromFile(textBox4.Text);
+                    standard = true;
+                    comboBox1.Enabled = false;
+                    pictureBox1.BackgroundImage = Properties.Resources.Pla;
+                }
+                else
+                {
+                    comboBox1.Enabled = true;
+                    standard = false;
+                    if (comboBox1.Text != "")
+                    {
+                        pictureBox1.BackgroundImage = Image.FromFile(Application.StartupPath + "\\avatars\\" + comboBox1.Text + ".jpg");
+                    }
                 }
             }
+            catch (Exception)
+            {
+                MessageBox.Show("尝试载入图像时发生错误！","error",MessageBoxButtons.OK,MessageBoxIcon.Error);
+            }
+
         }
 
         private void button1_Click(object sender, EventArgs e)
         {
-            button1.Enabled = false;
             if (textBox1.Text==welcomecode)
             {
+                button1.Enabled = false;
                 button2.Enabled = true;
                 textBox1.Enabled = false;
+                textBox2.Enabled = true;
             }
             else
             {
@@ -86,77 +83,121 @@ namespace FairiesPoker
 
         private void button2_Click(object sender, EventArgs e)
         {
-            button2.Enabled = false;
-            button3.Enabled = true;
-            textBox2.Enabled = false;
-            registervalues.Add("UserName", textBox2.Text);
+            if (textBox2.Text.Length >= 4 && textBox2.Text.Length <= 16)
+            {
+                button2.Enabled = false;
+                button3.Enabled = true;
+                textBox2.Enabled = false;
+                textBox3.Enabled = true;
+                nm = textBox2.Text;
+            }
+            else
+            {
+                MessageBox.Show("用户名不规范！");
+            }
         }
 
         private void Register_Shown(object sender, EventArgs e)
         {
-            registervalues.Add("Type", "Register");
+            try
+            {
+                List<String> list = new List<string>();
+                DirectoryInfo theFolder = new DirectoryInfo(Application.StartupPath + "\\avatars");
+                FileInfo[] thefileInfo = theFolder.GetFiles("*.*", SearchOption.TopDirectoryOnly);
+                foreach (FileInfo NextFile in thefileInfo)  //遍历文件
+                list.Add(NextFile.Name.Substring(0,NextFile.Name.IndexOf('.')));
+                comboBox1.DataSource = list;
+                comboBox1.SelectedIndex = 0;
+            }
+            catch (Exception)
+            {
+                MessageBox.Show("尝试载入图像时发生错误！", "error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+
         }
 
         private void button3_Click(object sender, EventArgs e)
         {
-            pwd = null;
-            MD5 md5 = new MD5CryptoServiceProvider();
-            byte[] username = Encoding.Default.GetBytes(textBox3.Text);
-            byte[] encryptname = md5.ComputeHash(username);
-            for (int i = 0; i < encryptname.Length; i++)
+            if (textBox3.Text.Length>=8&&textBox3.Text.Length<=16)
             {
-                // 将得到的字符串使用十六进制类型格式。格式后的字符是小写的字母，如果使用大写（X）则格式后的字符是大写字符
-                pwd = pwd + encryptname[i].ToString("X");
+                pwd = null;
+                MD5 md5 = new MD5CryptoServiceProvider();
+                byte[] username = Encoding.Default.GetBytes(textBox3.Text);
+                byte[] encryptname = md5.ComputeHash(username);
+                for (int i = 0; i < encryptname.Length; i++)
+                {
+                    // 将得到的字符串使用十六进制类型格式。格式后的字符是小写的字母，如果使用大写（X）则格式后的字符是大写字符
+                    pwd = pwd + encryptname[i].ToString("X");
+                }
+                button6.Enabled = true;
+                button3.Enabled = false;
+                checkBox1.Enabled = true;
+                textBox3.Enabled = false;
             }
-            textBox3.Enabled = false;
-            button5.Enabled = true;
-            button6.Enabled = true;
-            textBox4.Enabled = true;
-            checkBox1.Enabled = true;
-            registervalues.Add("PwdMD5", pwd);
-            textBox3.Enabled = false;
+            else
+            {
+                MessageBox.Show("密码长度不规范！");
+            }
         }
 
         private void button6_Click(object sender, EventArgs e)
         {
-            button5.Enabled = false;
-            textBox4.Enabled = false;
+            comboBox1.Enabled = false;
+            checkBox1.Enabled = false;
             if (standard)
             {
-
+                avatarid = -1;
             }
             else
             {
-                string fullpath = ofd.FileName;//文件路径
-                FileStream fs = new FileStream(fullpath, FileMode.Open);
-                byte[] imagebytes = new byte[fs.Length];
-                BinaryReader br = new BinaryReader(fs);
-                imagebytes = br.ReadBytes(Convert.ToInt32(fs.Length));
+                if (comboBox1.SelectedIndex==-1)
+                {
+                    avatarid = -1;
+                }
+                avatarid = comboBox1.SelectedIndex;
             }
             button4.Enabled = true;
+            button6.Enabled = false;
         }
 
         private void button4_Click(object sender, EventArgs e)
         {
             try
             {
-                socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-                ip = IPAddress.Parse(con.IPAddress);
-                IPEndPoint endPoint = new IPEndPoint(ip, con.Port+1000);
-                string send = JsonConvert.SerializeObject(registervalues);
-                byte[] newsend = Encoding.UTF8.GetBytes(send);
-                socket.SendTo(newsend, endPoint);
-                MessageBox.Show("注册成功！\r\n" + "用户名：" + textBox2.Text + "\r\n请牢记您的密码！", "Congratulations!", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                this.Close();
+                AccountDto dto = new AccountDto(nm, pwd, avatarid);
+                Msg = new SocketMsg(OpCode.ACCOUNT, AccountCode.REGIST_CREQ, dto);
+                netManager.Execute(0, Msg);
+                //MessageBox.Show("注册成功！\r\n" + "用户名：" + nm + "\r\n密码MD5:"+pwd+"\r\n头像ID："+ avatarid +"\r\n请牢记您的密码！", "Congratulations!", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                reset();
             }
-            catch (SocketException)
+            catch (Exception)
             {
-                MessageBox.Show("错误：未能连接上服务器！","Error",MessageBoxButtons.OK,MessageBoxIcon.Error);
+                MessageBox.Show("未知错误，请联系开发者","Error",MessageBoxButtons.OK,MessageBoxIcon.Error);
             }
         }
         private void Register_Load(object sender, EventArgs e)
         {
+            timer1.Start();
+        }
+        private void reset()
+        {
+            nm = "";
+            pwd = "";
+            avatarid = -1;
+            textBox1.Text = textBox2.Text = textBox3.Text = "";
+            textBox1.Enabled = true;
+            button1.Enabled = true;
+            button4.Enabled = false;
+        }
 
+        private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            pictureBox1.BackgroundImage = Image.FromFile(Application.StartupPath + "\\avatars\\" + comboBox1.Text + ".jpg");
+        }
+
+        private void timer1_Tick(object sender, EventArgs e)
+        {
+            netManager.Update();
         }
     }
 }

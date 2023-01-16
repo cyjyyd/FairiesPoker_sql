@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Drawing;
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -156,5 +158,10 @@ namespace FairiesPoker
             }
         }
         #endregion
+
+        private void Main_Shown(object sender, EventArgs e)
+        {
+            
+        }
     }
 }

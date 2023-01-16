@@ -92,7 +92,7 @@ public class UserHandler : HandlerBase
             //创建成功
             //隐藏创建面板
             //获取角色信息
-            socketMsg.Change(OpCode.USER, UserCode.GET_INFO_CREQ, null);
+            socketMsg = new SocketMsg(OpCode.USER, UserCode.GET_INFO_CREQ, null);
         }
     }
 }

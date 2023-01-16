@@ -8,18 +8,18 @@ using System.Windows.Forms;
 
 namespace FairiesPoker
 {
-    class MsgProcess
+    public static class MsgProcess
     {
-        public byte[] SendCon(Dictionary<string,string> dic)
+        public static byte[] SendCon(object value)
         {
-            string jstr = JsonConvert.SerializeObject(dic);
+            string jstr = JsonConvert.SerializeObject(value);
             byte[] send = Encoding.UTF8.GetBytes(jstr);
             return send;
         }
-        public Dictionary<string,string> ReCon(byte[] rec,int index,int count)
+        public static object ReCon(byte[] rec)
         {
-            string jstr = Encoding.UTF8.GetString(rec, index, count);
-            Dictionary<string, string> receive = JsonConvert.DeserializeObject<Dictionary<string, string>>(jstr);
+            string jstr = Encoding.UTF8.GetString(rec);
+            object receive = JsonConvert.DeserializeObject(jstr);
             return receive;
         }
     }
