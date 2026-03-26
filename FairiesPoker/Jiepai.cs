@@ -28,6 +28,11 @@ namespace FairiesPoker
         #region 外部调用方法,提示出牌
         public ArrayList isRight(int paiType, ArrayList upPai, ArrayList nextPai)
         {
+            System.Diagnostics.Debug.WriteLine($"Jiepai.isRight: paiType={paiType}, upPai.Count={upPai?.Count ?? -1}, nextPai.Count={nextPai?.Count ?? -1}");
+
+            if (nextPai == null || nextPai.Count == 0) return null;
+            if (upPai == null || upPai.Count == 0) return null;
+
             int leave = nextPai.Count;
             chupai.PaiType = 0;
             chupai.isRight(nextPai);
@@ -45,6 +50,7 @@ namespace FairiesPoker
                     if (sameType(paiType, chupai.PaiType, upPai, nextPai)) list.Add(nextPai);
                     else if (list1 != null) list = list1;
                 }
+                System.Diagnostics.Debug.WriteLine($"leave <= upPai.Count: list.Count={list.Count}");
                 if (list.Count != 0) return list;
                 return null;
             }
@@ -53,9 +59,11 @@ namespace FairiesPoker
             else
             {
                 int size = upBigPai(paiType, upPai);
+                System.Diagnostics.Debug.WriteLine($"upBigPai返回: size={size}");
                 ArrayList list = new ArrayList();
                 ArrayList list1 = basic(size, nextPai);
-                if (list1 == null) return null;
+                System.Diagnostics.Debug.WriteLine($"basic返回: list1={(list1 == null ? "null" : list1.Count.ToString())}");
+                if (list1 == null || list1.Count < 4) return null;
                 switch (paiType)
                 {
                     case 1: list = list1; break;
@@ -67,6 +75,7 @@ namespace FairiesPoker
                 }
                 if (paiType > 6 && paiType < 11)   list = findFeiji(size, paiType, nextPai);
                 if (paiType > 10 && paiType < 20)  list = fly_n(size, paiType, nextPai);
+                System.Diagnostics.Debug.WriteLine($"最终list.Count={list?.Count ?? -1}");
                 return list;
             }
             #endregion
@@ -81,15 +90,32 @@ namespace FairiesPoker
             {
                 int[] args = arrayToArgs(upPai);
                 int[] next = arrayToArgs(nextPai);
-                if (type > 0 && type < 11 && next[0] > args[0]) return true;
-                if (type > 10 && type < 15 && next[2] > args[2]) return true;
-                if (type > 14 && type < 18 && next[4] > args[4]) return true;
-                if (type == 18 && next[6] > args[6]) return true;
-                if (type == 19)
+                if (args == null || next == null) return false;
+
+                if (type > 0 && type < 11)
+                {
+                    if (next.Length > 0 && args.Length > 0 && next[0] > args[0]) return true;
+                }
+                else if (type > 10 && type < 15)
+                {
+                    if (next.Length > 2 && args.Length > 2 && next[2] > args[2]) return true;
+                }
+                else if (type > 14 && type < 18)
+                {
+                    if (next.Length > 4 && args.Length > 4 && next[4] > args[4]) return true;
+                }
+                else if (type == 18)
+                {
+                    if (next.Length > 6 && args.Length > 6 && next[6] > args[6]) return true;
+                }
+                else if (type == 19)
                 {
                     ArrayList upList = findZhadan(upPai);
                     ArrayList nextList = findZhadan(nextPai);
-                    if ((int)nextList[nextList.Count - 1] > (int)upList[upList.Count - 1]) return true;
+                    if (upList != null && upList.Count > 0 && nextList != null && nextList.Count > 0)
+                    {
+                        if ((int)nextList[nextList.Count - 1] > (int)upList[upList.Count - 1]) return true;
+                    }
                 }
             }
             return false;
@@ -125,11 +151,16 @@ namespace FairiesPoker
         #region 判断是否为飞机
         private bool isFeiji(ArrayList list)
         {
+            if (list == null || list.Count < 6) return false;
+
             int[] args = arrayToArgs(list);
+            if (args == null || args.Length < 6) return false;
             if (args[0] > 14) return false;
+
             for (int i = 0; i < args.Length; i += 3)
             {
-                if (args[i] != args[i + 1] && args[i + 1] != args[i + 2]) return false;
+                if (i + 2 >= args.Length) return false;
+                if (args[i] != args[i + 1] || args[i + 1] != args[i + 2]) return false;
             }
             for (int i = 2; i < args.Length - 1; i += 3)
             {
@@ -142,22 +173,43 @@ namespace FairiesPoker
         private int upBigPai(int type, ArrayList upPai)
         {
             int[] args = mArrayToArgs(upPai);
+            if (args == null || args.Length == 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"upBigPai: args为空，返回18");
+                return 18; // 默认返回最大值
+            }
+
+            System.Diagnostics.Debug.WriteLine($"upBigPai: type={type}, args=[{string.Join(",", args)}]");
+
             int size = 18;
             if (type > 0 && type < 11) size = args[0];
-            else if (type > 10 && type < 15) size = args[2];
-            else if (type > 14 && type < 18) size = args[4];
-            else if (type == 18) size = args[6];
+            else if (type > 10 && type < 15)
+            {
+                size = args.Length > 2 ? args[2] : args[0];
+            }
+            else if (type > 14 && type < 18)
+            {
+                size = args.Length > 4 ? args[4] : args[0];
+            }
+            else if (type == 18)
+            {
+                size = args.Length > 6 ? args[6] : args[0];
+            }
             else if (type == 19)
             {
                 ArrayList upList = findZhadan(upPai);
-                size = (int)upList[upList.Count - 1];
+                if (upList != null && upList.Count > 0)
+                    size = (int)upList[upList.Count - 1];
             }
+            System.Diagnostics.Debug.WriteLine($"upBigPai: 返回size={size}");
             return size;
         }
         #endregion
         #region 获取上手出的最大牌的下标
         private int findBigSub(int size, int[] next)
         {
+            if (next == null || next.Length == 0) return -1;
+
             if (size < next[next.Length - 1])
             {
                 for (int i = 0; i < next.Length; i++)
@@ -171,17 +223,17 @@ namespace FairiesPoker
         #region 排除不能组合成顺子或连对的牌
         public ArrayList removeBigPai(int size, ArrayList nextPai)
         {
-            if (nextPai.Count != 0)
+            if (nextPai == null || nextPai.Count == 0) return new ArrayList();
+
+            int[] next = arrayToArgs(nextPai);
+            if (next == null) return new ArrayList();
+
+            ArrayList list = new ArrayList();
+            for (int i = 0; i < next.Length; i++)
             {
-                int[] next = arrayToArgs(nextPai);
-                ArrayList list = new ArrayList();
-                for (int i = 0; i < next.Length; i++)
-                {
-                    if (next[i] < 15) list.Add(next[i]);
-                }
-                return list;
+                if (next[i] < 15) list.Add(next[i]);
             }
-            return nextPai;
+            return list;
         }
         #endregion
         #region 扫描当前牌中所有可以组合顺子的单张，如重复，只取一张
@@ -189,6 +241,8 @@ namespace FairiesPoker
         {
             ArrayList list = removeBigPai(size, nextPai);
             int[] args = mArrayToArgs(list);
+            if (args == null || args.Length == 0) return null;
+
             int sub = findBigSub(size, args);
             list.Clear();
             if (sub != -1)
@@ -208,6 +262,8 @@ namespace FairiesPoker
         {
             ArrayList list = removeBigPai(size, nextPai);
             int[] args = mArrayToArgs(list);
+            if (args == null || args.Length == 0) return null;
+
             int sub = findBigSub(size, args);
             list.Clear();
             if (sub != -1)
@@ -231,16 +287,17 @@ namespace FairiesPoker
         #region 搜索天炸
         public ArrayList findTianzha(ArrayList nextPai)
         {
-            if (nextPai.Count > 1)
+            if (nextPai == null || nextPai.Count < 2) return null;
+
+            int[] args = arrayToArgs(nextPai);
+            if (args == null || args.Length < 2) return null;
+
+            ArrayList list = new ArrayList();
+            if (args[0] == 17 && args[1] == 16)
             {
-                int[] args = arrayToArgs(nextPai);
-                ArrayList list = new ArrayList();
-                if (args[0] == 17 && args[1] == 16)
-                {
-                    list.Add(args[0]); 
-                    list.Add(args[1]); 
-                    return list;
-                }
+                list.Add(args[0]);
+                list.Add(args[1]);
+                return list;
             }
             return null;
         }
@@ -248,7 +305,11 @@ namespace FairiesPoker
         #region 搜索炸弹
         public ArrayList findZhadan(ArrayList nextPai)
         {
+            if (nextPai == null || nextPai.Count < 4) return null;
+
             int[] args = arrayToArgs(nextPai);
+            if (args == null || args.Length < 4) return null;
+
             ArrayList list = new ArrayList();
             ArrayList list1 = new ArrayList();
             chupai.minToBig(args);
@@ -279,6 +340,8 @@ namespace FairiesPoker
         #region 搜索所有大于上手牌的顺子
         private ArrayList shunzi(int paiType,ArrayList upPai,ArrayList nextPai)
         {
+            if (upPai == null || nextPai == null) return null;
+
             ArrayList list = new ArrayList();
             if (nextPai.Count > upPai.Count)
             {
@@ -315,6 +378,8 @@ namespace FairiesPoker
         #region 搜索所有大于上手牌的连对
         private ArrayList liandui(int paiType, ArrayList upPai, ArrayList nextPai)
         {
+            if (upPai == null || nextPai == null) return null;
+
             ArrayList list = new ArrayList();
             ArrayList list1 = new ArrayList();
             int upLen = upPai.Count / 2;
@@ -358,45 +423,44 @@ namespace FairiesPoker
         private ArrayList findFeiji(int size,int paiType,ArrayList nextPai)
         {
             ArrayList list = basic(size, nextPai);
-            if (list != null)
+            if (list == null || list.Count < 4) return null;
+
+            ArrayList list1 = new ArrayList();
+            int[] a = arrayToArgs((ArrayList)list[2]);
+            int[] b = arrayToArgs((ArrayList)list[3]);
+            list.Clear();
+            if (a != null)
             {
-                ArrayList list1 = new ArrayList();
-                int[] a = arrayToArgs((ArrayList)list[2]);
-                int[] b = arrayToArgs((ArrayList)list[3]);
-                list.Clear();
-                if (a != null)
+                for (int i = 0; i < a.Length; i++)
                 {
-                    for (int i = 0; i < a.Length; i++)
-                    {
-                        list1.Add(a[i]);
-                    }
+                    list1.Add(a[i]);
                 }
-                if (b != null)
+            }
+            if (b != null)
+            {
+                for (int i = 0; i < b.Length; i++)
                 {
-                    for (int i = 0; i < b.Length; i++)
-                    {
-                        list1.Add(b[i]);
-                    }
+                    list1.Add(b[i]);
                 }
-                int[] args = mArrayToArgs(list1);
-                if (args == null) return null;
-                list1.Clear();
-                int len = args.Length;
-                paiType -= 5;
-                if (len > 1 && len >= paiType)
+            }
+            int[] args = mArrayToArgs(list1);
+            if (args == null) return null;
+            list1.Clear();
+            int len = args.Length;
+            paiType -= 5;
+            if (len > 1 && len >= paiType)
+            {
+                for (int i = 0; i < len - paiType + 1; i++)
                 {
-                    for (int i = 0; i < len - paiType + 1; i++)
+                    for (int j = 0; j < paiType; j++)
                     {
-                        for (int j = 0; j < paiType; j++)
-                        {
-                            list1.Add(args[j + i]); list1.Add(args[j + i]); list1.Add(args[j + i]);
-                        }
-                        if (isFeiji(list1)) list.Add(list1.Clone());
-                        list1.Clear();
+                        list1.Add(args[j + i]); list1.Add(args[j + i]); list1.Add(args[j + i]);
                     }
-                    if(list.Count != 0)  return list;
-                    return null;
+                    if (isFeiji(list1)) list.Add(list1.Clone());
+                    list1.Clear();
                 }
+                if(list.Count != 0)  return list;
+                return null;
             }
             return null;
         }
@@ -405,9 +469,13 @@ namespace FairiesPoker
         private ArrayList fly_n(int size, int paiType, ArrayList nextPai)
         {
             ArrayList list = basic(2, nextPai);
+            if (list == null || list.Count < 4) return null;
+
             int[] a = mArrayToArgs((ArrayList)list[0]);
             int[] b = mArrayToArgs((ArrayList)list[1]);
             list = basic(size, nextPai);
+            if (list == null || list.Count < 4) return null;
+
             int[] c = mArrayToArgs((ArrayList)list[2]);
             int[] d = mArrayToArgs((ArrayList)list[3]);
             ArrayList list1 = new ArrayList();
@@ -660,7 +728,16 @@ namespace FairiesPoker
         public ArrayList basic(int size, ArrayList nextPai)
         {
             int[] next = mArrayToArgs(nextPai);
+            if (next == null || next.Length == 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"basic: next为空");
+                return null;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"basic: size={size}, next=[{string.Join(",", next)}]");
+
             int sub = findBigSub(size, next);
+            System.Diagnostics.Debug.WriteLine($"basic: findBigSub返回sub={sub}");
             if (sub != -1)
             {
                 ArrayList list = new ArrayList();
@@ -719,8 +796,10 @@ namespace FairiesPoker
                 list.Add(list2);
                 list.Add(list3);
                 list.Add(list4);
+                System.Diagnostics.Debug.WriteLine($"basic: singles={list1.Count}, pairs={list2.Count}, triples={list3.Count}, quads={list4.Count}");
                 return list;
             }
+            System.Diagnostics.Debug.WriteLine($"basic: findBigSub返回-1，返回null");
             return null;
         }
         #endregion

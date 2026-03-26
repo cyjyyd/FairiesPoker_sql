@@ -1,10 +1,10 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Drawing;
 using System.Media;
 using System.Threading;
 using System.Windows.Forms;
-public delegate void Myweituo1(int status,bool visible);//用于委托主线程进行控件的显示
+public delegate void Myweituo1(int status,bool visible);
 namespace FairiesPoker
 {
     public partial class DdzMian : Form
@@ -13,42 +13,40 @@ namespace FairiesPoker
         /// 面向对象编程中型项目首次实践（斗地主单机版）
         /// </summary>
         #region 所有属性
-        Point mouseOff;//记录鼠标位置
-        public win win;//游戏结果显示
-        private UI ui = new UI();//UI加载
-        private config con = new config();//设置
-        private Pai[] pai;//一副牌
-        private Juese juese1;//角色1
-        private Juese juese2;//角色2
-        private Juese juese3;//角色3
-        private Chupai chupai;//出牌类
-        private Jiepai jiepai;//接牌类
-        private Thread th_faPai;//发牌线程
-        private Thread th_daPai;//打牌线程
-        private PictureBox[] paiImage;//牌图形
-        private ComputerChuPai Cchupai;//电脑出牌类
-        private SoundPlayer SoundLoss;//输播放声音
-        private SoundPlayer SoundWin;//赢播放声音
-        private SoundPlayer SoundClick;//点击按钮声音
-        private SoundPlayer SoundGive;//出牌声音
-        private Myweituo1 weituo1;//出牌，不出，叫地主等按钮的设置
-        private ArrayList saveList;//保存链表
+        Point mouseOff;
+        public win win;
+        private UI ui = new UI();
+        private config con = new config();
+        private Pai[] pai;
+        private Juese juese1;
+        private Juese juese2;
+        private Juese juese3;
+        private Chupai chupai;
+        private Jiepai jiepai;
+        private GameThreadManager tm_faPai;
+        private GameThreadManager tm_daPai;
+        private PictureBox[] paiImage;
+        private ComputerChuPai Cchupai;
+        private SoundPlayer SoundLoss;
+        private SoundPlayer SoundWin;
+        private SoundPlayer SoundClick;
+        private SoundPlayer SoundGive;
+        private Myweituo1 weituo1;
+        private ArrayList saveList;
         private int buChuPai = 0;
-        private int chuPaiWeiZhi;//出牌位置
-        private int tishi = 0;//提示
-        private bool bl_isDiZhu = false;//是否是地主
-        private bool noDiZhu = false;//是否没有地主
-        private bool bl_isFirst = false;//是否第一次出牌
-        private bool bl_chuPaiOver;//是否出牌完毕
-        private bool leftFlag;//是否左键
+        private int chuPaiWeiZhi;
+        private int tishi = 0;
+        private bool bl_isDiZhu = false;
+        private bool noDiZhu = false;
+        private bool bl_isFirst = false;
+        private bool bl_chuPaiOver;
+        private bool leftFlag;
         private bool online = false;
         #endregion
         #region 窗体设置
         public DdzMian(bool online)
         {
-            /// <summary>
-            /// 设置控件绘制方式（双缓冲UI绘制）：控件先在缓冲区中自行绘制，并忽略WM_ERASEKGND消息引起的重绘，从而减少闪烁
-            /// </summary>
+            this.online = online;
             InitializeComponent();
             this.SetStyle(ControlStyles.UserPaint, true);
             this.SetStyle(ControlStyles.AllPaintingInWmPaint, true);
@@ -58,7 +56,7 @@ namespace FairiesPoker
         }
         private void DdzMian_Load(object sender, EventArgs e)
         {
-            int i = 1; CheckForIllegalCrossThreadCalls = false;//禁用此项可以跨线程调用控件
+            int i = 1; CheckForIllegalCrossThreadCalls = false;
             for (i = 1; i <=8; i++)
             {
                 Control[] a = this.Controls.Find("button" + i.ToString(), true);
@@ -66,10 +64,12 @@ namespace FairiesPoker
                 ((Button)(a[0])).MouseDown += DdzMian_MouseDown1;
                 ((Button)(a[0])).MouseUp += DdzMian_MouseUp1;
             }
-            SoundLoss = new SoundPlayer(Properties.Resources._5538);
-            SoundWin = new SoundPlayer(Properties.Resources._5553);
-            SoundClick = new SoundPlayer(Properties.Resources.click);
-            SoundGive = new SoundPlayer(Properties.Resources.give);
+            string resourcePath = Application.StartupPath + "\\Resources\\";
+            SoundLoss = new SoundPlayer(resourcePath + "5538.wav");
+            SoundWin = new SoundPlayer(resourcePath + "5553.wav");
+            SoundClick = new SoundPlayer(resourcePath + "click.wav");
+            SoundGive = new SoundPlayer(resourcePath + "give.wav");
+            audioPlayer = new AudioPlayer();
             this.Focus();
             if (online)
             {
@@ -78,9 +78,6 @@ namespace FairiesPoker
         }
         #endregion
         #region NEW出3个角色
-        /// <summary>
-        /// 新建三个角色，用于记录剩余的牌等...后续会添加其他功能
-        /// </summary>
         private void newPlayer()
         {
             juese1 = new Juese();
@@ -97,8 +94,8 @@ namespace FairiesPoker
             pai = new Pai[54];
             paiImage = new PictureBox[54];
             weituo1 = new Myweituo1(buttonset);
-            th_faPai = new Thread(new ThreadStart(fapai));
-            th_daPai = new Thread(new ThreadStart(daPai));
+            tm_faPai = new GameThreadManager();
+            tm_daPai = new GameThreadManager();
             chupai = new Chupai();
             jiepai = new Jiepai();
             saveList = new ArrayList();
@@ -298,9 +295,7 @@ namespace FairiesPoker
                     case 7:mpath = Path.UI_LN.ToString();
                         break;
                 }
-                axWindowsMediaPlayer1.URL = Application.StartupPath + "\\" + mpath + "\\background.mp3";
-                axWindowsMediaPlayer1.settings.setMode("loop", true);
-                axWindowsMediaPlayer1.Ctlcontrols.play();
+                audioPlayer.Play(Application.StartupPath + "\\" + mpath + "\\background.mp3", true);
             }
             do
             {
@@ -336,9 +331,9 @@ namespace FairiesPoker
                         {
                             bl3 = true; count++; num = 1;
                             this.button1.Invoke(weituo1,1,true);
-#pragma warning disable CS0618 // “Thread.Suspend()”已过时:“Thread.Suspend has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
-                            th_faPai.Suspend();
-#pragma warning restore CS0618 // “Thread.Suspend()”已过时:“Thread.Suspend has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
+                            tm_faPai.Pause();
+                            tm_faPai.WaitOne();
+                            if (tm_faPai.ShouldStop()) return;
                             if (bl_isDiZhu)
                             {
                                 count = 3; juese2.Dizhu = true; switchDiZhu = 2;
@@ -390,7 +385,7 @@ namespace FairiesPoker
                 MessageBox.Show("没有人选择地主，本局结束！","Warning",MessageBoxButtons.OK,MessageBoxIcon.Warning);
                 noDiZhu = true;
             }
-            th_faPai.Abort();
+            return;
         }
         #endregion
         #region 按钮设置
@@ -433,12 +428,6 @@ namespace FairiesPoker
         }
         #endregion
         #region 电脑叫地主
-        /// <summary>
-        /// 根据牌的权值来确定是否叫地主，大王权值+4，小王+3
-        /// 每一张2加2，一张A加一，当总计权值不小于7则叫地主
-        /// </summary>
-        /// <param name="juese"></param>
-        /// <returns></returns>
         private bool isJiaoDiZhu (Juese juese)
         {
             int quanzhi = 0;
@@ -461,18 +450,14 @@ namespace FairiesPoker
         }
         #endregion
         #region 打牌主流程
-        /// <summary>
-        /// 打牌主流程，先出第一手牌，然后循环出牌
-        /// 任何一方牌出完则跳出循环并计算结果~
-        /// </summary>
         private void daPai ()
         {
-            th_faPai.Start();
-            th_faPai.Join();
+            tm_faPai.Start(new ThreadStart(fapai));
+            tm_faPai.Join();
             if (noDiZhu)
             {
                 noDiZhu = false; chongZhi();
-                th_daPai.Abort();
+                return;
             }
             int num = 0;
             if (juese1.Dizhu)
@@ -481,15 +466,17 @@ namespace FairiesPoker
             }
             else if (juese2.Dizhu)
             {
-#pragma warning disable CS0618 // “Thread.Suspend()”已过时:“Thread.Suspend has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
-                num = 1; this.button1.Invoke(weituo1,4, true); th_daPai.Suspend(); shengyupai();
-#pragma warning restore CS0618 // “Thread.Suspend()”已过时:“Thread.Suspend has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
+                num = 1; this.button1.Invoke(weituo1,4, true);
+                tm_daPai.Pause();
+                tm_daPai.WaitOne();
+                if (tm_daPai.ShouldStop()) return;
+                shengyupai();
             }
             else if (juese3.Dizhu)
             {
                 num = 3; Thread.Sleep(2000); computerChuPai(juese3);soundFx(1); shengyupai();
             }
-            bl_isFirst = true; 
+            bl_isFirst = true;
             do
             {
                 #region 角色一出牌或接牌
@@ -502,7 +489,7 @@ namespace FairiesPoker
                     }
                     else computerJiePai(juese1);
                     this.label3.Text = "";
-                    shengyupai(); 
+                    shengyupai();
                 }
                 if (bl_chuPaiOver)
                 {
@@ -536,11 +523,11 @@ namespace FairiesPoker
                     num = 1;
                     if (buChuPai == 2) this.button1.Invoke(weituo1, 4, true);
                     else this.button1.Invoke(weituo1, 2, true);
-#pragma warning disable CS0618 // “Thread.Suspend()”已过时:“Thread.Suspend has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
-                    th_daPai.Suspend();
-#pragma warning restore CS0618 // “Thread.Suspend()”已过时:“Thread.Suspend has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
+                    tm_daPai.Pause();
+                    tm_daPai.WaitOne();
+                    if (tm_daPai.ShouldStop()) return;
                     this.label1.Text = "";
-                    shengyupai();          
+                    shengyupai();
                 }
                 if (bl_chuPaiOver)
                 {
@@ -555,7 +542,8 @@ namespace FairiesPoker
             if (juese2.ShengYuPai.Count == 0) soundFx(2);
             else if (juese1.Dizhu && juese1.ShengYuPai.Count != 0 || juese3.Dizhu && juese3.ShengYuPai.Count != 0) soundFx(2);
             else soundFx(3);
-            chongZhi(); th_daPai.Abort();
+            chongZhi();
+            return;
             #endregion
         }
         #endregion
@@ -563,9 +551,21 @@ namespace FairiesPoker
         private void computerChuPai(Juese juese)
         {
             yichu();
+
+            // 初始化AI（每次出牌前确保AI知道当前游戏状态）
+            int landlordPos = 0;
+            bool isCurrentLandlord = juese.Dizhu;
+            if (juese1.Dizhu) landlordPos = 1;
+            else if (juese2.Dizhu) landlordPos = 2;
+            else if (juese3.Dizhu) landlordPos = 3;
+
+            Cchupai.InitializeGame(juese.WeiZhi, isCurrentLandlord, landlordPos);
+
             ArrayList list = Cchupai.chuPai(juese.ShengYuPai);
+            System.Diagnostics.Debug.WriteLine($"computerChuPai: list={(list == null ? "null" : list.Count.ToString())}");
             if (list != null && chupai.isRight(list))
             {
+                System.Diagnostics.Debug.WriteLine($"computerChuPai: chupai.PaiType={chupai.PaiType}");
                 juese1.ShangShouPai.Clear(); juese2.ShangShouPai.Clear(); juese3.ShangShouPai.Clear();
                 movePai(juese, jiepai.arrayToArgs(list));soundFx(1);
             }
@@ -615,9 +615,59 @@ namespace FairiesPoker
         #region 电脑接牌
         private void computerJiePai(Juese juese)
         {
-            chuPaiWeiZhi = 640 - (juese2.ShangShouPai.Count * 30 + 120) / 2;
-            bool bl = tiShiJiePai(jiepai.isRight(chupai.PaiType, juese.ShangShouPai, juese.ShengYuPai), juese, false);
-            //chuPaiWeiZhi = 109;
+            chuPaiWeiZhi = 640 - (juese.ShangShouPai.Count * 30 + 120) / 2;
+
+            // 调试信息：检查关键参数
+            System.Diagnostics.Debug.WriteLine($"电脑接牌: PaiType={chupai.PaiType}, ShangShouPai.Count={juese.ShangShouPai?.Count ?? -1}, ShengYuPai.Count={juese.ShengYuPai?.Count ?? -1}");
+
+            // 检查ShangShouPai是否为空
+            if (juese.ShangShouPai == null || juese.ShangShouPai.Count == 0)
+            {
+                System.Diagnostics.Debug.WriteLine("ShangShouPai为空，无法接牌");
+                if (juese == juese1)
+                {
+                    this.label2.Text = "不出"; soundFx(0);
+                }
+                else if (juese == juese2)
+                {
+                    this.label3.Text = "不出"; soundFx(0);
+                }
+                else
+                {
+                    this.label1.Text = "不出"; soundFx(0);
+                }
+                buChuPai++;
+                return;
+            }
+
+            // 检查PaiType是否有效
+            if (chupai.PaiType <= 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"PaiType无效: {chupai.PaiType}");
+                if (juese == juese1)
+                {
+                    this.label2.Text = "不出"; soundFx(0);
+                    juese3.ShangShouPai = (ArrayList)juese.ShangShouPai.Clone();
+                }
+                else if (juese == juese2)
+                {
+                    this.label3.Text = "不出"; soundFx(0);
+                    juese1.ShangShouPai = (ArrayList)juese.ShangShouPai.Clone();
+                }
+                else
+                {
+                    this.label1.Text = "不出"; soundFx(0);
+                    juese2.ShangShouPai = (ArrayList)juese.ShangShouPai.Clone();
+                }
+                buChuPai++; juese.ShangShouPai.Clear();
+                return;
+            }
+
+            // 直接使用原来的提示接牌逻辑（AI版本，不显示提示）
+            ArrayList possibleMoves = jiepai.isRight(chupai.PaiType, juese.ShangShouPai, juese.ShengYuPai);
+            System.Diagnostics.Debug.WriteLine($"jiepai.isRight返回: {(possibleMoves == null ? "null" : possibleMoves.Count.ToString())}");
+
+            bool bl = tiShiJiePai(possibleMoves, juese, false);
             if (bl == false)
             {
                 if (juese == juese1)
@@ -659,10 +709,13 @@ namespace FairiesPoker
         #region 提示接牌
         private bool tiShiJiePai(ArrayList list, Juese juese, bool bl_tishi)
         {
-            if (chupai.PaiType == (int)Guize.天炸) return false;//如果上手出了火箭，直接要不起
+            System.Diagnostics.Debug.WriteLine($"tiShiJiePai: PaiType={chupai.PaiType}, list={(list == null ? "null" : list.Count.ToString())}");
+
+            if (chupai.PaiType == (int)Guize.天炸) return false;
             #region 单张
             else if (chupai.PaiType == (int)Guize.一张)
             {
+                System.Diagnostics.Debug.WriteLine("处理单张...");
                 if (list != null)
                 {
                     int[] jie = null;
@@ -670,6 +723,8 @@ namespace FairiesPoker
                     else if (((ArrayList)list[1]).Count != 0) jie = jiepai.mArrayToArgs((ArrayList)list[1]);
                     else if (((ArrayList)list[2]).Count != 0) jie = jiepai.mArrayToArgs((ArrayList)list[2]);
                     else if (((ArrayList)list[3]).Count != 0) jie = jiepai.mArrayToArgs((ArrayList)list[3]);
+
+                    System.Diagnostics.Debug.WriteLine($"单张jie: {(jie == null ? "null" : string.Join(",", jie))}");
                     if (jie != null)
                     {
                         if (tishi == jie.Length) tishi = 0;
@@ -684,12 +739,15 @@ namespace FairiesPoker
             #region 对子
             else if (chupai.PaiType == (int)Guize.对子)
             {
+                System.Diagnostics.Debug.WriteLine("处理对子...");
                 if (list != null)
                 {
                     int[] jie = null;
                     if (((ArrayList)list[0]).Count != 0) jie = jiepai.mArrayToArgs((ArrayList)list[0]);
                     else if (((ArrayList)list[1]).Count != 0) jie = jiepai.mArrayToArgs((ArrayList)list[1]);
                     else if (((ArrayList)list[2]).Count != 0) jie = jiepai.mArrayToArgs((ArrayList)list[2]);
+
+                    System.Diagnostics.Debug.WriteLine($"对子jie: {(jie == null ? "null" : string.Join(",", jie))}");
                     if (jie != null)
                     {
                         if (tishi == jie.Length) tishi = 0;
@@ -704,11 +762,14 @@ namespace FairiesPoker
             #region 三张
             else if (chupai.PaiType == (int)Guize.三不带)
             {
+                System.Diagnostics.Debug.WriteLine("处理三张...");
                 if (list != null)
                 {
                     int[] jie = null;
                     if (((ArrayList)list[0]).Count != 0) jie = jiepai.mArrayToArgs((ArrayList)list[0]);
                     else if (((ArrayList)list[1]).Count != 0) jie = jiepai.mArrayToArgs((ArrayList)list[1]);
+
+                    System.Diagnostics.Debug.WriteLine($"三张jie: {(jie == null ? "null" : string.Join(",", jie))}");
                     if (jie != null)
                     {
                         if (tishi == jie.Length) tishi = 0;
@@ -723,9 +784,11 @@ namespace FairiesPoker
             #region 炸弹
             else if (chupai.PaiType == (int)Guize.炸弹)
             {
+                System.Diagnostics.Debug.WriteLine("处理炸弹...");
                 if (list != null && list.Count != 0)
                 {
                     int[] jie = jiepai.mArrayToArgs(list);
+                    System.Diagnostics.Debug.WriteLine($"炸弹jie: {(jie == null ? "null" : string.Join(",", jie))}");
                     if (tishi == jie.Length) tishi = 0;
                     int[] _jie = new int[] { jie[tishi], jie[tishi], jie[tishi], jie[tishi] };
                     if (bl_tishi) tiShiBottun(_jie);
@@ -746,7 +809,7 @@ namespace FairiesPoker
                     return true;
                 }
             }
-            #endregion 
+            #endregion
             #region 四带二,四带两对,飞机带,三飞机带,四飞机带
             else if (chupai.PaiType > 12 && chupai.PaiType < 20)
             {
@@ -760,10 +823,12 @@ namespace FairiesPoker
             }
             #endregion
             #region 如果同类型牌要不起，就判断是否有炸弹
+            System.Diagnostics.Debug.WriteLine($"检查炸弹: PaiType={chupai.PaiType}");
             if (chupai.PaiType != (int)Guize.炸弹)
             {
                 list = jiepai.findZhadan(juese.ShengYuPai);
                 int[] jie = jiepai.mArrayToArgs(list);
+                System.Diagnostics.Debug.WriteLine($"炸弹搜索结果: {(jie == null ? "null" : string.Join(",", jie))}");
                 if (jie != null)
                 {
                     if (tishi == jie.Length) tishi = 0;
@@ -779,6 +844,7 @@ namespace FairiesPoker
             }
             list = jiepai.findTianzha(juese.ShengYuPai);
             int[] huoJian = jiepai.mArrayToArgs(list);
+            System.Diagnostics.Debug.WriteLine($"王炸搜索结果: {(huoJian == null ? "null" : string.Join(",", huoJian))}");
             if (huoJian != null)
             {
                 if (bl_tishi) tiShiBottun(huoJian);
@@ -790,6 +856,7 @@ namespace FairiesPoker
                 return true;
             }
             #endregion
+            System.Diagnostics.Debug.WriteLine("无可用牌，返回false");
             return false;
         }
         #endregion
@@ -818,7 +885,7 @@ namespace FairiesPoker
         #region 重置所有对象
         private void chongZhi()
         {
-            axWindowsMediaPlayer1.Ctlcontrols.stop();
+            audioPlayer?.Stop();
             if (bl_chuPaiOver)
             {
                 win = new win(result(),new string[] {juese1.Name,juese2.Name,juese3.Name });
@@ -852,7 +919,7 @@ namespace FairiesPoker
             groupBox3.Visible = false;
             label6.Text = "剩余牌：";
             label5.Text = "剩余牌：";
-            label4.Text = "剩余牌："; 
+            label4.Text = "剩余牌：";
             this.button1.Visible = true;
         }
         #endregion
@@ -1097,39 +1164,8 @@ namespace FairiesPoker
         }
         private void ThreadStop ()
         {
-            if (th_faPai != null)
-            {
-                if (th_faPai.ThreadState == ThreadState.Suspended)
-                {
-#pragma warning disable CS0618 // “Thread.Resume()”已过时:“Thread.Resume has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
-                    th_faPai.Resume();
-#pragma warning restore CS0618 // “Thread.Resume()”已过时:“Thread.Resume has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
-                    th_faPai.Abort();
-                }
-                else if (th_faPai.ThreadState == ThreadState.Running)
-                {
-                    th_faPai.Abort();
-                    th_daPai.Abort();
-                }
-            }
-            if (th_daPai != null)
-            {
-                if (th_daPai.ThreadState == ThreadState.Suspended)
-                {
-#pragma warning disable CS0618 // “Thread.Resume()”已过时:“Thread.Resume has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
-                    th_daPai.Resume();
-#pragma warning restore CS0618 // “Thread.Resume()”已过时:“Thread.Resume has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
-                    th_daPai.Abort();
-                }
-                else if (th_daPai.ThreadState == ThreadState.WaitSleepJoin)
-                {
-                    th_daPai.Abort();
-                }
-                else if (th_daPai.ThreadState == ThreadState.Running)
-                {
-                    th_daPai.Abort();
-                }
-            }
+            tm_faPai?.Cancel();
+            tm_daPai?.Cancel();
         }
         private void ShowPai (Juese juese, int[] whatPai)
         {
@@ -1192,7 +1228,7 @@ namespace FairiesPoker
             groupBox3.Visible = true;
             load();
             soundFx(0);
-            th_daPai.Start();
+            tm_daPai.Start(new ThreadStart(daPai));
         }
 
         private void button2_Click(object sender, EventArgs e)
@@ -1202,9 +1238,7 @@ namespace FairiesPoker
             {
                 bl_isDiZhu = true;
                 buttonset(3, false);
-#pragma warning disable CS0618 // “Thread.Resume()”已过时:“Thread.Resume has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
-                th_faPai.Resume();
-#pragma warning restore CS0618 // “Thread.Resume()”已过时:“Thread.Resume has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
+                tm_faPai.Resume();
             }
             else if (button2.Text=="出牌")
             {
@@ -1218,10 +1252,12 @@ namespace FairiesPoker
                 }
                 chuPaiWeiZhi -= (j * 30 + 120)/2;
                 int paiType = chupai.PaiType;
+                System.Diagnostics.Debug.WriteLine($"玩家出牌: 原PaiType={paiType}, ShangShouPai.Count={juese2.ShangShouPai?.Count ?? -1}");
                 if (saveList.Count != 0)
                 {
                     if (chupai.isRight(saveList))
                     {
+                        System.Diagnostics.Debug.WriteLine($"玩家出牌验证通过: 新PaiType={chupai.PaiType}");
                         if (buChuPai != 2 && bl_isFirst)
                         {
                             if (jiepai.isRight(juese2.ShangShouPai, saveList, paiType))
@@ -1229,9 +1265,8 @@ namespace FairiesPoker
                                 yichu();soundFx(1);
                                 this.button2.Invoke (weituo1,3,false);
                                 juese1.ShangShouPai.Clear(); movePai(juese2, jiepai.arrayToArgs(saveList)); buChuPai = 0;
-#pragma warning disable CS0618 // “Thread.Resume()”已过时:“Thread.Resume has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
-                                th_daPai.Resume();
-#pragma warning restore CS0618 // “Thread.Resume()”已过时:“Thread.Resume has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
+                                System.Diagnostics.Debug.WriteLine($"玩家出牌完成: PaiType={chupai.PaiType}, juese1.ShangShouPai.Count={juese1.ShangShouPai?.Count ?? -1}");
+                                tm_daPai.Resume();
                             }
                             else
                             {
@@ -1243,12 +1278,11 @@ namespace FairiesPoker
                         else
                         {
                             yichu();soundFx(1);
-                            this.button2.Invoke(weituo1, 3, false); 
+                            this.button2.Invoke(weituo1, 3, false);
                             juese1.ShangShouPai.Clear(); juese2.ShangShouPai.Clear(); juese3.ShangShouPai.Clear();
                             movePai(juese2, jiepai.arrayToArgs(saveList)); buChuPai = 0;
-#pragma warning disable CS0618 // “Thread.Resume()”已过时:“Thread.Resume has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
-                            th_daPai.Resume();
-#pragma warning restore CS0618 // “Thread.Resume()”已过时:“Thread.Resume has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
+                            System.Diagnostics.Debug.WriteLine($"玩家出牌完成(首出): PaiType={chupai.PaiType}, juese1.ShangShouPai.Count={juese1.ShangShouPai?.Count ?? -1}");
+                            tm_daPai.Resume();
                         }
                     }
                     else
@@ -1256,7 +1290,7 @@ namespace FairiesPoker
                         chupai.PaiType = paiType;
                         MessageBox.Show("您出的牌不符合规则!");
                     }
-                    saveList.Clear(); 
+                    saveList.Clear();
                     for (int i = 0; i < juese2.ImagePaiSub.Count; i++)
                     {
                         paiImage[(int)juese2.ImagePaiSub[i]].Top = 483;
@@ -1271,9 +1305,7 @@ namespace FairiesPoker
             if (button3.Text=="不叫")
             {
                 buttonset(3, false);
-#pragma warning disable CS0618 // “Thread.Resume()”已过时:“Thread.Resume has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
-                th_faPai.Resume();
-#pragma warning restore CS0618 // “Thread.Resume()”已过时:“Thread.Resume has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
+                tm_faPai.Resume();
             }
             else if (button3.Text=="不出")
             {
@@ -1287,9 +1319,7 @@ namespace FairiesPoker
                 juese1.ShangShouPai = (ArrayList)juese2.ShangShouPai.Clone();
                 juese2.ShangShouPai.Clear();
                 this.label3.Text = "不出";
-#pragma warning disable CS0618 // “Thread.Resume()”已过时:“Thread.Resume has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
-                th_daPai.Resume();
-#pragma warning restore CS0618 // “Thread.Resume()”已过时:“Thread.Resume has been deprecated.  Please use other classes in System.Threading, such as Monitor, Mutex, Event, and Semaphore, to synchronize Threads or protect resources.  http://go.microsoft.com/fwlink/?linkid=14202”
+                tm_daPai.Resume();
             }
         }
 
@@ -1386,7 +1416,6 @@ namespace FairiesPoker
         }
         private void DdzMian_Shown(object sender, EventArgs e)
         {
-            //this.Size = new Size(con.Width,con.Height);
         }
 
         private void timer1_Tick(object sender, EventArgs e)

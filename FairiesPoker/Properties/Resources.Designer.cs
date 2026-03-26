@@ -59,25 +59,7 @@ namespace FairiesPoker.Properties {
                 resourceCulture = value;
             }
         }
-        
-        /// <summary>
-        ///   查找类似于 System.IO.MemoryStream 的 System.IO.UnmanagedMemoryStream 类型的本地化资源。
-        /// </summary>
-        internal static System.IO.UnmanagedMemoryStream _5538 {
-            get {
-                return ResourceManager.GetStream("_5538", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   查找类似于 System.IO.MemoryStream 的 System.IO.UnmanagedMemoryStream 类型的本地化资源。
-        /// </summary>
-        internal static System.IO.UnmanagedMemoryStream _5553 {
-            get {
-                return ResourceManager.GetStream("_5553", resourceCulture);
-            }
-        }
-        
+
         /// <summary>
         ///   查找 System.Drawing.Bitmap 类型的本地化资源。
         /// </summary>
@@ -149,11 +131,12 @@ namespace FairiesPoker.Properties {
         }
         
         /// <summary>
-        ///   查找类似于 System.IO.MemoryStream 的 System.IO.UnmanagedMemoryStream 类型的本地化资源。
+        ///   查找 System.Byte[] 类型的本地化资源。
         /// </summary>
-        internal static System.IO.UnmanagedMemoryStream click {
+        internal static byte[] click {
             get {
-                return ResourceManager.GetStream("click", resourceCulture);
+                object obj = ResourceManager.GetObject("click", resourceCulture);
+                return ((byte[])(obj));
             }
         }
         
@@ -188,11 +171,12 @@ namespace FairiesPoker.Properties {
         }
         
         /// <summary>
-        ///   查找类似于 System.IO.MemoryStream 的 System.IO.UnmanagedMemoryStream 类型的本地化资源。
+        ///   查找 System.Byte[] 类型的本地化资源。
         /// </summary>
-        internal static System.IO.UnmanagedMemoryStream give {
+        internal static byte[] give {
             get {
-                return ResourceManager.GetStream("give", resourceCulture);
+                object obj = ResourceManager.GetObject("give", resourceCulture);
+                return ((byte[])(obj));
             }
         }
         

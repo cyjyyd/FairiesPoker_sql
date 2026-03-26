@@ -1,40 +1,49 @@
-﻿using Protocol.Constant;
+using Protocol.Constant;
 using System;
 using System.Collections.Generic;
+using ProtoBuf;
 
 namespace Protocol.Dto.Fight
 {
+    [ProtoContract]
     [Serializable]
     public class DealDto
     {
         /// <summary>
         /// 选中要出的牌
         /// </summary>
+        [ProtoMember(1)]
         public List<CardDto> SelectCardList;
         /// <summary>
         /// 长度
         /// </summary>
+        [ProtoMember(2)]
         public int Length;
         /// <summary>
         /// 权值
         /// </summary>
+        [ProtoMember(3)]
         public int Weight;
         /// <summary>
         /// 类型
         /// </summary>
+        [ProtoMember(4)]
         public int Type;
 
         /// <summary>
         /// 谁出的牌
         /// </summary>
+        [ProtoMember(5)]
         public int UserId;
         /// <summary>
         /// 牌是否合法
         /// </summary>
+        [ProtoMember(6)]
         public bool IsRegular;
         /// <summary>
         /// 剩余的手牌
         /// </summary>
+        [ProtoMember(7)]
         public List<CardDto> RemainCardList;
 
         public DealDto()

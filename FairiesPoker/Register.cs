@@ -13,7 +13,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Windows.Shapes;
 using Newtonsoft.Json;
 using Protocol.Code;
 using Protocol.Dto;
@@ -121,7 +120,7 @@ namespace FairiesPoker
             if (textBox3.Text.Length>=8&&textBox3.Text.Length<=16)
             {
                 pwd = null;
-                MD5 md5 = new MD5CryptoServiceProvider();
+                MD5 md5 = MD5.Create();
                 byte[] username = Encoding.Default.GetBytes(textBox3.Text);
                 byte[] encryptname = md5.ComputeHash(username);
                 for (int i = 0; i < encryptname.Length; i++)

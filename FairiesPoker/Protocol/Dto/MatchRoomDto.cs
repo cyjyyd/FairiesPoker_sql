@@ -1,30 +1,41 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using ProtoBuf;
 
 namespace Protocol.Dto
 {
     /// <summary>
     /// 房间数据对应的传输模型
     /// </summary>
+    [ProtoContract]
     [Serializable]
     public class MatchRoomDto
     {
         /// <summary>
         /// 用户id对应的用户数据的传输模型
         /// </summary>
+        [ProtoMember(1)]
+        [ProtoMap]
         public Dictionary<int, UserDto> UIdUserDict;
 
         /// <summary>
         /// 准备的玩家id列表
         /// </summary>
+        [ProtoMember(2)]
         public List<int> ReadyUIdList;
 
         /// <summary>
-        /// 存储玩家进入的顺序 
+        /// 存储玩家进入的顺序
         /// </summary>
+        [ProtoMember(3)]
         public List<int> UIdList;
+
+        [ProtoMember(4)]
+        public int LeftId;//左边玩家的id
+        [ProtoMember(5)]
+        public int RightId;//代表右边玩家的id
 
         public MatchRoomDto()
         {
@@ -53,12 +64,9 @@ namespace Protocol.Dto
             this.ReadyUIdList.Add(userId);
         }
 
-        public int LeftId;//左边玩家的id
-        public int RightId;//代表右边玩家的id
-
         /// <summary>
         /// 重置位置
-        ///  在每次玩家进入或者离开房间的时候 都需要调整一下位置 
+        ///  在每次玩家进入或者离开房间的时候 都需要调整一下位置
         /// </summary>
         public void ResetPosition(int myUserId)
         {

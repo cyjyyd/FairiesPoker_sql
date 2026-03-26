@@ -1,25 +1,35 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using ProtoBuf;
 
 namespace Protocol.Dto.Fight
 {
     /// <summary>
     /// 玩家的传输模型
     /// </summary>
+    [ProtoContract]
     [Serializable]
     public class PlayerDto
     {
+        [ProtoMember(1)]
         public int UserId;// 用户id
+        [ProtoMember(2)]
         public int Identity;//身份
+        [ProtoMember(3)]
         public List<CardDto> CardList;//自己拥有的手牌
 
         public PlayerDto(int userId)
         {
             this.Identity = Protocol.Constant.Identity.FARMER;
             this.UserId = userId;
+            this.CardList = new List<CardDto>();
+        }
+
+        public PlayerDto()
+        {
             this.CardList = new List<CardDto>();
         }
 

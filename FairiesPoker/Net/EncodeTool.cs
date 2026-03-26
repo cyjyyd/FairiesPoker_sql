@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
+using ProtoBuf;
 
 /// <summary>
 /// 关于编码的工具类
@@ -80,21 +80,31 @@ public static class EncodeTool
     /// <returns></returns>
     public static byte[] EncodeMsg(SocketMsg Msg)
     {
-        MemoryStream ms = new MemoryStream();
-        BinaryWriter bw = new BinaryWriter(ms);
-        bw.Write(Msg.OpCode);
-        bw.Write(Msg.SubCode);
-        //如果不等于null 才需要把object类型转换成字节数据 存起来
-        if (Msg.Value != null)
+        using (MemoryStream ms = new MemoryStream())
         {
-            byte[] valueBytes = EncodeObj(Msg.Value);
-            bw.Write(valueBytes);
+            using (BinaryWriter bw = new BinaryWriter(ms))
+            {
+                bw.Write(Msg.OpCode);
+                bw.Write(Msg.SubCode);
+
+                //如果不等于null 才需要把object类型转换成字节数据 存起来
+                if (Msg.Value != null)
+                {
+                    // 获取类型名称
+                    string typeName = Msg.Value.GetType().AssemblyQualifiedName;
+                    bw.Write(typeName);
+
+                    // 使用protobuf序列化值
+                    byte[] valueBytes = EncodeObj(Msg.Value);
+                    bw.Write(valueBytes.Length);
+                    bw.Write(valueBytes);
+                }
+
+                byte[] data = new byte[ms.Length];
+                Buffer.BlockCopy(ms.GetBuffer(), 0, data, 0, (int)ms.Length);
+                return data;
+            }
         }
-        byte[] data = new byte[ms.Length];
-        Buffer.BlockCopy(ms.GetBuffer(), 0, data, 0, (int)ms.Length);
-        bw.Close();
-        ms.Close();
-        return data;
     }
 
     /// <summary>
@@ -104,20 +114,31 @@ public static class EncodeTool
     /// <returns></returns>
     public static SocketMsg DecodeMsg(byte[] data)
     {
-        MemoryStream ms = new MemoryStream(data);
-        BinaryReader br = new BinaryReader(ms);
         SocketMsg msg = new SocketMsg();
-        msg.OpCode = br.ReadInt32();
-        msg.SubCode = br.ReadInt32();
-        //还有剩余的字节没读取 代表 value 有值
-        if (ms.Length > ms.Position)
+        using (MemoryStream ms = new MemoryStream(data))
         {
-            byte[] valueBytes = br.ReadBytes((int)(ms.Length - ms.Position));
-            object value = DecodeObj(valueBytes);
-            msg.Value = value;
+            using (BinaryReader br = new BinaryReader(ms))
+            {
+                msg.OpCode = br.ReadInt32();
+                msg.SubCode = br.ReadInt32();
+
+                //还有剩余的字节没读取 代表 value 有值
+                if (ms.Length > ms.Position)
+                {
+                    // 读取类型名称
+                    string typeName = br.ReadString();
+                    msg.ValueType = typeName;
+
+                    // 读取值长度和值数据
+                    int valueLength = br.ReadInt32();
+                    byte[] valueBytes = br.ReadBytes(valueLength);
+
+                    // 反序列化值
+                    object value = DecodeObj(typeName, valueBytes);
+                    msg.Value = value;
+                }
+            }
         }
-        br.Close();
-        ms.Close();
         return msg;
     }
 
@@ -126,7 +147,7 @@ public static class EncodeTool
     #region 把一个object类型转换成byte[]
 
     /// <summary>
-    /// 序列化对象
+    /// 序列化对象 (使用protobuf-net)
     /// </summary>
     /// <param name="value"></param>
     /// <returns></returns>
@@ -134,25 +155,27 @@ public static class EncodeTool
     {
         using (MemoryStream ms = new MemoryStream())
         {
-            BinaryFormatter bf = new BinaryFormatter();
-            bf.Serialize(ms, value);
-            byte[] valueBytes = new byte[ms.Length];
-            Buffer.BlockCopy(ms.GetBuffer(), 0, valueBytes, 0, (int)ms.Length);
-            return valueBytes;
+            Serializer.Serialize(ms, value);
+            return ms.ToArray();
         }
     }
 
     /// <summary>
-    /// 反序列化对象
+    /// 反序列化对象 (使用protobuf-net)
     /// </summary>
+    /// <param name="typeName">类型程序集限定名称</param>
     /// <param name="valueBytes"></param>
     /// <returns></returns>
-    public static object DecodeObj(byte[] valueBytes)
+    public static object DecodeObj(string typeName, byte[] valueBytes)
     {
         using (MemoryStream ms = new MemoryStream(valueBytes))
         {
-            BinaryFormatter bf = new BinaryFormatter();
-            Object value = bf.Deserialize(ms);
+            Type type = Type.GetType(typeName);
+            if (type == null)
+            {
+                throw new Exception($"无法加载类型: {typeName}");
+            }
+            object value = Serializer.Deserialize(type, ms);
             return value;
         }
     }

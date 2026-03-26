@@ -97,6 +97,9 @@ namespace FairiesPoker
                 case 7:
                     uipath = Path.UI_PG.ToString(); uiselect = Convert.ToInt32(Path.UI_PG);
                     break;
+                default:
+                    uipath = Path.UI_PF.ToString(); uiselect = Convert.ToInt32(Path.UI_PF);
+                    break;
             }
             fpath = apppath + "\\" + uipath + "\\";
             try

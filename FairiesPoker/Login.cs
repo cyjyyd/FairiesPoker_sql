@@ -118,7 +118,7 @@ namespace FairiesPoker
             {
                 string usr = textBox1.Text;
                 string pwd = null;
-                MD5 md5 = new MD5CryptoServiceProvider();
+                MD5 md5 = MD5.Create();
                 byte[] password = Encoding.Default.GetBytes(textBox2.Text);
                 byte[] encryptpassword = md5.ComputeHash(password);
                 for (int i = 0; i < encryptpassword.Length; i++)
