@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
-using System.Data.SqlClient;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -13,7 +12,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using Newtonsoft.Json;
 using Protocol.Code;
 using Protocol.Dto;
 
@@ -28,8 +26,6 @@ namespace FairiesPoker
         bool standard = false;
         NetManager netManager;
         config con = new config();
-        const string welcomecode = "westerndigital";
-        SqlConnection connection;
         Dictionary<string, string> registervalues = new Dictionary<string, string>();
         public Register(NetManager netManager)
         {
@@ -67,33 +63,11 @@ namespace FairiesPoker
 
         private void button1_Click(object sender, EventArgs e)
         {
-            if (textBox1.Text==welcomecode)
-            {
-                button1.Enabled = false;
-                button2.Enabled = true;
-                textBox1.Enabled = false;
-                textBox2.Enabled = true;
-            }
-            else
-            {
-                MessageBox.Show("不正确的邀请码！","Error",MessageBoxButtons.OK,MessageBoxIcon.Error);
-            }
-        }
-
-        private void button2_Click(object sender, EventArgs e)
-        {
-            if (textBox2.Text.Length >= 4 && textBox2.Text.Length <= 16)
-            {
-                button2.Enabled = false;
-                button3.Enabled = true;
-                textBox2.Enabled = false;
-                textBox3.Enabled = true;
-                nm = textBox2.Text;
-            }
-            else
-            {
-                MessageBox.Show("用户名不规范！");
-            }
+            // 直接进入下一步，移除邀请码验证
+            button1.Enabled = false;
+            textBox1.Enabled = false;
+            textBox2.Enabled = true;
+            button2.Enabled = true;
         }
 
         private void Register_Shown(object sender, EventArgs e)
@@ -115,18 +89,33 @@ namespace FairiesPoker
 
         }
 
+        private void button2_Click(object sender, EventArgs e)
+        {
+            if (textBox2.Text.Length >= 4 && textBox2.Text.Length <= 16)
+            {
+                button2.Enabled = false;
+                button3.Enabled = true;
+                textBox2.Enabled = false;
+                textBox3.Enabled = true;
+                nm = textBox2.Text;
+            }
+            else
+            {
+                MessageBox.Show("用户名长度需要在4-16个字符之间！");
+            }
+        }
+
         private void button3_Click(object sender, EventArgs e)
         {
-            if (textBox3.Text.Length>=8&&textBox3.Text.Length<=16)
+            if (textBox3.Text.Length>=6&&textBox3.Text.Length<=16)
             {
                 pwd = null;
                 MD5 md5 = MD5.Create();
-                byte[] username = Encoding.Default.GetBytes(textBox3.Text);
-                byte[] encryptname = md5.ComputeHash(username);
-                for (int i = 0; i < encryptname.Length; i++)
+                byte[] password = Encoding.Default.GetBytes(textBox3.Text);
+                byte[] encryptpassword = md5.ComputeHash(password);
+                for (int i = 0; i < encryptpassword.Length; i++)
                 {
-                    // 将得到的字符串使用十六进制类型格式。格式后的字符是小写的字母，如果使用大写（X）则格式后的字符是大写字符
-                    pwd = pwd + encryptname[i].ToString("X");
+                    pwd = pwd + encryptpassword[i].ToString("X");
                 }
                 button6.Enabled = true;
                 button3.Enabled = false;
@@ -135,7 +124,7 @@ namespace FairiesPoker
             }
             else
             {
-                MessageBox.Show("密码长度不规范！");
+                MessageBox.Show("密码长度需要在6-16个字符之间！");
             }
         }
 
@@ -166,7 +155,6 @@ namespace FairiesPoker
                 AccountDto dto = new AccountDto(nm, pwd, avatarid);
                 Msg = new SocketMsg(OpCode.ACCOUNT, AccountCode.REGIST_CREQ, dto);
                 netManager.Execute(0, Msg);
-                //MessageBox.Show("注册成功！\r\n" + "用户名：" + nm + "\r\n密码MD5:"+pwd+"\r\n头像ID："+ avatarid +"\r\n请牢记您的密码！", "Congratulations!", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 reset();
             }
             catch (Exception)

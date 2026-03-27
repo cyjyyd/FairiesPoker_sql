@@ -29,140 +29,149 @@
         private void InitializeComponent()
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(win));
-            this.label1 = new System.Windows.Forms.Label();
-            this.label2 = new System.Windows.Forms.Label();
-            this.label3 = new System.Windows.Forms.Label();
-            this.label4 = new System.Windows.Forms.Label();
-            this.label5 = new System.Windows.Forms.Label();
-            this.label6 = new System.Windows.Forms.Label();
-            this.label7 = new System.Windows.Forms.Label();
-            this.button1 = new System.Windows.Forms.Button();
-            this.SuspendLayout();
+            label1 = new System.Windows.Forms.Label();
+            label2 = new System.Windows.Forms.Label();
+            label3 = new System.Windows.Forms.Label();
+            label4 = new System.Windows.Forms.Label();
+            label5 = new System.Windows.Forms.Label();
+            label6 = new System.Windows.Forms.Label();
+            label7 = new System.Windows.Forms.Label();
+            button1 = new System.Windows.Forms.Button();
+            SuspendLayout();
             // 
             // label1
             // 
-            this.label1.AutoSize = true;
-            this.label1.BackColor = System.Drawing.Color.Transparent;
-            this.label1.Font = new System.Drawing.Font("黑体", 42F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.label1.ForeColor = System.Drawing.Color.OrangeRed;
-            this.label1.Location = new System.Drawing.Point(243, 20);
-            this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(138, 56);
-            this.label1.TabIndex = 0;
-            this.label1.Text = "结果";
+            label1.AutoSize = true;
+            label1.BackColor = System.Drawing.Color.Transparent;
+            label1.Font = new System.Drawing.Font("黑体", 42F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, 134);
+            label1.ForeColor = System.Drawing.Color.OrangeRed;
+            label1.Location = new System.Drawing.Point(295, 28);
+            label1.Margin = new System.Windows.Forms.Padding(9, 0, 9, 0);
+            label1.Name = "label1";
+            label1.Size = new System.Drawing.Size(205, 84);
+            label1.TabIndex = 0;
+            label1.Text = "结果";
             // 
             // label2
             // 
-            this.label2.AutoSize = true;
-            this.label2.BackColor = System.Drawing.Color.Transparent;
-            this.label2.Font = new System.Drawing.Font("黑体", 24F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.label2.ForeColor = System.Drawing.Color.OrangeRed;
-            this.label2.Location = new System.Drawing.Point(70, 97);
-            this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(117, 33);
-            this.label2.TabIndex = 1;
-            this.label2.Text = "Zarina";
+            label2.AutoSize = true;
+            label2.BackColor = System.Drawing.Color.Transparent;
+            label2.Font = new System.Drawing.Font("黑体", 24F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, 134);
+            label2.ForeColor = System.Drawing.Color.OrangeRed;
+            label2.Location = new System.Drawing.Point(122, 174);
+            label2.Margin = new System.Windows.Forms.Padding(9, 0, 9, 0);
+            label2.Name = "label2";
+            label2.Size = new System.Drawing.Size(170, 48);
+            label2.TabIndex = 1;
+            label2.Text = "Zarina";
             // 
             // label3
             // 
-            this.label3.AutoSize = true;
-            this.label3.BackColor = System.Drawing.Color.Transparent;
-            this.label3.Font = new System.Drawing.Font("黑体", 24F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.label3.ForeColor = System.Drawing.Color.OrangeRed;
-            this.label3.Location = new System.Drawing.Point(70, 169);
-            this.label3.Name = "label3";
-            this.label3.Size = new System.Drawing.Size(202, 33);
-            this.label3.TabIndex = 2;
-            this.label3.Text = "Tinker Bell";
+            label3.AutoSize = true;
+            label3.BackColor = System.Drawing.Color.Transparent;
+            label3.Font = new System.Drawing.Font("黑体", 24F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, 134);
+            label3.ForeColor = System.Drawing.Color.OrangeRed;
+            label3.Location = new System.Drawing.Point(122, 266);
+            label3.Margin = new System.Windows.Forms.Padding(9, 0, 9, 0);
+            label3.Name = "label3";
+            label3.Size = new System.Drawing.Size(295, 48);
+            label3.TabIndex = 2;
+            label3.Text = "Tinker Bell";
             // 
             // label4
             // 
-            this.label4.AutoSize = true;
-            this.label4.BackColor = System.Drawing.Color.Transparent;
-            this.label4.Font = new System.Drawing.Font("黑体", 24F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.label4.ForeColor = System.Drawing.Color.OrangeRed;
-            this.label4.Location = new System.Drawing.Point(70, 241);
-            this.label4.Name = "label4";
-            this.label4.Size = new System.Drawing.Size(185, 33);
-            this.label4.TabIndex = 3;
-            this.label4.Text = "James Hook";
+            label4.AutoSize = true;
+            label4.BackColor = System.Drawing.Color.Transparent;
+            label4.Font = new System.Drawing.Font("黑体", 24F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, 134);
+            label4.ForeColor = System.Drawing.Color.OrangeRed;
+            label4.Location = new System.Drawing.Point(122, 347);
+            label4.Margin = new System.Windows.Forms.Padding(9, 0, 9, 0);
+            label4.Name = "label4";
+            label4.Size = new System.Drawing.Size(270, 48);
+            label4.TabIndex = 3;
+            label4.Text = "James Hook";
             // 
             // label5
             // 
-            this.label5.AutoSize = true;
-            this.label5.BackColor = System.Drawing.Color.Transparent;
-            this.label5.Font = new System.Drawing.Font("黑体", 24F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.label5.ForeColor = System.Drawing.Color.OrangeRed;
-            this.label5.Location = new System.Drawing.Point(416, 97);
-            this.label5.Name = "label5";
-            this.label5.Size = new System.Drawing.Size(0, 33);
-            this.label5.TabIndex = 4;
+            label5.AutoSize = true;
+            label5.BackColor = System.Drawing.Color.Transparent;
+            label5.Font = new System.Drawing.Font("黑体", 24F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, 134);
+            label5.ForeColor = System.Drawing.Color.OrangeRed;
+            label5.Location = new System.Drawing.Point(579, 174);
+            label5.Margin = new System.Windows.Forms.Padding(9, 0, 9, 0);
+            label5.Name = "label5";
+            label5.Size = new System.Drawing.Size(0, 48);
+            label5.TabIndex = 4;
             // 
             // label6
             // 
-            this.label6.AutoSize = true;
-            this.label6.BackColor = System.Drawing.Color.Transparent;
-            this.label6.Font = new System.Drawing.Font("黑体", 24F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.label6.ForeColor = System.Drawing.Color.OrangeRed;
-            this.label6.Location = new System.Drawing.Point(416, 169);
-            this.label6.Name = "label6";
-            this.label6.Size = new System.Drawing.Size(0, 33);
-            this.label6.TabIndex = 5;
+            label6.AutoSize = true;
+            label6.BackColor = System.Drawing.Color.Transparent;
+            label6.Font = new System.Drawing.Font("黑体", 24F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, 134);
+            label6.ForeColor = System.Drawing.Color.OrangeRed;
+            label6.Location = new System.Drawing.Point(579, 266);
+            label6.Margin = new System.Windows.Forms.Padding(9, 0, 9, 0);
+            label6.Name = "label6";
+            label6.Size = new System.Drawing.Size(0, 48);
+            label6.TabIndex = 5;
             // 
             // label7
             // 
-            this.label7.AutoSize = true;
-            this.label7.BackColor = System.Drawing.Color.Transparent;
-            this.label7.Font = new System.Drawing.Font("黑体", 24F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.label7.ForeColor = System.Drawing.Color.OrangeRed;
-            this.label7.Location = new System.Drawing.Point(416, 241);
-            this.label7.Name = "label7";
-            this.label7.Size = new System.Drawing.Size(0, 33);
-            this.label7.TabIndex = 6;
+            label7.AutoSize = true;
+            label7.BackColor = System.Drawing.Color.Transparent;
+            label7.Font = new System.Drawing.Font("黑体", 24F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, 134);
+            label7.ForeColor = System.Drawing.Color.OrangeRed;
+            label7.Location = new System.Drawing.Point(579, 347);
+            label7.Margin = new System.Windows.Forms.Padding(9, 0, 9, 0);
+            label7.Name = "label7";
+            label7.Size = new System.Drawing.Size(0, 48);
+            label7.TabIndex = 6;
             // 
             // button1
             // 
-            this.button1.BackColor = System.Drawing.Color.Transparent;
-            this.button1.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
-            this.button1.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.button1.FlatAppearance.BorderSize = 0;
-            this.button1.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.button1.ForeColor = System.Drawing.Color.Snow;
-            this.button1.Location = new System.Drawing.Point(253, 314);
-            this.button1.Name = "button1";
-            this.button1.Size = new System.Drawing.Size(128, 34);
-            this.button1.TabIndex = 7;
-            this.button1.Text = "确定";
-            this.button1.UseVisualStyleBackColor = false;
-            this.button1.Click += new System.EventHandler(this.button1_Click);
-            this.button1.MouseDown += new System.Windows.Forms.MouseEventHandler(this.button1_MouseDown);
-            this.button1.MouseUp += new System.Windows.Forms.MouseEventHandler(this.button1_MouseUp);
+            button1.BackColor = System.Drawing.Color.Transparent;
+            button1.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
+            button1.Cursor = System.Windows.Forms.Cursors.Hand;
+            button1.FlatAppearance.BorderSize = 0;
+            button1.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            button1.ForeColor = System.Drawing.Color.Snow;
+            button1.Location = new System.Drawing.Point(321, 429);
+            button1.Margin = new System.Windows.Forms.Padding(9, 9, 9, 9);
+            button1.Name = "button1";
+            button1.Size = new System.Drawing.Size(179, 48);
+            button1.TabIndex = 7;
+            button1.Text = "确定";
+            button1.UseVisualStyleBackColor = false;
+            button1.Click += button1_Click;
+            button1.MouseDown += button1_MouseDown;
+            button1.MouseUp += button1_MouseUp;
             // 
             // win
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
-            this.ClientSize = new System.Drawing.Size(640, 360);
-            this.Controls.Add(this.button1);
-            this.Controls.Add(this.label7);
-            this.Controls.Add(this.label6);
-            this.Controls.Add(this.label5);
-            this.Controls.Add(this.label4);
-            this.Controls.Add(this.label3);
-            this.Controls.Add(this.label2);
-            this.Controls.Add(this.label1);
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
-            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            this.Name = "win";
-            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
-            this.Load += new System.EventHandler(this.win_Load);
-            this.Shown += new System.EventHandler(this.win_Shown);
-            this.MouseDown += new System.Windows.Forms.MouseEventHandler(this.win_MouseDown);
-            this.MouseMove += new System.Windows.Forms.MouseEventHandler(this.win_MouseMove);
-            this.MouseUp += new System.Windows.Forms.MouseEventHandler(this.win_MouseUp);
-            this.ResumeLayout(false);
-            this.PerformLayout();
+            AutoScaleDimensions = new System.Drawing.SizeF(144F, 144F);
+            AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
+            BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
+            ClientSize = new System.Drawing.Size(822, 508);
+            Controls.Add(button1);
+            Controls.Add(label7);
+            Controls.Add(label6);
+            Controls.Add(label5);
+            Controls.Add(label4);
+            Controls.Add(label3);
+            Controls.Add(label2);
+            Controls.Add(label1);
+            FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
+            Icon = (System.Drawing.Icon)resources.GetObject("$this.Icon");
+            Margin = new System.Windows.Forms.Padding(9, 9, 9, 9);
+            Name = "win";
+            StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
+            Load += win_Load;
+            Shown += win_Shown;
+            MouseDown += win_MouseDown;
+            MouseMove += win_MouseMove;
+            MouseUp += win_MouseUp;
+            ResumeLayout(false);
+            PerformLayout();
 
         }
 

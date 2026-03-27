@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Protocol.Code;
 using Protocol.Dto;
+using FairiesPoker;
 
 /// <summary>
 /// 角色的网络消息处理类
@@ -19,7 +20,7 @@ public class UserHandler : HandlerBase
                 getInfoResponse(value as UserDto);
                 break;
             case UserCode.ONLINE_SRES:
-                onlineResponse((int)value);
+                onlineResponse(value as UserDto);
                 break;
             default:
                 break;
@@ -40,14 +41,7 @@ public class UserHandler : HandlerBase
         }
         else
         {
-            //有角色
-            //隐藏创建面板
-            //角色上线
-            //socketMsg.Change(OpCode.USER, UserCode.ONLINE_CREQ, null);
-            //Dispatch(AreaCode.NET, 0, socketMsg);
-
             //保存服务器发来的角色数据
-            //GameModel model = new GameModel();
             Models.GameModel.UserDto = user;
 
             //更新一下本地的显示
@@ -55,22 +49,24 @@ public class UserHandler : HandlerBase
     }
 
     /// <summary>
-    /// 上线的响应
+    /// 上线的响应（登录成功后会收到）
     /// </summary>
-    /// <param name="result"></param>
-    private void onlineResponse(int result)
+    private void onlineResponse(UserDto user)
     {
-        if (result == 0)
+        if (user != null)
         {
-            //上线成功
-        }
-        else if (result == -1)
-        {
-            //客户端非法登录
-        }
-        else if(result == -2)
-        {
-            //没有角色 不能创建
+            // 保存用户数据
+            Models.GameModel.UserDto = user;
+
+            // 跳转到主菜单
+            Main mainForm = new Main();
+            mainForm.Show();
+
+            // 关闭登录窗口
+            if (System.Windows.Forms.Application.OpenForms["Login"] is Login loginForm)
+            {
+                loginForm.Hide();
+            }
         }
     }
 

@@ -24,12 +24,9 @@ namespace FairiesPoker
         private static extern long GetPrivateProfileString(string section, string key, string def, StringBuilder retVal, int size, string filePath);
         config con = new config();
         string iniFilePath = Application.StartupPath + "\\config.ini";
-        Socket socket;
-        IPAddress ip;
-        Thread th1;
         public Login()
         {
-            InitializeComponent(); 
+            InitializeComponent();
             CheckForIllegalCrossThreadCalls = false;
             Opacity = 0; timer1.Start();
         }
@@ -84,19 +81,22 @@ namespace FairiesPoker
 
         private void button2_Click(object sender, EventArgs e)
         {
+            // 离线模式 - 直接进入主菜单
             Main m = new Main();
-            CloseWindow();
             m.Show();
-            this.Close();
+            this.Hide();
         }
 
         private void timer1_Tick(object sender, EventArgs e)
-        {         
+        {
             if (Opacity != 100)
             {
                 Opacity += 0.05;
             }
-            netManager.Update();
+            if (netManager != null)
+            {
+                netManager.Update();
+            }
         }
         private void CloseWindow()
         {
@@ -127,8 +127,7 @@ namespace FairiesPoker
                 }
                 AccountDto dto = new AccountDto(usr, pwd);
                 Msg = new SocketMsg(OpCode.ACCOUNT, AccountCode.LOGIN, dto);
-                netManager.Execute(0,Msg);
-                netManager.Update();
+                netManager.Execute(0, Msg);
             }
             else
             {

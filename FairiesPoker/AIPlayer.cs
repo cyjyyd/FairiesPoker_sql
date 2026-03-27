@@ -9,14 +9,15 @@ namespace FairiesPoker
     /// </summary>
     public enum AIStrategy
     {
-        Aggressive,     // 激进（地主或牌很好时）
-        Conservative,   // 保守（牌不好时）
-        Cooperative,    // 配合（农民配合）
-        Defensive       // 防守（保护队友）
+        Early,          // 早期：保守出牌，保留大牌
+        Mid,            // 中期：根据局势调整
+        Late,           // 后期：激进出牌，争取跑牌
+        Cooperative     // 配合（农民配合队友）
     }
 
     /// <summary>
-    /// 增强版AI出牌逻辑
+    /// 策略优化版AI出牌逻辑
+    /// 核心策略：大牌保留、小牌先行、阶段出牌、智能控场
     /// </summary>
     public class AIPlayer
     {
@@ -26,12 +27,20 @@ namespace FairiesPoker
         private Random random;
 
         // 游戏状态
-        private int myPosition;         // 我的位置 (1, 2, 3)
-        private bool isLandlord;        // 是否是地主
-        private int landlordPosition;   // 地主位置
+        private int myPosition;
+        private bool isLandlord;
+        private int landlordPosition;
 
         // 策略参数
         private AIStrategy currentStrategy;
+
+        // 游戏阶段常量
+        private const int STAGE_EARLY = 1;
+        private const int STAGE_MID = 2;
+        private const int STAGE_LATE = 3;
+
+        // 控场牌阈值
+        private const int CONTROL_CARD_THRESHOLD = 14;
 
         public AIPlayer()
         {
@@ -66,38 +75,40 @@ namespace FairiesPoker
         /// </summary>
         private void DetermineStrategy()
         {
-            if (isLandlord)
+            currentStrategy = isLandlord ? AIStrategy.Early : AIStrategy.Cooperative;
+        }
+
+        /// <summary>
+        /// 根据手牌数量调整策略
+        /// </summary>
+        public void AdjustStrategyByCards(ArrayList myCards)
+        {
+            if (myCards == null) return;
+
+            int cardCount = myCards.Count;
+
+            if (cardCount > 12)
             {
-                currentStrategy = AIStrategy.Aggressive;
+                currentStrategy = AIStrategy.Early;
+            }
+            else if (cardCount >= 8)
+            {
+                currentStrategy = AIStrategy.Mid;
             }
             else
             {
-                currentStrategy = AIStrategy.Cooperative;
+                currentStrategy = AIStrategy.Late;
             }
         }
 
         /// <summary>
-        /// 根据手牌调整策略
+        /// 获取当前游戏阶段
         /// </summary>
-        public void AdjustStrategyByCards(ArrayList myCards)
+        private int GetGameStage(int cardCount)
         {
-            int handStrength = EvaluateHandStrength(myCards);
-
-            if (isLandlord)
-            {
-                if (handStrength > 70)
-                    currentStrategy = AIStrategy.Aggressive;
-                else if (handStrength < 30)
-                    currentStrategy = AIStrategy.Conservative;
-            }
-            else
-            {
-                // 农民根据情况调整
-                if (handStrength > 60)
-                    currentStrategy = AIStrategy.Cooperative;
-                else
-                    currentStrategy = AIStrategy.Defensive;
-            }
+            if (cardCount > 12) return STAGE_EARLY;
+            if (cardCount >= 8) return STAGE_MID;
+            return STAGE_LATE;
         }
 
         /// <summary>
@@ -123,8 +134,8 @@ namespace FairiesPoker
             {
                 if (kvp.Value == 4)
                 {
-                    score += 25; // 炸弹加分
-                    if (kvp.Key >= 14) score += 10; // 大炸弹额外加分
+                    score += 25;
+                    if (kvp.Key >= 14) score += 10;
                 }
                 else if (kvp.Value == 3)
                 {
@@ -137,10 +148,10 @@ namespace FairiesPoker
             }
 
             // 评估大牌
-            score += cardCounts.ContainsKey(17) ? 15 : 0; // 大王
-            score += cardCounts.ContainsKey(16) ? 12 : 0; // 小王
-            score += (cardCounts.ContainsKey(15) ? cardCounts[15] : 0) * 6; // 2
-            score += (cardCounts.ContainsKey(14) ? cardCounts[14] : 0) * 4; // A
+            score += cardCounts.ContainsKey(17) ? 15 : 0;
+            score += cardCounts.ContainsKey(16) ? 12 : 0;
+            score += (cardCounts.ContainsKey(15) ? cardCounts[15] : 0) * 6;
+            score += (cardCounts.ContainsKey(14) ? cardCounts[14] : 0) * 4;
 
             // 王炸
             if (cardCounts.ContainsKey(16) && cardCounts.ContainsKey(17))
@@ -178,45 +189,221 @@ namespace FairiesPoker
             int[] triples = jiepai.mArrayToArgs((ArrayList)basicCards[2]);
             int[] bombs = jiepai.mArrayToArgs((ArrayList)basicCards[3]);
 
-            // 根据剩余牌数和身份选择策略
             int myCardCount = myCards.Count;
+            int stage = GetGameStage(myCardCount);
 
-            // 地主且牌少时激进出牌
-            if (isLandlord && myCardCount <= 5)
+            // 根据阶段选择策略
+            if (stage == STAGE_EARLY)
             {
-                return PlayAggressive(myCards, singles, pairs, triples, bombs);
+                return PlayEarlyStage(myCards, singles, pairs, triples, bombs, previousPlayerCards, nextPlayerCards);
             }
-
-            // 农民配合逻辑
-            if (!isLandlord)
+            else if (stage == STAGE_MID)
             {
-                return PlayAsFarmer(myCards, singles, pairs, triples, bombs, previousPlayerCards, nextPlayerCards);
+                return PlayMidStage(myCards, singles, pairs, triples, bombs, previousPlayerCards, nextPlayerCards);
             }
-
-            // 默认：从小到大出
-            return PlayConservative(myCards, singles, pairs, triples, bombs);
+            else
+            {
+                return PlayLateStage(myCards, singles, pairs, triples, bombs);
+            }
         }
 
         /// <summary>
-        /// 激进出牌
+        /// 早期阶段出牌 - 保守策略，保留大牌
         /// </summary>
-        private ArrayList PlayAggressive(ArrayList myCards, int[] singles, int[] pairs, int[] triples, int[] bombs)
+        private ArrayList PlayEarlyStage(ArrayList myCards, int[] singles, int[] pairs, int[] triples, int[] bombs,
+                                         int previousPlayerCards, int nextPlayerCards)
         {
             ArrayList result = new ArrayList();
 
-            // 优先出大牌
+            // 1. 尝试出组合牌（顺子、连对、飞机）
+            ArrayList comboResult = TryPlayCombo(myCards);
+            if (comboResult != null) return comboResult;
+
+            // 2. 农民配合逻辑
+            if (!isLandlord)
+            {
+                // 如果地主在后面，出小牌顶他
+                bool landlordIsNext = IsLandlordNext(previousPlayerCards, nextPlayerCards);
+                if (landlordIsNext)
+                {
+                    // 出小牌让地主接
+                    return PlaySmallCard(singles, pairs, triples);
+                }
+            }
+
+            // 3. 出小三带
             if (triples != null && triples.Length > 0)
             {
-                // 三带
-                int card = triples[triples.Length - 1]; // 出最大的三张
-                for (int i = 0; i < 3; i++) result.Add(card);
-                if (singles != null && singles.Length > 0)
-                    result.Add(singles[0]);
-                else if (pairs != null && pairs.Length > 0)
-                    result.Add(pairs[0]);
+                int smallTriple = GetSmallCard(triples, 13); // Q以下
+                if (smallTriple > 0)
+                {
+                    for (int i = 0; i < 3; i++) result.Add(smallTriple);
+                    // 带小牌
+                    if (singles != null && singles.Length > 0)
+                    {
+                        int smallSingle = GetSmallCard(singles, CONTROL_CARD_THRESHOLD);
+                        if (smallSingle > 0) result.Add(smallSingle);
+                        else result.Add(singles[0]);
+                    }
+                    else if (pairs != null && pairs.Length > 0)
+                    {
+                        int smallPair = GetSmallCard(pairs, CONTROL_CARD_THRESHOLD);
+                        if (smallPair > 0)
+                        {
+                            result.Add(smallPair);
+                            result.Add(smallPair);
+                        }
+                    }
+                    return result;
+                }
+            }
+
+            // 4. 出小对子
+            if (pairs != null && pairs.Length > 0)
+            {
+                int smallPair = GetSmallCard(pairs, CONTROL_CARD_THRESHOLD);
+                if (smallPair > 0)
+                {
+                    result.Add(smallPair);
+                    result.Add(smallPair);
+                    return result;
+                }
+            }
+
+            // 5. 出小单张
+            if (singles != null && singles.Length > 0)
+            {
+                int smallSingle = GetSmallCard(singles, CONTROL_CARD_THRESHOLD);
+                if (smallSingle > 0)
+                {
+                    result.Add(smallSingle);
+                    return result;
+                }
+                // 只有大牌，出最小的
+                result.Add(singles[0]);
                 return result;
             }
 
+            // 6. 只有三张或炸弹
+            if (triples != null && triples.Length > 0)
+            {
+                for (int i = 0; i < 3; i++) result.Add(triples[0]);
+                return result;
+            }
+
+            return PlaySmallestCard(myCards, singles, pairs, triples, bombs);
+        }
+
+        /// <summary>
+        /// 中期阶段出牌 - 根据局势调整
+        /// </summary>
+        private ArrayList PlayMidStage(ArrayList myCards, int[] singles, int[] pairs, int[] triples, int[] bombs,
+                                       int previousPlayerCards, int nextPlayerCards)
+        {
+            ArrayList result = new ArrayList();
+            int handStrength = EvaluateHandStrength(myCards);
+
+            // 尝试出组合牌
+            ArrayList comboResult = TryPlayCombo(myCards);
+            if (comboResult != null) return comboResult;
+
+            // 手牌好，可以激进一点
+            bool canAggressive = isLandlord ? (handStrength > 50) : (handStrength > 40);
+
+            // 出三带
+            if (triples != null && triples.Length > 0)
+            {
+                int tripleCard = canAggressive ?
+                    GetMediumOrSmallCard(triples) :
+                    GetSmallCard(triples, CONTROL_CARD_THRESHOLD);
+
+                if (tripleCard == 0) tripleCard = triples[0];
+
+                for (int i = 0; i < 3; i++) result.Add(tripleCard);
+
+                if (singles != null && singles.Length > 0)
+                {
+                    int single = GetSmallCard(singles, CONTROL_CARD_THRESHOLD);
+                    if (single > 0) result.Add(single);
+                    else result.Add(singles[0]);
+                }
+                else if (pairs != null && pairs.Length > 0)
+                {
+                    int pair = GetSmallCard(pairs, CONTROL_CARD_THRESHOLD);
+                    if (pair > 0)
+                    {
+                        result.Add(pair);
+                        result.Add(pair);
+                    }
+                }
+                return result;
+            }
+
+            // 出对子
+            if (pairs != null && pairs.Length > 0)
+            {
+                int pairCard = canAggressive ?
+                    GetMediumOrSmallCard(pairs) :
+                    GetSmallCard(pairs, CONTROL_CARD_THRESHOLD);
+
+                if (pairCard == 0) pairCard = pairs[0];
+
+                result.Add(pairCard);
+                result.Add(pairCard);
+                return result;
+            }
+
+            // 出单张
+            if (singles != null && singles.Length > 0)
+            {
+                int singleCard = canAggressive ?
+                    GetMediumOrSmallCard(singles) :
+                    GetSmallCard(singles, CONTROL_CARD_THRESHOLD);
+
+                if (singleCard == 0) singleCard = singles[0];
+
+                result.Add(singleCard);
+                return result;
+            }
+
+            return PlaySmallestCard(myCards, singles, pairs, triples, bombs);
+        }
+
+        /// <summary>
+        /// 后期阶段出牌 - 激进策略，争取跑牌
+        /// </summary>
+        private ArrayList PlayLateStage(ArrayList myCards, int[] singles, int[] pairs, int[] triples, int[] bombs)
+        {
+            ArrayList result = new ArrayList();
+            int cardCount = myCards.Count;
+
+            // 牌很少时，快速结束
+            if (cardCount <= 3)
+            {
+                return PlayQuickFinish(myCards, singles, pairs, triples, bombs);
+            }
+
+            // 尝试出组合牌
+            ArrayList comboResult = TryPlayCombo(myCards);
+            if (comboResult != null) return comboResult;
+
+            // 出大三带
+            if (triples != null && triples.Length > 0)
+            {
+                int card = triples[triples.Length - 1];
+                for (int i = 0; i < 3; i++) result.Add(card);
+
+                if (singles != null && singles.Length > 0)
+                    result.Add(singles[0]);
+                else if (pairs != null && pairs.Length > 0)
+                {
+                    result.Add(pairs[0]);
+                    result.Add(pairs[0]);
+                }
+                return result;
+            }
+
+            // 出大对子
             if (pairs != null && pairs.Length > 0)
             {
                 int card = pairs[pairs.Length - 1];
@@ -225,13 +412,14 @@ namespace FairiesPoker
                 return result;
             }
 
+            // 出大单张
             if (singles != null && singles.Length > 0)
             {
                 result.Add(singles[singles.Length - 1]);
                 return result;
             }
 
-            // 只剩炸弹了
+            // 只有炸弹
             if (bombs != null && bombs.Length > 0)
             {
                 int card = bombs[0];
@@ -243,47 +431,17 @@ namespace FairiesPoker
         }
 
         /// <summary>
-        /// 保守出牌（先出小牌）
+        /// 快速结束出牌（牌数<=3时）
         /// </summary>
-        private ArrayList PlayConservative(ArrayList myCards, int[] singles, int[] pairs, int[] triples, int[] bombs)
+        private ArrayList PlayQuickFinish(ArrayList myCards, int[] singles, int[] pairs, int[] triples, int[] bombs)
         {
             ArrayList result = new ArrayList();
 
-            // 优先出小单张
-            if (singles != null && singles.Length > 0)
+            if (chupai.isRight(myCards))
             {
-                // 出最小的单张，但保留A、2、王
-                for (int i = 0; i < singles.Length; i++)
-                {
-                    if (singles[i] < 14) // 不出A以上的牌
-                    {
-                        result.Add(singles[i]);
-                        return result;
-                    }
-                }
-                // 如果只剩大牌，出最小的那个
-                result.Add(singles[0]);
-                return result;
+                return myCards;
             }
 
-            // 出对子
-            if (pairs != null && pairs.Length > 0)
-            {
-                int card = pairs[0];
-                result.Add(card);
-                result.Add(card);
-                return result;
-            }
-
-            // 出三张
-            if (triples != null && triples.Length > 0)
-            {
-                int card = triples[0];
-                for (int i = 0; i < 3; i++) result.Add(card);
-                return result;
-            }
-
-            // 只有炸弹了
             if (bombs != null && bombs.Length > 0)
             {
                 int card = bombs[0];
@@ -291,69 +449,350 @@ namespace FairiesPoker
                 return result;
             }
 
+            if (triples != null && triples.Length > 0)
+            {
+                for (int i = 0; i < 3; i++) result.Add(triples[0]);
+                return result;
+            }
+
+            if (pairs != null && pairs.Length > 0)
+            {
+                result.Add(pairs[0]);
+                result.Add(pairs[0]);
+                return result;
+            }
+
+            if (singles != null && singles.Length > 0)
+            {
+                result.Add(singles[0]);
+                return result;
+            }
+
+            return myCards;
+        }
+
+        /// <summary>
+        /// 尝试出组合牌（顺子、连对、飞机）
+        /// </summary>
+        private ArrayList TryPlayCombo(ArrayList myCards)
+        {
+            // 尝试顺子
+            ArrayList straight = FindStraight(myCards);
+            if (straight != null) return straight;
+
+            // 尝试连对
+            ArrayList doubleStraight = FindDoubleStraight(myCards);
+            if (doubleStraight != null) return doubleStraight;
+
+            // 尝试飞机
+            ArrayList plane = FindPlane(myCards);
+            if (plane != null) return plane;
+
             return null;
         }
 
         /// <summary>
-        /// 农民配合出牌
+        /// 查找顺子
         /// </summary>
-        private ArrayList PlayAsFarmer(ArrayList myCards, int[] singles, int[] pairs, int[] triples, int[] bombs,
-                                        int previousPlayerCards, int nextPlayerCards)
+        private ArrayList FindStraight(ArrayList myCards)
         {
-            ArrayList result = new ArrayList();
-
-            // 判断队友（另一个农民）的情况
-            bool teammateHasFewCards = false; // 队友是否牌少
-            int teammatePosition = GetTeammatePosition();
-
-            // 如果地主在后面，要小心出牌
-            bool landlordIsNext = IsLandlordNext();
-
-            // 如果队友牌少，帮忙跑牌
-            if (teammateHasFewCards && !landlordIsNext)
+            Dictionary<int, int> cardCounts = new Dictionary<int, int>();
+            foreach (int card in myCards)
             {
-                // 出小牌帮队友跑
-                return PlayConservative(myCards, singles, pairs, triples, bombs);
+                if (cardCounts.ContainsKey(card))
+                    cardCounts[card]++;
+                else
+                    cardCounts[card] = 1;
             }
 
-            // 如果地主牌少，要顶地主
-            if (IsLandlordLowOnCards())
+            // 找连续的牌
+            ArrayList singles = new ArrayList();
+            foreach (var kvp in cardCounts)
             {
-                return PlayToBlockLandlord(myCards, singles, pairs, triples, bombs);
+                if (kvp.Key < 15) // 不包括2和王
+                {
+                    singles.Add(kvp.Key);
+                }
+            }
+            singles.Sort();
+
+            if (singles.Count < 5) return null;
+
+            // 找最长的连续序列
+            int startIdx = -1;
+            int maxLength = 0;
+            int currentStart = 0;
+            int currentLength = 1;
+
+            for (int i = 1; i < singles.Count; i++)
+            {
+                if ((int)singles[i] - (int)singles[i - 1] == 1)
+                {
+                    currentLength++;
+                    if (currentLength >= 5 && currentLength > maxLength)
+                    {
+                        maxLength = currentLength;
+                        startIdx = currentStart;
+                    }
+                }
+                else
+                {
+                    currentStart = i;
+                    currentLength = 1;
+                }
             }
 
-            // 正常出牌
-            return PlayConservative(myCards, singles, pairs, triples, bombs);
+            if (startIdx >= 0 && maxLength >= 5)
+            {
+                ArrayList result = new ArrayList();
+                for (int i = startIdx; i < startIdx + maxLength && i < singles.Count; i++)
+                {
+                    result.Add(singles[i]);
+                }
+                if (chupai.isRight(result))
+                {
+                    return result;
+                }
+            }
+
+            return null;
         }
 
         /// <summary>
-        /// 顶地主的牌
+        /// 查找连对
         /// </summary>
-        private ArrayList PlayToBlockLandlord(ArrayList myCards, int[] singles, int[] pairs, int[] triples, int[] bombs)
+        private ArrayList FindDoubleStraight(ArrayList myCards)
+        {
+            Dictionary<int, int> cardCounts = new Dictionary<int, int>();
+            foreach (int card in myCards)
+            {
+                if (cardCounts.ContainsKey(card))
+                    cardCounts[card]++;
+                else
+                    cardCounts[card] = 1;
+            }
+
+            ArrayList pairs = new ArrayList();
+            foreach (var kvp in cardCounts)
+            {
+                if (kvp.Value >= 2 && kvp.Key < 15)
+                {
+                    pairs.Add(kvp.Key);
+                }
+            }
+
+            if (pairs.Count < 3) return null;
+
+            pairs.Sort();
+
+            int consecutive = 1;
+            for (int i = 1; i < pairs.Count; i++)
+            {
+                if ((int)pairs[i] - (int)pairs[i - 1] == 1)
+                {
+                    consecutive++;
+                    if (consecutive >= 3)
+                    {
+                        ArrayList result = new ArrayList();
+                        int startIdx = i - 2;
+                        for (int j = startIdx; j <= i; j++)
+                        {
+                            int card = (int)pairs[j];
+                            result.Add(card);
+                            result.Add(card);
+                        }
+                        if (chupai.isRight(result))
+                        {
+                            return result;
+                        }
+                    }
+                }
+                else
+                {
+                    consecutive = 1;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 查找飞机
+        /// </summary>
+        private ArrayList FindPlane(ArrayList myCards)
+        {
+            Dictionary<int, int> cardCounts = new Dictionary<int, int>();
+            foreach (int card in myCards)
+            {
+                if (cardCounts.ContainsKey(card))
+                    cardCounts[card]++;
+                else
+                    cardCounts[card] = 1;
+            }
+
+            ArrayList triples = new ArrayList();
+            foreach (var kvp in cardCounts)
+            {
+                if (kvp.Value >= 3 && kvp.Key < 15)
+                {
+                    triples.Add(kvp.Key);
+                }
+            }
+
+            if (triples.Count < 2) return null;
+
+            triples.Sort();
+
+            int consecutive = 1;
+            for (int i = 1; i < triples.Count; i++)
+            {
+                if ((int)triples[i] - (int)triples[i - 1] == 1)
+                {
+                    consecutive++;
+                    if (consecutive >= 2)
+                    {
+                        ArrayList result = new ArrayList();
+                        int startIdx = i - 1;
+                        for (int j = startIdx; j <= i; j++)
+                        {
+                            int card = (int)triples[j];
+                            result.Add(card);
+                            result.Add(card);
+                            result.Add(card);
+                        }
+                        if (chupai.isRight(result))
+                        {
+                            return result;
+                        }
+                    }
+                }
+                else
+                {
+                    consecutive = 1;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 出小牌
+        /// </summary>
+        private ArrayList PlaySmallCard(int[] singles, int[] pairs, int[] triples)
         {
             ArrayList result = new ArrayList();
 
-            // 出大牌顶住
             if (singles != null && singles.Length > 0)
             {
-                // 出较大的单张，迫使地主用更大的牌
-                int index = Math.Max(0, singles.Length / 2); // 出中等大小的牌
-                if (singles[index] >= 12) // Q以上开始顶
+                int small = GetSmallCard(singles, CONTROL_CARD_THRESHOLD);
+                if (small > 0)
                 {
-                    result.Add(singles[index]);
+                    result.Add(small);
                     return result;
                 }
             }
 
             if (pairs != null && pairs.Length > 0)
             {
-                int index = Math.Max(0, pairs.Length / 2);
-                result.Add(pairs[index]);
-                result.Add(pairs[index]);
+                int small = GetSmallCard(pairs, CONTROL_CARD_THRESHOLD);
+                if (small > 0)
+                {
+                    result.Add(small);
+                    result.Add(small);
+                    return result;
+                }
+            }
+
+            if (triples != null && triples.Length > 0)
+            {
+                int small = GetSmallCard(triples, 13);
+                if (small > 0)
+                {
+                    for (int i = 0; i < 3; i++) result.Add(small);
+                    return result;
+                }
+            }
+
+            // 没有小牌，出最小的
+            if (singles != null && singles.Length > 0)
+            {
+                result.Add(singles[0]);
                 return result;
             }
 
-            return PlayConservative(myCards, singles, pairs, triples, bombs);
+            return null;
+        }
+
+        /// <summary>
+        /// 出最小的牌
+        /// </summary>
+        private ArrayList PlaySmallestCard(ArrayList myCards, int[] singles, int[] pairs, int[] triples, int[] bombs)
+        {
+            ArrayList result = new ArrayList();
+
+            if (singles != null && singles.Length > 0)
+            {
+                result.Add(singles[0]);
+                return result;
+            }
+
+            if (pairs != null && pairs.Length > 0)
+            {
+                result.Add(pairs[0]);
+                result.Add(pairs[0]);
+                return result;
+            }
+
+            if (triples != null && triples.Length > 0)
+            {
+                for (int i = 0; i < 3; i++) result.Add(triples[0]);
+                return result;
+            }
+
+            if (bombs != null && bombs.Length > 0)
+            {
+                for (int i = 0; i < 4; i++) result.Add(bombs[0]);
+                return result;
+            }
+
+            return myCards;
+        }
+
+        /// <summary>
+        /// 获取小牌（小于阈值的牌）
+        /// </summary>
+        private int GetSmallCard(int[] cards, int threshold)
+        {
+            if (cards == null || cards.Length == 0) return 0;
+
+            for (int i = 0; i < cards.Length; i++)
+            {
+                if (cards[i] < threshold)
+                {
+                    return cards[i];
+                }
+            }
+            return 0;
+        }
+
+        /// <summary>
+        /// 获取中等或偏小的牌
+        /// </summary>
+        private int GetMediumOrSmallCard(int[] cards)
+        {
+            if (cards == null || cards.Length == 0) return 0;
+
+            // 先找小于阈值的最大牌
+            for (int i = cards.Length - 1; i >= 0; i--)
+            {
+                if (cards[i] < CONTROL_CARD_THRESHOLD)
+                {
+                    return cards[i];
+                }
+            }
+
+            // 没有小于阈值的，返回最小的
+            return cards[0];
         }
 
         /// <summary>
@@ -377,7 +816,6 @@ namespace FairiesPoker
 
                 if (bomb != null || rocket != null)
                 {
-                    // 决定是否炸
                     if (ShouldUseBomb(paiType, myCards, upperPlayerPosition, previousPlayerCards, nextPlayerCards))
                     {
                         if (rocket != null)
@@ -390,10 +828,10 @@ namespace FairiesPoker
                         return result;
                     }
                 }
-                return null; // 不接
+                return null;
             }
 
-            // 选择最佳接牌策略
+            // 选择最佳接牌
             return ChooseBestResponse(possibleResponses, paiType, upperCards, myCards,
                                        upperPlayerPosition, previousPlayerCards, nextPlayerCards);
         }
@@ -407,12 +845,11 @@ namespace FairiesPoker
         {
             if (possibleResponses == null || possibleResponses.Count == 0) return null;
 
-            // 判断是否应该接牌
-            bool shouldRespond = ShouldRespond(upperPlayerPosition, previousPlayerCards, nextPlayerCards);
+            bool shouldRespond = ShouldRespondToPlay(upperPlayerPosition, previousPlayerCards, nextPlayerCards);
 
-            if (!shouldRespond && !IsLandlordNext())
+            if (!shouldRespond && !IsLandlordNext(previousPlayerCards, nextPlayerCards))
             {
-                return null; // 不接，让队友接
+                return null;
             }
 
             // 选择最小的能接的牌
@@ -433,13 +870,11 @@ namespace FairiesPoker
                 }
             }
 
-            // 如果是单张或对子，可能选择最小接牌
             if (paiType == (int)Guize.一张 || paiType == (int)Guize.对子)
             {
                 return bestResponse;
             }
 
-            // 其他情况，返回第一个可用的
             if (possibleResponses[0] is ArrayList)
             {
                 return (ArrayList)possibleResponses[0];
@@ -451,33 +886,27 @@ namespace FairiesPoker
         /// <summary>
         /// 判断是否应该接牌
         /// </summary>
-        private bool ShouldRespond(int upperPlayerPosition, int previousPlayerCards, int nextPlayerCards)
+        private bool ShouldRespondToPlay(int upperPlayerPosition, int previousPlayerCards, int nextPlayerCards)
         {
             if (isLandlord)
             {
-                // 地主一定要接
                 return true;
             }
 
-            // 农民逻辑
             bool upperIsLandlord = (upperPlayerPosition == landlordPosition);
             bool upperIsTeammate = (!upperIsLandlord && upperPlayerPosition != myPosition);
 
             if (upperIsTeammate)
             {
-                // 队友出的牌
                 if (previousPlayerCards <= 3 || nextPlayerCards <= 3)
                 {
-                    // 队友牌少，让他跑
                     return false;
                 }
-                // 牌多时可以接
-                return random.Next(100) < 30; // 30%概率接队友的牌
+                return random.Next(100) < 30;
             }
 
             if (upperIsLandlord)
             {
-                // 地主出的牌，尽量接
                 return true;
             }
 
@@ -490,30 +919,23 @@ namespace FairiesPoker
         private bool ShouldUseBomb(int paiType, ArrayList myCards, int upperPlayerPosition,
                                     int previousPlayerCards, int nextPlayerCards)
         {
+            int stage = GetGameStage(myCards.Count);
+
             if (isLandlord)
             {
-                // 地主：牌少就炸
-                return myCards.Count <= 6;
+                return stage == STAGE_LATE || myCards.Count <= 5;
             }
             else
             {
-                // 农民
                 bool upperIsLandlord = (upperPlayerPosition == landlordPosition);
 
                 if (upperIsLandlord)
                 {
-                    // 地主出的牌
-                    if (nextPlayerCards <= 2 || previousPlayerCards <= 2)
-                    {
-                        // 地主快赢了，必须炸
-                        return true;
-                    }
-                    // 地主牌少时炸
-                    return nextPlayerCards <= 5 || previousPlayerCards <= 5;
+                    if (stage == STAGE_LATE) return true;
+                    return myCards.Count <= 6;
                 }
                 else
                 {
-                    // 队友出的牌，不炸
                     return false;
                 }
             }
@@ -537,25 +959,7 @@ namespace FairiesPoker
         /// <summary>
         /// 判断地主是否在下一个出牌
         /// </summary>
-        private bool IsLandlordNext()
-        {
-            // 简化实现
-            return false;
-        }
-
-        /// <summary>
-        /// 判断地主是否牌少
-        /// </summary>
-        private bool IsLandlordLowOnCards()
-        {
-            // 需要从外部获取信息
-            return false;
-        }
-
-        /// <summary>
-        /// 判断地主是否在后面
-        /// </summary>
-        private bool IsLandlordAfterMe()
+        private bool IsLandlordNext(int previousPlayerCards, int nextPlayerCards)
         {
             return false;
         }
