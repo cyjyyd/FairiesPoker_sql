@@ -12,23 +12,53 @@ public class NetManager
 {
     bool debug = true;
     public static NetManager Instance = null;
-    public static IPHostEntry IPinfo;
     private ClientPeer client;
+
+    /// <summary>
+    /// 是否已连接
+    /// </summary>
+    public bool IsConnected => client?.IsConnected ?? false;
+
+    /// <summary>
+    /// 连接状态变化事件
+    /// </summary>
+    public event Action<bool, string> OnConnectionStateChanged;
+
+    public NetManager()
+    {
+        // 设置静态实例
+        Instance = this;
+    }
 
     public void Start()
     {
         debug = true;
         if (debug)
         {
-            IPinfo = Dns.GetHostEntry("127.0.0.1");
-            client = new ClientPeer(IPinfo.AddressList[0].ToString(), 40960);
-
+            // 直接使用 127.0.0.1，避免 DNS 解析问题
+            client = new ClientPeer("127.0.0.1", 40960);
         }
         else
         {
-            IPinfo = Dns.GetHostEntry("www.fairybcd.top");
-            client = new ClientPeer(IPinfo.AddressList[0].ToString(), 40960);
+            client = new ClientPeer("www.fairybcd.top", 40960);
         }
+
+        // 订阅连接事件
+        client.OnConnectSuccess += () =>
+        {
+            OnConnectionStateChanged?.Invoke(true, "连接服务器成功");
+        };
+
+        client.OnConnectFailed += (msg) =>
+        {
+            OnConnectionStateChanged?.Invoke(false, msg);
+        };
+
+        client.OnDisconnected += () =>
+        {
+            OnConnectionStateChanged?.Invoke(false, "与服务器断开连接");
+        };
+
         client.Connect();
     }
 
@@ -52,6 +82,7 @@ public class NetManager
     HandlerBase matchHandler = new MatchHandler();
     HandlerBase chatHandler = new ChatHandler();
     HandlerBase fightHandler = new FightHandler();
+    HandlerBase avatarHandler = new AvatarHandler();
 
     /// <summary>
     /// 接受网络的消息
@@ -75,6 +106,9 @@ public class NetManager
             case OpCode.FIGHT:
                 fightHandler.OnReceive(msg.SubCode, msg.Value);
                 break;
+            case OpCode.AVATAR:
+                avatarHandler.OnReceive(msg.SubCode, msg.Value);
+                break;
             default:
                 break;
         }
@@ -93,6 +127,29 @@ public class NetManager
                 break;
             default:
                 break;
+        }
+    }
+
+    /// <summary>
+    /// 安全断开连接（先发送登出消息再断开）
+    /// </summary>
+    /// <param name="logoutMessage">登出消息（可选）</param>
+    public void SafeDisconnect(SocketMsg logoutMessage = null)
+    {
+        if (client != null)
+        {
+            client.SafeClose(logoutMessage);
+        }
+    }
+
+    /// <summary>
+    /// 直接断开连接
+    /// </summary>
+    public void Disconnect()
+    {
+        if (client != null)
+        {
+            client.Close();
         }
     }
     #endregion

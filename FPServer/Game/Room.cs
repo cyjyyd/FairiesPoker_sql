@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Protocol.Code;
 using Protocol.Dto;
 
 namespace FPServer.Game
@@ -9,8 +10,11 @@ namespace FPServer.Game
     public class Room
     {
         public string RoomId { get; private set; }
+        public string RoomName { get; set; }
+        public int HostId { get; set; } = -1;
         public int LandlordId { get; set; } = -1;
         public int Multiple { get; set; } = 1;
+        public int Status { get; set; } = RoomStatus.WAITING;
 
         private readonly Dictionary<int, UserDto> _players = new();
         private readonly List<int> _playerOrder = new();
@@ -20,6 +24,7 @@ namespace FPServer.Game
         public Room(string roomId, ILogger<Room> logger)
         {
             RoomId = roomId;
+            RoomName = $"房间{roomId}";
             _logger = logger;
         }
 
@@ -47,6 +52,12 @@ namespace FPServer.Game
             _players.Remove(userId);
             _playerOrder.Remove(userId);
             _readyPlayers.Remove(userId);
+
+            // 如果房主离开，转移房主
+            if (HostId == userId && _playerOrder.Count > 0)
+            {
+                HostId = _playerOrder[0];
+            }
         }
 
         /// <summary>
@@ -58,6 +69,22 @@ namespace FPServer.Game
             {
                 _readyPlayers.Add(userId);
             }
+        }
+
+        /// <summary>
+        /// 取消准备
+        /// </summary>
+        public void CancelReady(int userId)
+        {
+            _readyPlayers.Remove(userId);
+        }
+
+        /// <summary>
+        /// 检查玩家是否已准备
+        /// </summary>
+        public bool IsPlayerReady(int userId)
+        {
+            return _readyPlayers.Contains(userId);
         }
 
         /// <summary>
@@ -76,9 +103,14 @@ namespace FPServer.Game
         public bool IsEmpty() => _players.Count == 0;
 
         /// <summary>
+        /// 是否等待中
+        /// </summary>
+        public bool IsWaiting() => Status == RoomStatus.WAITING;
+
+        /// <summary>
         /// 是否所有人准备
         /// </summary>
-        public bool IsAllReady() => _readyPlayers.Count == _players.Count;
+        public bool IsAllReady() => _readyPlayers.Count == _players.Count && _players.Count > 0;
 
         /// <summary>
         /// 获取玩家ID列表
@@ -86,9 +118,27 @@ namespace FPServer.Game
         public List<int> GetPlayerIds() => _playerOrder.ToList();
 
         /// <summary>
-        /// 获取房间数据传输对象
+        /// 获取房间数据传输对象（用于房间列表）
         /// </summary>
-        public MatchRoomDto GetRoomDto()
+        public RoomDto GetRoomDto()
+        {
+            var dto = new RoomDto
+            {
+                RoomId = RoomId,
+                RoomName = RoomName,
+                HostId = HostId,
+                PlayerCount = _players.Count,
+                MaxPlayers = 3,
+                Status = Status,
+                Players = _players.Values.ToList()
+            };
+            return dto;
+        }
+
+        /// <summary>
+        /// 获取匹配房间数据传输对象（用于匹配）
+        /// </summary>
+        public MatchRoomDto GetMatchRoomDto()
         {
             var dto = new MatchRoomDto();
             foreach (var kvp in _players)
@@ -97,6 +147,9 @@ namespace FPServer.Game
             }
             dto.UIdList = _playerOrder.ToList();
             dto.ReadyUIdList = _readyPlayers.ToList();
+            dto.HostId = HostId;
+            dto.RoomId = RoomId;
+            dto.RoomName = RoomName;
             return dto;
         }
     }

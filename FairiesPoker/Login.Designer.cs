@@ -40,6 +40,7 @@
             timer1 = new System.Windows.Forms.Timer(components);
             linkLabel1 = new System.Windows.Forms.LinkLabel();
             linkLabel2 = new System.Windows.Forms.LinkLabel();
+            lblConnectionStatus = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)pictureBox1).BeginInit();
             SuspendLayout();
             // 
@@ -156,9 +157,9 @@
             linkLabel1.TabStop = true;
             linkLabel1.Text = "注册账号";
             linkLabel1.LinkClicked += linkLabel1_LinkClicked;
-            // 
+            //
             // linkLabel2
-            // 
+            //
             linkLabel2.AutoSize = true;
             linkLabel2.BackColor = System.Drawing.Color.Transparent;
             linkLabel2.Location = new System.Drawing.Point(738, 403);
@@ -169,7 +170,20 @@
             linkLabel2.TabStop = true;
             linkLabel2.Text = "修改密码";
             linkLabel2.LinkClicked += linkLabel2_LinkClicked;
-            // 
+            //
+            // lblConnectionStatus
+            //
+            lblConnectionStatus.AutoSize = true;
+            lblConnectionStatus.BackColor = System.Drawing.Color.Transparent;
+            lblConnectionStatus.Font = new System.Drawing.Font("微软雅黑", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, 134);
+            lblConnectionStatus.ForeColor = System.Drawing.Color.Gray;
+            lblConnectionStatus.Location = new System.Drawing.Point(20, 620);
+            lblConnectionStatus.Margin = new System.Windows.Forms.Padding(9, 0, 9, 0);
+            lblConnectionStatus.Name = "lblConnectionStatus";
+            lblConnectionStatus.Size = new System.Drawing.Size(56, 31);
+            lblConnectionStatus.TabIndex = 10;
+            lblConnectionStatus.Text = "连接中...";
+            //
             // Login
             // 
             AcceptButton = button1;
@@ -179,6 +193,7 @@
             BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
             CancelButton = button2;
             ClientSize = new System.Drawing.Size(860, 656);
+            Controls.Add(lblConnectionStatus);
             Controls.Add(linkLabel2);
             Controls.Add(linkLabel1);
             Controls.Add(label2);
@@ -215,5 +230,6 @@
         private System.Windows.Forms.Timer timer1;
         private System.Windows.Forms.LinkLabel linkLabel1;
         private System.Windows.Forms.LinkLabel linkLabel2;
+        private System.Windows.Forms.Label lblConnectionStatus;
     }
 }

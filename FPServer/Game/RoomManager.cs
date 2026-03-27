@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Protocol.Dto;
 
 namespace FPServer.Game
 {
@@ -20,14 +21,14 @@ namespace FPServer.Game
         }
 
         /// <summary>
-        /// 查找或创建房间
+        /// 查找或创建房间（用于快速匹配）
         /// </summary>
         public Room FindOrCreateRoom()
         {
             lock (_lock)
             {
                 // 查找未满的房间
-                var availableRoom = _rooms.Values.FirstOrDefault(r => !r.IsFull());
+                var availableRoom = _rooms.Values.FirstOrDefault(r => !r.IsFull() && r.IsWaiting());
                 if (availableRoom != null)
                 {
                     return availableRoom;
@@ -39,6 +40,66 @@ namespace FPServer.Game
                 _rooms[roomId] = newRoom;
                 _logger.LogInformation("创建新房间: {RoomId}", roomId);
                 return newRoom;
+            }
+        }
+
+        /// <summary>
+        /// 创建指定名称的房间
+        /// </summary>
+        public Room CreateRoom(int hostId, string roomName)
+        {
+            lock (_lock)
+            {
+                var roomId = Guid.NewGuid().ToString("N").Substring(0, 8);
+                var newRoom = new Room(roomId, _loggerFactory.CreateLogger<Room>())
+                {
+                    RoomName = roomName,
+                    HostId = hostId
+                };
+                _rooms[roomId] = newRoom;
+                _logger.LogInformation("创建新房间: {RoomId} - {RoomName}", roomId, roomName);
+                return newRoom;
+            }
+        }
+
+        /// <summary>
+        /// 添加玩家到房间
+        /// </summary>
+        public bool AddPlayerToRoom(Room room, int userId, UserDto userDto)
+        {
+            lock (_lock)
+            {
+                if (room.AddPlayer(userId, userDto))
+                {
+                    _playerRoomMap[userId] = room.RoomId;
+                    _logger.LogDebug("玩家 {UserId} 加入房间 {RoomId}", userId, room.RoomId);
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 从房间移除玩家
+        /// </summary>
+        public void RemovePlayerFromRoom(Room room, int userId)
+        {
+            lock (_lock)
+            {
+                room.RemovePlayer(userId);
+                _playerRoomMap.Remove(userId);
+                _logger.LogDebug("玩家 {UserId} 离开房间 {RoomId}", userId, room.RoomId);
+            }
+        }
+
+        /// <summary>
+        /// 获取所有房间
+        /// </summary>
+        public List<Room> GetAllRooms()
+        {
+            lock (_lock)
+            {
+                return _rooms.Values.Where(r => r.IsWaiting()).ToList();
             }
         }
 

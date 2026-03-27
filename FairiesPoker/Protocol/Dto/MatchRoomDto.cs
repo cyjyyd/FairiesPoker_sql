@@ -37,12 +37,31 @@ namespace Protocol.Dto
         [ProtoMember(5)]
         public int RightId;//代表右边玩家的id
 
+        /// <summary>
+        /// 房主ID
+        /// </summary>
+        [ProtoMember(6)]
+        public int HostId;
+
+        /// <summary>
+        /// 房间ID
+        /// </summary>
+        [ProtoMember(7)]
+        public string RoomId;
+
+        /// <summary>
+        /// 房间名称
+        /// </summary>
+        [ProtoMember(8)]
+        public string RoomName;
+
         public MatchRoomDto()
         {
             this.UIdUserDict = new Dictionary<int, UserDto>();
             this.ReadyUIdList = new List<int>();
             //fix bug
             this.UIdList = new List<int>();
+            this.HostId = -1;
         }
 
         //CTRL K D 整理代码
@@ -57,11 +76,22 @@ namespace Protocol.Dto
         {
             this.UIdUserDict.Remove(userId);
             this.UIdList.Remove(userId);
+            this.ReadyUIdList.Remove(userId);
         }
 
         public void Ready(int userId)
         {
             this.ReadyUIdList.Add(userId);
+        }
+
+        public void CancelReady(int userId)
+        {
+            this.ReadyUIdList.Remove(userId);
+        }
+
+        public bool IsReady(int userId)
+        {
+            return this.ReadyUIdList.Contains(userId);
         }
 
         /// <summary>

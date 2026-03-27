@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using Protocol.Code;
 using Protocol.Dto;
 using FairiesPoker;
+using System.IO;
+using System.Windows.Forms;
 
 /// <summary>
 /// 角色的网络消息处理类
@@ -58,15 +60,46 @@ public class UserHandler : HandlerBase
             // 保存用户数据
             Models.GameModel.UserDto = user;
 
-            // 跳转到主菜单
-            Main mainForm = new Main();
-            mainForm.Show();
+            // 检查是否有待上传的临时头像
+            UploadPendingAvatar();
 
-            // 关闭登录窗口
-            if (System.Windows.Forms.Application.OpenForms["Login"] is Login loginForm)
+            // 跳转到游戏大厅
+            Lobby lobby = new Lobby(NetManager.Instance);
+            lobby.Show();
+
+            // 标记登录成功并关闭登录窗口
+            if (Application.OpenForms["Login"] is Login loginForm)
             {
-                loginForm.Hide();
+                loginForm.MarkLoginSuccess();
+                loginForm.Close();
             }
+        }
+    }
+
+    /// <summary>
+    /// 上传待处理的头像（注册时选择的头像）
+    /// </summary>
+    private void UploadPendingAvatar()
+    {
+        try
+        {
+            string tempPath = System.IO.Path.Combine(Application.StartupPath, "temp_avatar.dat");
+            if (System.IO.File.Exists(tempPath))
+            {
+                byte[] avatarData = System.IO.File.ReadAllBytes(tempPath);
+                if (avatarData != null && avatarData.Length > 0)
+                {
+                    var dto = new AvatarDto(avatarData, "avatar.jpg");
+                    var msg = new SocketMsg(OpCode.AVATAR, AvatarCode.UPLOAD_CREQ, dto);
+                    NetManager.Instance.Execute(0, msg);
+                }
+                // 上传后删除临时文件
+                System.IO.File.Delete(tempPath);
+            }
+        }
+        catch
+        {
+            // 忽略错误
         }
     }
 

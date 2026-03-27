@@ -37,6 +37,9 @@ namespace FPServer.Handlers
                 case AccountCode.LOGIN:
                     HandleLogin(client, value as AccountDto);
                     break;
+                case AccountCode.LOGOUT_CREQ:
+                    HandleLogout(client);
+                    break;
                 default:
                     _logger.LogWarning("未知账号操作码: {SubCode}", subCode);
                     break;
@@ -82,11 +85,11 @@ namespace FPServer.Handlers
 
                 // 插入新用户
                 await DbHelper.Instance.ExecuteNonQueryAsync(
-                    @"INSERT INTO users (username, password_hash, avatar_id, nickname, beans, created_at)
-                      VALUES (@username, @password, @avatarId, @nickname, 1000, NOW())",
+                    @"INSERT INTO users (username, password_hash, avatar_url, nickname, beans, created_at)
+                      VALUES (@username, @password, @avatarUrl, @nickname, 1000, NOW())",
                     new MySqlParameter("@username", username),
                     new MySqlParameter("@password", hashedPassword),
-                    new MySqlParameter("@avatarId", dto.avatarid >= 0 ? dto.avatarid : 0),
+                    new MySqlParameter("@avatarUrl", DBNull.Value),
                     new MySqlParameter("@nickname", username));
 
                 _logger.LogInformation("新用户注册成功: {Username}", username);
@@ -117,7 +120,7 @@ namespace FPServer.Handlers
             {
                 // 查询用户
                 using var reader = await DbHelper.Instance.ExecuteReaderAsync(
-                    "SELECT id, username, password_hash, avatar_id, nickname, beans, win_count, lose_count, run_count, level, exp, is_online FROM users WHERE username = @username",
+                    "SELECT id, username, password_hash, avatar_url, nickname, beans, win_count, lose_count, run_count, level, exp, is_online FROM users WHERE username = @username",
                     new MySqlParameter("@username", username));
 
                 if (!await reader.ReadAsync())
@@ -128,7 +131,8 @@ namespace FPServer.Handlers
 
                 int userId = reader.GetInt32("id");
                 string storedHash = reader.GetString("password_hash");
-                int avatarId = reader.GetInt32("avatar_id");
+                int avatarUrlOrdinal = reader.GetOrdinal("avatar_url");
+                string avatarUrl = reader.IsDBNull(avatarUrlOrdinal) ? null : reader.GetString("avatar_url");
                 int nicknameOrdinal = reader.GetOrdinal("nickname");
                 string nickname = reader.IsDBNull(nicknameOrdinal) ? username : reader.GetString("nickname");
                 int beans = reader.GetInt32("beans");
@@ -161,7 +165,7 @@ namespace FPServer.Handlers
                     new MySqlParameter("@id", userId));
 
                 // 创建用户数据
-                var userDto = new UserDto(userId, nickname, beans, winCount, loseCount, runCount, level, exp);
+                var userDto = new UserDto(userId, nickname, beans, winCount, loseCount, runCount, level, exp, avatarUrl);
 
                 // 添加到在线缓存
                 _userCache.AddUser(userId, client, userDto);
@@ -172,8 +176,8 @@ namespace FPServer.Handlers
                 var resultMsg = new SocketMsg(OpCode.ACCOUNT, AccountCode.LOGIN, 0);
                 _messageHandler.Send(client, resultMsg);
 
-                // 发送用户数据
-                var userMsg = new SocketMsg(OpCode.USER, UserCode.GET_INFO_SRES, userDto);
+                // 发送用户上线消息（客户端收到此消息后跳转到Lobby）
+                var userMsg = new SocketMsg(OpCode.USER, UserCode.ONLINE_SRES, userDto);
                 _messageHandler.Send(client, userMsg);
             }
             catch (Exception ex)
@@ -192,6 +196,42 @@ namespace FPServer.Handlers
         private void SendLoginErrorResponse(ClientConnection client, int errorCode)
         {
             var msg = new SocketMsg(OpCode.ACCOUNT, AccountCode.LOGIN, errorCode);
+            _messageHandler.Send(client, msg);
+        }
+
+        /// <summary>
+        /// 处理登出请求
+        /// </summary>
+        public async void HandleLogout(ClientConnection client)
+        {
+            if (client.UserId <= 0)
+            {
+                return;
+            }
+
+            _logger.LogInformation("用户登出: {UserId} {Username}", client.UserId, client.Username);
+
+            // 从在线缓存移除
+            _userCache.RemoveUser(client.UserId);
+
+            // 更新数据库状态
+            try
+            {
+                await DbHelper.Instance.ExecuteNonQueryAsync(
+                    "UPDATE users SET is_online = 0 WHERE id = @id",
+                    new MySqlParameter("@id", client.UserId));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "更新用户离线状态失败");
+            }
+
+            // 清除客户端用户信息
+            client.UserId = 0;
+            client.Username = null;
+
+            // 发送登出成功响应
+            var msg = new SocketMsg(OpCode.ACCOUNT, AccountCode.LOGOUT_SRES, 0);
             _messageHandler.Send(client, msg);
         }
     }

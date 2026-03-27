@@ -10,5 +10,6 @@ namespace Protocol.Code
         public const byte MATCH = 2;//匹配模块
         public const byte CHAT = 3;//聊天模块
         public const byte FIGHT = 4;//战斗模块
+        public const byte AVATAR = 5;//头像模块
     }
 }

@@ -18,6 +18,7 @@ namespace FairiesPoker
     {
         NetManager netManager;
         private SocketMsg Msg;
+        private bool isLoginSuccess = false; // 标记是否登录成功跳转
         [DllImport("kernel32")]//返回0表示失败，非0为成功
         private static extern long WritePrivateProfileString(string section, string key, string val, string filePath);
         [DllImport("kernel32")]//返回取得字符串缓冲区的长度
@@ -110,10 +111,40 @@ namespace FairiesPoker
         private void Login_Load(object sender, EventArgs e)
         {
             netManager = new NetManager();
+            netManager.OnConnectionStateChanged += OnConnectionStateChanged;
             netManager.Start();
         }
+
+        private void OnConnectionStateChanged(bool connected, string message)
+        {
+            if (this.InvokeRequired)
+            {
+                this.Invoke(new Action<bool, string>(OnConnectionStateChanged), connected, message);
+                return;
+            }
+
+            if (!connected)
+            {
+                lblConnectionStatus.Text = "未连接";
+                lblConnectionStatus.ForeColor = System.Drawing.Color.Red;
+                // 可选：显示提示
+                // MessageBox.Show(message, "连接状态", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            else
+            {
+                lblConnectionStatus.Text = "已连接";
+                lblConnectionStatus.ForeColor = System.Drawing.Color.Green;
+            }
+        }
+
         private void button1_Click(object sender, EventArgs e)
         {
+            if (!netManager.IsConnected)
+            {
+                MessageBox.Show("未连接到服务器，请检查服务器是否启动", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             if (check())
             {
                 string usr = textBox1.Text;
@@ -166,7 +197,25 @@ namespace FairiesPoker
 
         private void Login_FormClosing(object sender, FormClosingEventArgs e)
         {
+            // 如果是登录成功跳转，不断开连接
+            if (isLoginSuccess)
+            {
+                return;
+            }
 
+            // 安全断开连接
+            if (netManager != null && netManager.IsConnected)
+            {
+                netManager.Disconnect();
+            }
+        }
+
+        /// <summary>
+        /// 标记登录成功，跳转时不断开连接
+        /// </summary>
+        public void MarkLoginSuccess()
+        {
+            isLoginSuccess = true;
         }
 
         private void textBox2_TextChanged(object sender, EventArgs e)

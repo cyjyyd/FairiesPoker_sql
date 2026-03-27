@@ -2,6 +2,7 @@ using FPServer.Cache;
 using FPServer.Database;
 using FPServer.Game;
 using FPServer.Handlers;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
 using Protocol.Code;
@@ -19,11 +20,13 @@ namespace FPServer.Network
         private readonly AccountHandler _accountHandler;
         private readonly UserHandler _userHandler;
         private readonly MatchHandler _matchHandler;
+        private readonly ChatHandler _chatHandler;
         private readonly FightHandler _fightHandler;
+        private readonly AvatarHandler _avatarHandler;
         private readonly OnlineUserCache _userCache;
         private readonly RoomManager _roomManager;
 
-        public MessageHandler(ServerPeer server, ILoggerFactory loggerFactory)
+        public MessageHandler(ServerPeer server, ILoggerFactory loggerFactory, IConfiguration configuration)
         {
             _server = server;
             _loggerFactory = loggerFactory;
@@ -33,7 +36,17 @@ namespace FPServer.Network
             _accountHandler = new AccountHandler(this, loggerFactory, _userCache);
             _userHandler = new UserHandler(this, loggerFactory, _userCache);
             _matchHandler = new MatchHandler(this, loggerFactory, _userCache, _roomManager);
+            _chatHandler = new ChatHandler(this, loggerFactory, _userCache, _roomManager);
             _fightHandler = new FightHandler(this, loggerFactory, _userCache, _roomManager);
+            _avatarHandler = new AvatarHandler(this, loggerFactory, _userCache, configuration);
+        }
+
+        /// <summary>
+        /// 获取头像处理器（用于控制台命令）
+        /// </summary>
+        public AvatarHandler GetAvatarHandler()
+        {
+            return _avatarHandler;
         }
 
         /// <summary>
@@ -54,8 +67,14 @@ namespace FPServer.Network
                 case OpCode.MATCH:
                     _matchHandler.Handle(client, msg.SubCode, msg.Value);
                     break;
+                case OpCode.CHAT:
+                    _chatHandler.Handle(client, msg.SubCode, msg.Value);
+                    break;
                 case OpCode.FIGHT:
                     _fightHandler.Handle(client, msg.SubCode, msg.Value);
+                    break;
+                case OpCode.AVATAR:
+                    _avatarHandler.Handle(client, msg.SubCode, msg.Value);
                     break;
                 default:
                     _logger.LogWarning("未知操作码: {OpCode}", msg.OpCode);

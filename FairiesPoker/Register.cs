@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -19,167 +19,139 @@ namespace FairiesPoker
 {
     public partial class Register : Form
     {
-        SocketMsg Msg;
-        string nm;
-        string pwd;
-        int avatarid = 0;
-        bool standard = false;
         NetManager netManager;
-        config con = new config();
-        Dictionary<string, string> registervalues = new Dictionary<string, string>();
+        byte[] _customAvatarData = null; // 自定义头像数据
+
         public Register(NetManager netManager)
         {
             InitializeComponent();
             this.netManager = netManager;
+            // 订阅注册结果事件
+            Models.OnRegisterResult += OnRegisterResultHandler;
         }
-        OpenFileDialog ofd = new OpenFileDialog();
 
-        private void checkBox1_CheckedChanged(object sender, EventArgs e)
+        /// <summary>
+        /// 注册结果处理
+        /// </summary>
+        private void OnRegisterResultHandler(bool success)
         {
-            try
+            if (this.InvokeRequired)
             {
-                if (checkBox1.Checked)
+                this.Invoke(new Action<bool>(OnRegisterResultHandler), success);
+                return;
+            }
+
+            if (success)
+            {
+                // 保存头像数据到临时文件，登录后上传
+                if (_customAvatarData != null)
                 {
-                    standard = true;
-                    comboBox1.Enabled = false;
-                    pictureBox1.BackgroundImage = Properties.Resources.Pla;
-                }
-                else
-                {
-                    comboBox1.Enabled = true;
-                    standard = false;
-                    if (comboBox1.Text != "")
+                    try
                     {
-                        pictureBox1.BackgroundImage = Image.FromFile(Application.StartupPath + "\\avatars\\" + comboBox1.Text + ".jpg");
+                        string tempPath = System.IO.Path.Combine(Application.StartupPath, "temp_avatar.dat");
+                        System.IO.File.WriteAllBytes(tempPath, _customAvatarData);
                     }
+                    catch { }
                 }
-            }
-            catch (Exception)
-            {
-                MessageBox.Show("尝试载入图像时发生错误！","error",MessageBoxButtons.OK,MessageBoxIcon.Error);
-            }
 
+                MessageBox.Show("注册成功！请使用新账号登录。", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                // 关闭注册窗口，返回登录页面
+                this.DialogResult = DialogResult.OK;
+                this.Close();
+            }
+            else
+            {
+                MessageBox.Show("注册失败，用户名可能已存在，请重试", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                btnRegister.Enabled = true;
+                lblStatus.Text = "";
+            }
         }
 
-        private void button1_Click(object sender, EventArgs e)
+        /// <summary>
+        /// 窗口关闭时取消订阅
+        /// </summary>
+        protected override void OnFormClosed(FormClosedEventArgs e)
         {
-            // 直接进入下一步，移除邀请码验证
-            button1.Enabled = false;
-            textBox1.Enabled = false;
-            textBox2.Enabled = true;
-            button2.Enabled = true;
+            Models.OnRegisterResult -= OnRegisterResultHandler;
+            base.OnFormClosed(e);
         }
 
         private void Register_Shown(object sender, EventArgs e)
         {
+            // 不再加载预设头像列表
+        }
+
+        private void btnUploadAvatar_Click(object sender, EventArgs e)
+        {
+            // 打开图片裁切窗口
+            using var form = new ImageCropperForm(netManager, false);
+            if (form.ShowDialog() == DialogResult.OK && form.CroppedImageData != null)
+            {
+                _customAvatarData = form.CroppedImageData;
+                // 显示预览
+                using var ms = new MemoryStream(_customAvatarData);
+                pictureBox1.BackgroundImage = Image.FromStream(ms);
+            }
+        }
+
+        private void btnRegister_Click(object sender, EventArgs e)
+        {
+            // 验证用户名
+            string username = txtUsername.Text.Trim();
+            if (username.Length < 4 || username.Length > 16)
+            {
+                MessageBox.Show("用户名长度需要在4-16个字符之间！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtUsername.Focus();
+                return;
+            }
+
+            // 验证密码
+            string password = txtPassword.Text;
+            if (password.Length < 6 || password.Length > 16)
+            {
+                MessageBox.Show("密码长度需要在6-16个字符之间！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtPassword.Focus();
+                return;
+            }
+
+            // 确认密码
+            if (password != txtConfirmPassword.Text)
+            {
+                MessageBox.Show("两次输入的密码不一致！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtConfirmPassword.Focus();
+                return;
+            }
+
+            // MD5加密密码
+            string pwdHash = null;
+            MD5 md5 = MD5.Create();
+            byte[] passwordBytes = Encoding.Default.GetBytes(password);
+            byte[] encryptpassword = md5.ComputeHash(passwordBytes);
+            for (int i = 0; i < encryptpassword.Length; i++)
+            {
+                pwdHash = pwdHash + encryptpassword[i].ToString("X");
+            }
+
             try
             {
-                List<String> list = new List<string>();
-                DirectoryInfo theFolder = new DirectoryInfo(Application.StartupPath + "\\avatars");
-                FileInfo[] thefileInfo = theFolder.GetFiles("*.*", SearchOption.TopDirectoryOnly);
-                foreach (FileInfo NextFile in thefileInfo)  //遍历文件
-                list.Add(NextFile.Name.Substring(0,NextFile.Name.IndexOf('.')));
-                comboBox1.DataSource = list;
-                comboBox1.SelectedIndex = 0;
+                btnRegister.Enabled = false;
+                lblStatus.Text = "正在注册...";
+
+                AccountDto dto = new AccountDto(username, pwdHash);
+                SocketMsg msg = new SocketMsg(OpCode.ACCOUNT, AccountCode.REGIST_CREQ, dto);
+                netManager.Execute(0, msg);
             }
             catch (Exception)
             {
-                MessageBox.Show("尝试载入图像时发生错误！", "error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-
-        }
-
-        private void button2_Click(object sender, EventArgs e)
-        {
-            if (textBox2.Text.Length >= 4 && textBox2.Text.Length <= 16)
-            {
-                button2.Enabled = false;
-                button3.Enabled = true;
-                textBox2.Enabled = false;
-                textBox3.Enabled = true;
-                nm = textBox2.Text;
-            }
-            else
-            {
-                MessageBox.Show("用户名长度需要在4-16个字符之间！");
+                MessageBox.Show("未知错误，请联系开发者", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                btnRegister.Enabled = true;
+                lblStatus.Text = "";
             }
         }
 
-        private void button3_Click(object sender, EventArgs e)
-        {
-            if (textBox3.Text.Length>=6&&textBox3.Text.Length<=16)
-            {
-                pwd = null;
-                MD5 md5 = MD5.Create();
-                byte[] password = Encoding.Default.GetBytes(textBox3.Text);
-                byte[] encryptpassword = md5.ComputeHash(password);
-                for (int i = 0; i < encryptpassword.Length; i++)
-                {
-                    pwd = pwd + encryptpassword[i].ToString("X");
-                }
-                button6.Enabled = true;
-                button3.Enabled = false;
-                checkBox1.Enabled = true;
-                textBox3.Enabled = false;
-            }
-            else
-            {
-                MessageBox.Show("密码长度需要在6-16个字符之间！");
-            }
-        }
-
-        private void button6_Click(object sender, EventArgs e)
-        {
-            comboBox1.Enabled = false;
-            checkBox1.Enabled = false;
-            if (standard)
-            {
-                avatarid = -1;
-            }
-            else
-            {
-                if (comboBox1.SelectedIndex==-1)
-                {
-                    avatarid = -1;
-                }
-                avatarid = comboBox1.SelectedIndex;
-            }
-            button4.Enabled = true;
-            button6.Enabled = false;
-        }
-
-        private void button4_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                AccountDto dto = new AccountDto(nm, pwd, avatarid);
-                Msg = new SocketMsg(OpCode.ACCOUNT, AccountCode.REGIST_CREQ, dto);
-                netManager.Execute(0, Msg);
-                reset();
-            }
-            catch (Exception)
-            {
-                MessageBox.Show("未知错误，请联系开发者","Error",MessageBoxButtons.OK,MessageBoxIcon.Error);
-            }
-        }
         private void Register_Load(object sender, EventArgs e)
         {
             timer1.Start();
-        }
-        private void reset()
-        {
-            nm = "";
-            pwd = "";
-            avatarid = -1;
-            textBox1.Text = textBox2.Text = textBox3.Text = "";
-            textBox1.Enabled = true;
-            button1.Enabled = true;
-            button4.Enabled = false;
-        }
-
-        private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            pictureBox1.BackgroundImage = Image.FromFile(Application.StartupPath + "\\avatars\\" + comboBox1.Text + ".jpg");
         }
 
         private void timer1_Tick(object sender, EventArgs e)

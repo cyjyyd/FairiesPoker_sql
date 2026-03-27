@@ -14,5 +14,9 @@ namespace Protocol.Code
 
         //登录的操作码
         public const int LOGIN = 2;//参数 AccountDto 账号密码
+
+        //登出的操作码
+        public const int LOGOUT_CREQ = 3;//client request 登出请求
+        public const int LOGOUT_SRES = 4;//server response 登出响应
     }
 }

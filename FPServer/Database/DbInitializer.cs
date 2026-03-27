@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    avatar_id INT DEFAULT 0,
+    avatar_url VARCHAR(255) DEFAULT NULL,
     nickname VARCHAR(50),
     beans INT DEFAULT 1000,
     win_count INT DEFAULT 0,
@@ -43,6 +43,25 @@ CREATE TABLE IF NOT EXISTS users (
 
                 await DbHelper.Instance.ExecuteNonQueryAsync(createUserTable);
                 _logger.LogInformation("用户表创建成功");
+
+                // 头像审核表
+                var createAvatarTable = @"
+CREATE TABLE IF NOT EXISTS user_avatars (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    file_path VARCHAR(255) NOT NULL,
+    upload_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    is_approved TINYINT DEFAULT 0,
+    reviewed_by INT NULL,
+    review_time DATETIME NULL,
+    review_note VARCHAR(255) NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user (user_id),
+    INDEX idx_approved (is_approved)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+
+                await DbHelper.Instance.ExecuteNonQueryAsync(createAvatarTable);
+                _logger.LogInformation("头像审核表创建成功");
 
                 // 用户会话表
                 var createSessionTable = @"
@@ -77,6 +96,10 @@ CREATE TABLE IF NOT EXISTS game_records (
 
                 await DbHelper.Instance.ExecuteNonQueryAsync(createGameRecordTable);
                 _logger.LogInformation("游戏记录表创建成功");
+
+                // 服务器启动时重置所有用户为离线状态
+                await DbHelper.Instance.ExecuteNonQueryAsync("UPDATE users SET is_online = 0");
+                _logger.LogInformation("已重置所有用户在线状态");
 
                 _logger.LogInformation("数据库初始化完成");
             }

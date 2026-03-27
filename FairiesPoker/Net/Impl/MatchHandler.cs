@@ -13,16 +13,31 @@ public class MatchHandler : HandlerBase
                 enterResponse(value as MatchRoomDto);
                 break;
             case MatchCode.ENTER_BRO:
-                enterBro(value as UserDto);
+                enterBro(value as MatchRoomDto);
                 break;
             case MatchCode.LEAVE_BRO:
-                leaveBro((int)value);
+                leaveBro(value as MatchRoomDto);
                 break;
             case MatchCode.READY_BRO:
-                readyBro((int)value);
+                readyBro(value as MatchRoomDto);
                 break;
             case MatchCode.START_BRO:
                 startBro();
+                break;
+            case RoomCode.GET_ROOMS_SRES:
+                getRoomsResponse(value as List<RoomDto>);
+                break;
+            case RoomCode.CREATE_SRES:
+                createRoomResponse(value as MatchRoomDto);
+                break;
+            case RoomCode.JOIN_SRES:
+                joinRoomResponse(value as MatchRoomDto);
+                break;
+            case RoomCode.UPDATE_BRO:
+                roomUpdateBro(value as MatchRoomDto);
+                break;
+            case RoomCode.LEAVE_BRO:
+                leaveRoomBro(value as MatchRoomDto);
                 break;
             default:
                 break;
@@ -35,76 +50,60 @@ public class MatchHandler : HandlerBase
     private void startBro()
     {
         //开始游戏 隐藏状态面板的准备文字
+        Models.TriggerMatchUpdate(Models.GameModel.MatchRoomDto);
     }
 
     /// <summary>
     /// 准备的广播处理
     /// </summary>
-    /// <param name="readyUserId"></param>
-    private void readyBro(int readyUserId)
+    private void readyBro(MatchRoomDto matchRoom)
     {
-        //保存数据
-        Models.GameModel.MatchRoomDto.Ready(readyUserId);
-        //显示为玩家状态面板的准备文字
-
-        //fixbug923 判断是否是自身
-        if (readyUserId == Models.GameModel.UserDto.Id)
+        if (matchRoom != null)
         {
-            //发送消息 隐藏准备按钮 防止多次点击 和服务器交互
+            Models.GameModel.MatchRoomDto = matchRoom;
+            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+            Models.TriggerMatchUpdate(matchRoom);
         }
     }
 
     /// <summary>
-    /// 离开的广播处理
+    /// 离开的广播处理（匹配模式）
     /// </summary>
-    /// <param name="leaveUserId"></param>
-    private void leaveBro(int leaveUserId)
+    private void leaveBro(MatchRoomDto matchRoom)
     {
-        //发消息 隐藏玩家的状态面板所有游戏物体
-        resetPosition();
-        //保存数据
-        Models.GameModel.MatchRoomDto.Leave(leaveUserId);
+        if (matchRoom != null)
+        {
+            Models.GameModel.MatchRoomDto = matchRoom;
+            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+            Models.TriggerMatchUpdate(matchRoom);
+        }
     }
 
     /// <summary>
     /// 自身进入的服务器响应
     /// </summary>
-    /// <param name="room"></param>
     private void enterResponse(MatchRoomDto matchRoom)
     {
         Models.GameModel.MatchRoomDto = matchRoom;
-        resetPosition();
-        //显示进入房间的按钮
+        if (matchRoom != null)
+        {
+            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+        }
+        // 触发更新事件
+        Models.TriggerMatchUpdate(matchRoom);
     }
 
     /// <summary>
     /// 他人进入的广播处理
     /// </summary>
-    /// <param name="newUser"></param>
-    private void enterBro(UserDto newUser)
+    private void enterBro(MatchRoomDto matchRoom)
     {
-        //fix bug
-        //发消息 显示玩家的状态面板所有游戏物体
-        //Dispatch(AreaCode.UI, UIEvent.PLAYER_ENTER, newUser.Id);
-
-        //更新房间数据
-        MatchRoomDto room = Models.GameModel.MatchRoomDto;
-        room.Add(newUser);
-        resetPosition();
-
-        //给UI绑定数据
-        if (room.LeftId != -1)
+        if (matchRoom != null)
         {
-            UserDto leftUserDto = room.UIdUserDict[room.LeftId];
+            Models.GameModel.MatchRoomDto = matchRoom;
+            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+            Models.TriggerMatchUpdate(matchRoom);
         }
-        if (room.RightId != -1)
-        {
-            UserDto rightUserDto = room.UIdUserDict[room.RightId];
-        }
-
-        //发消息 显示玩家的状态面板所有游戏物体
-
-        //给用户一个提示
     }
 
     /// <summary>
@@ -117,7 +116,79 @@ public class MatchHandler : HandlerBase
         MatchRoomDto matchRoom = gModel.MatchRoomDto;
 
         //重置一下玩家的位置
-        matchRoom.ResetPosition(gModel.UserDto.Id);
+        if (matchRoom != null)
+        {
+            matchRoom.ResetPosition(gModel.UserDto.Id);
+        }
     }
 
+    #region 自定义房间处理
+
+    /// <summary>
+    /// 获取房间列表响应
+    /// </summary>
+    private void getRoomsResponse(List<RoomDto> rooms)
+    {
+        Models.TriggerRoomListUpdate(rooms ?? new List<RoomDto>());
+    }
+
+    /// <summary>
+    /// 创建房间响应
+    /// </summary>
+    private void createRoomResponse(MatchRoomDto matchRoom)
+    {
+        if (matchRoom != null)
+        {
+            Models.GameModel.MatchRoomDto = matchRoom;
+            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+            Models.TriggerMatchUpdate(matchRoom);
+        }
+    }
+
+    /// <summary>
+    /// 加入房间响应
+    /// </summary>
+    private void joinRoomResponse(MatchRoomDto matchRoom)
+    {
+        if (matchRoom != null)
+        {
+            Models.GameModel.MatchRoomDto = matchRoom;
+            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+            Models.TriggerMatchUpdate(matchRoom);
+        }
+    }
+
+    /// <summary>
+    /// 房间更新广播（玩家加入/离开）
+    /// </summary>
+    private void roomUpdateBro(MatchRoomDto matchRoom)
+    {
+        if (matchRoom != null)
+        {
+            Models.GameModel.MatchRoomDto = matchRoom;
+            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+            Models.TriggerMatchUpdate(matchRoom);
+        }
+    }
+
+    /// <summary>
+    /// 离开房间广播
+    /// </summary>
+    private void leaveRoomBro(MatchRoomDto matchRoom)
+    {
+        if (matchRoom != null)
+        {
+            Models.GameModel.MatchRoomDto = matchRoom;
+            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+            Models.TriggerMatchUpdate(matchRoom);
+        }
+        else
+        {
+            // 房间为空，清空房间数据
+            Models.GameModel.MatchRoomDto = null;
+            Models.TriggerMatchUpdate(null);
+        }
+    }
+
+    #endregion
 }

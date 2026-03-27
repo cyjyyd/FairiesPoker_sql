@@ -32,8 +32,7 @@ public class AccountHandler : HandlerBase
         switch (result)
         {
             case 0:
-                // 登录成功，等待UserDto（由UserHandler处理）
-                System.Windows.Forms.MessageBox.Show("登录成功！", "提示", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
+                // 登录成功，跳转到Lobby由UserHandler.onlineResponse处理
                 break;
             case -1:
                 System.Windows.Forms.MessageBox.Show("登录失败：该账号不存在！", "警告", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Warning);
@@ -57,18 +56,23 @@ public class AccountHandler : HandlerBase
         switch (result)
         {
             case 0:
-                System.Windows.Forms.MessageBox.Show("恭喜,注册成功！请牢记您的账号和密码！", "Success", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
+                // 注册成功，由Register.cs处理提示和关闭窗口
+                Models.TriggerRegisterResult(true);
                 break;
             case -1:
-                System.Windows.Forms.MessageBox.Show("该账号已经被注册，请换一个用户名吧", "Warning", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Warning);
+                Models.TriggerRegisterResult(false);
+                System.Windows.Forms.MessageBox.Show("该账号已经被注册，请换一个用户名吧", "警告", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Warning);
                 break;
             case -2:
-                System.Windows.Forms.MessageBox.Show("用户名长度需要在4-16个字符之间", "Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
+                Models.TriggerRegisterResult(false);
+                System.Windows.Forms.MessageBox.Show("用户名长度需要在4-16个字符之间", "错误", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
                 break;
             case -3:
-                System.Windows.Forms.MessageBox.Show("服务器错误，请稍后重试", "Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
+                Models.TriggerRegisterResult(false);
+                System.Windows.Forms.MessageBox.Show("服务器错误，请稍后重试", "错误", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
                 break;
             default:
+                Models.TriggerRegisterResult(false);
                 break;
         }
     }

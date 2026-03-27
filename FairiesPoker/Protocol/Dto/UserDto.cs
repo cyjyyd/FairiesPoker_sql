@@ -29,13 +29,15 @@ namespace Protocol.Dto
         public int Lv;//等级
         [ProtoMember(8)]
         public int Exp;//经验
+        [ProtoMember(9)]
+        public string AvatarUrl;//头像URL
 
         public UserDto()
         {
 
         }
 
-        public UserDto(int id, string name, int been, int winCount, int loseCount, int runCount, int lv, int exp)
+        public UserDto(int id, string name, int been, int winCount, int loseCount, int runCount, int lv, int exp, string avatarUrl = null)
         {
             this.Id = id;
             this.Name = name;
@@ -45,6 +47,7 @@ namespace Protocol.Dto
             this.RunCount = runCount;
             this.Lv = lv;
             this.Exp = exp;
+            this.AvatarUrl = avatarUrl;
         }
     }
 }

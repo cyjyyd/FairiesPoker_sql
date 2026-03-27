@@ -1,3 +1,4 @@
+using FPServer.Handlers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Net;
@@ -13,6 +14,7 @@ namespace FPServer.Network
         private Socket _listenSocket;
         private readonly ILogger<ServerPeer> _logger;
         private readonly ILoggerFactory _loggerFactory;
+        private readonly IConfiguration _configuration;
         private readonly int _port;
         private readonly string _host;
         private readonly List<ClientConnection> _clients = new List<ClientConnection>();
@@ -21,11 +23,20 @@ namespace FPServer.Network
 
         public ServerPeer(IConfiguration configuration, ILoggerFactory loggerFactory)
         {
+            _configuration = configuration;
             _loggerFactory = loggerFactory;
             _logger = loggerFactory.CreateLogger<ServerPeer>();
             _host = configuration["Server:Host"] ?? "0.0.0.0";
             _port = int.Parse(configuration["Server:Port"] ?? "40960");
-            _messageHandler = new MessageHandler(this, loggerFactory);
+            _messageHandler = new MessageHandler(this, loggerFactory, configuration);
+        }
+
+        /// <summary>
+        /// 获取头像处理器（用于控制台命令）
+        /// </summary>
+        public AvatarHandler GetAvatarHandler()
+        {
+            return _messageHandler.GetAvatarHandler();
         }
 
         /// <summary>

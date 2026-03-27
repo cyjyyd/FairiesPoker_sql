@@ -14,10 +14,11 @@ namespace FPServer.Network
         private readonly byte[] _receiveBuffer = new byte[1024];
         private List<byte> _dataCache = new List<byte>();
         private bool _isProcessing = false;
+        private bool _isDisconnected = false;
         public int UserId { get; set; } = -1;
         public string Username { get; set; }
         public DateTime LastActiveTime { get; set; }
-        public bool IsConnected => _socket != null && _socket.Connected;
+        public bool IsConnected => _socket != null && _socket.Connected && !_isDisconnected;
 
         public ClientConnection(Socket socket, ServerPeer server, ILogger<ClientConnection> logger)
         {
@@ -39,7 +40,7 @@ namespace FPServer.Network
         {
             try
             {
-                if (!IsConnected) return;
+                if (_isDisconnected || !IsConnected) return;
                 _socket.BeginReceive(_receiveBuffer, 0, _receiveBuffer.Length, SocketFlags.None, ReceiveCallback, null);
             }
             catch (Exception ex)
@@ -53,11 +54,16 @@ namespace FPServer.Network
         {
             try
             {
+                if (_isDisconnected)
+                {
+                    return;
+                }
+
                 int length = _socket.EndReceive(ar);
                 if (length == 0)
                 {
-                    // 客户端断开连接
-                    _logger.LogInformation("客户端断开连接: {UserId}", UserId);
+                    // 客户端正常断开连接
+                    _logger.LogInformation("客户端正常断开连接: UserId={UserId}", UserId);
                     Disconnect();
                     return;
                 }
@@ -73,9 +79,29 @@ namespace FPServer.Network
 
                 BeginReceive();
             }
+            catch (SocketException ex)
+            {
+                // Socket错误码10054: 远程主机强迫关闭了一个现有的连接
+                // 这通常是客户端非正常断开（如关闭窗口、网络中断等）
+                if (ex.SocketErrorCode == SocketError.ConnectionReset ||
+                    ex.SocketErrorCode == SocketError.ConnectionAborted ||
+                    ex.SocketErrorCode == SocketError.TimedOut)
+                {
+                    _logger.LogInformation("客户端异常断开连接: UserId={UserId}, Error={Error}", UserId, ex.SocketErrorCode);
+                }
+                else
+                {
+                    _logger.LogWarning("Socket错误: UserId={UserId}, Error={Error}, Message={Message}", UserId, ex.SocketErrorCode, ex.Message);
+                }
+                Disconnect();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Socket已被释放，忽略
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "接收回调失败");
+                _logger.LogError(ex, "接收回调失败 UserId={UserId}", UserId);
                 Disconnect();
             }
         }
@@ -109,7 +135,7 @@ namespace FPServer.Network
         /// </summary>
         public void Send(SocketMsg msg)
         {
-            if (!IsConnected) return;
+            if (_isDisconnected || !IsConnected) return;
 
             try
             {
@@ -128,11 +154,14 @@ namespace FPServer.Network
         {
             try
             {
-                _socket.EndSend(ar);
+                if (!_isDisconnected)
+                {
+                    _socket.EndSend(ar);
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "发送回调失败");
+                _logger.LogDebug("发送回调失败: {Message}", ex.Message);
             }
         }
 
@@ -141,9 +170,17 @@ namespace FPServer.Network
         /// </summary>
         public void Disconnect()
         {
+            if (_isDisconnected) return;
+            _isDisconnected = true;
+
             try
             {
                 _socket?.Shutdown(SocketShutdown.Both);
+            }
+            catch { }
+
+            try
+            {
                 _socket?.Close();
             }
             catch { }

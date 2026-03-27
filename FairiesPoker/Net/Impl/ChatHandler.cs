@@ -11,14 +11,32 @@ public class ChatHandler : HandlerBase
     {
         switch (subCode)
         {
-            case ChatCode.SRES:
+            case ChatCode.RECEIVE_BRO:
                 {
+                    // 收到聊天消息广播
                     ChatDto dto = value as ChatDto;
-                    int userId = dto.UserId;
-                    int chatType = dto.ChatType;
-                    string text = Constant.GetChatText(chatType);                        
-                    //显示文字
-                    //播放声音
+                    if (dto != null)
+                    {
+                        Models.TriggerChatMessage(dto);
+                    }
+                    break;
+                }
+            case ChatCode.SEND_SRES:
+                {
+                    // 发送消息响应（可选处理）
+                    break;
+                }
+            case ChatCode.GET_HISTORY_SRES:
+                {
+                    // 获取历史消息响应
+                    var messages = value as List<ChatDto>;
+                    if (messages != null)
+                    {
+                        foreach (var msg in messages)
+                        {
+                            Models.TriggerChatMessage(msg);
+                        }
+                    }
                     break;
                 }
             default:
