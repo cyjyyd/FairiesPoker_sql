@@ -36,7 +36,7 @@ namespace FPServer.Game
 
                 // 创建新房间
                 var roomId = Guid.NewGuid().ToString("N").Substring(0, 8);
-                var newRoom = new Room(roomId, _loggerFactory.CreateLogger<Room>());
+                var newRoom = new Room(roomId, _loggerFactory.CreateLogger<Room>(), _loggerFactory);
                 _rooms[roomId] = newRoom;
                 _logger.LogInformation("创建新房间: {RoomId}", roomId);
                 return newRoom;
@@ -51,7 +51,7 @@ namespace FPServer.Game
             lock (_lock)
             {
                 var roomId = Guid.NewGuid().ToString("N").Substring(0, 8);
-                var newRoom = new Room(roomId, _loggerFactory.CreateLogger<Room>())
+                var newRoom = new Room(roomId, _loggerFactory.CreateLogger<Room>(), _loggerFactory)
                 {
                     RoomName = roomName,
                     HostId = hostId

@@ -58,6 +58,8 @@ namespace FairiesPoker
             this.pic1 = new System.Windows.Forms.PictureBox();
             this.pic_dz = new System.Windows.Forms.PictureBox();
             this.timer1 = new System.Windows.Forms.Timer(this.components);
+            this.timerTurnTimeout = new System.Windows.Forms.Timer(this.components);
+            this.lblTurnTimer = new System.Windows.Forms.Label();
             this.groupBox1.SuspendLayout();
             this.groupBox2.SuspendLayout();
             this.groupBox3.SuspendLayout();
@@ -361,6 +363,25 @@ namespace FairiesPoker
             this.timer1.Interval = 50;
             this.timer1.Tick += new System.EventHandler(this.timer1_Tick);
             //
+            // timerTurnTimeout
+            //
+            this.timerTurnTimeout.Interval = 1000;
+            this.timerTurnTimeout.Tick += new System.EventHandler(this.timerTurnTimeout_Tick);
+            //
+            // lblTurnTimer
+            //
+            this.lblTurnTimer.Anchor = System.Windows.Forms.AnchorStyles.None;
+            this.lblTurnTimer.BackColor = System.Drawing.Color.Transparent;
+            this.lblTurnTimer.Font = new System.Drawing.Font("黑体", 24F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.lblTurnTimer.ForeColor = System.Drawing.Color.White;
+            this.lblTurnTimer.Location = new System.Drawing.Point(575, 340);
+            this.lblTurnTimer.Name = "lblTurnTimer";
+            this.lblTurnTimer.Size = new System.Drawing.Size(130, 40);
+            this.lblTurnTimer.TabIndex = 18;
+            this.lblTurnTimer.Text = "20";
+            this.lblTurnTimer.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            this.lblTurnTimer.Visible = false;
+            //
             // DdzMian
             //
             this.AcceptButton = this.button1;
@@ -369,6 +390,7 @@ namespace FairiesPoker
             this.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
             this.ClientSize = new System.Drawing.Size(1280, 720);
             this.ControlBox = false;
+            this.Controls.Add(this.lblTurnTimer);
             this.Controls.Add(this.button8);
             this.Controls.Add(this.button7);
             this.Controls.Add(this.button5);
@@ -435,6 +457,8 @@ namespace FairiesPoker
         private System.Windows.Forms.Button button7;
         private System.Windows.Forms.Button button8;
         private System.Windows.Forms.Timer timer1;
+        private System.Windows.Forms.Timer timerTurnTimeout;
+        private System.Windows.Forms.Label lblTurnTimer;
 
         // NAudio 音频播放器
         private AudioPlayer audioPlayer;

@@ -1,4 +1,4 @@
-﻿using Protocol.Code;
+using Protocol.Code;
 using Protocol.Constant;
 using Protocol.Dto.Fight;
 using System.Collections;
@@ -44,7 +44,7 @@ public class FightHandler : HandlerBase
 
     private void changeMultiple(int value)
     {
-        //Dispatch(AreaCode.UI, UIEvent.CHANGE_MULTIPLE, value);
+        Models.TriggerMultipleChange(value);
     }
 
     /// <summary>
@@ -53,16 +53,7 @@ public class FightHandler : HandlerBase
     /// <param name="dto"></param>
     private void overBro(OverDto dto)
     {
-        //播放结束音效
-        if (dto.WinUIdList.Contains(Models.GameModel.Id))
-        {
-            //赢
-        }
-        else
-        {
-            //输
-        }
-        //显示结束面板
+        Models.TriggerGameOver(dto);
     }
 
     /// <summary>
@@ -71,20 +62,12 @@ public class FightHandler : HandlerBase
     /// <param name=""></param>
     private void dealResponse(int result)
     {
-        if (result == -1)
-        {
-            //玩家出的牌管不上上一个玩家出的牌
-            //重新显示出牌按钮
-        }
+        Models.TriggerDealResponse(result);
     }
 
     private void passResponse(int result)
     {
-        if (result == -1)
-        {
-            //玩家出的牌管不上上一个玩家出的牌
-            //重新显示出牌按钮
-        }
+        Models.TriggerPassResponse(result);
     }
 
     /// <summary>
@@ -93,22 +76,7 @@ public class FightHandler : HandlerBase
     /// <param name="dto"></param>
     private void dealBro(DealDto dto)
     {
-        //移除出完的手牌
-        int eventCode = -1;
-        if (dto.UserId == Models.GameModel.MatchRoomDto.LeftId)
-        {
-            //消除左边牌
-        }
-        else if (dto.UserId == Models.GameModel.MatchRoomDto.RightId)
-        {
-            //消除右边牌
-        }
-        else if (dto.UserId == Models.GameModel.UserDto.Id)
-        {
-            //消除手牌
-        }
-        //显示到桌面上
-        //播放出牌音效
+        Models.TriggerDealBroadcast(dto);
     }
 
     /// <summary>
@@ -161,25 +129,15 @@ public class FightHandler : HandlerBase
     /// <param name="userId">出牌者id</param>
     private void turnDealBro(int userId)
     {
-        if (Models.GameModel.Id == userId)
-        {
-            //
-        }
+        Models.TriggerTurnDeal(userId);
     }
 
     /// <summary>
     /// 抢地主成功的处理
     /// </summary>
     private void grabLandlordBro(GrabDto dto)
-    {        
-        //更改UI的身份显示
-
-        //播放抢地主的声音
-
-        //显示三张底牌
-
-        //给对应的地主玩家 添加手牌显示出来
-
+    {
+        Models.TriggerGrabLandlord(dto);
     }
 
     /// <summary>
@@ -193,22 +151,7 @@ public class FightHandler : HandlerBase
     /// <param name="userId"></param>
     private void turnGrabBro(int userId)
     {
-        //如果是自身 就显示 两个抢地主和不抢地主的按钮
-        if (userId == Models.GameModel.UserDto.Id && isFirst == false)
-        {
-            
-        }
-
-        if (isFirst == true)
-        {
-            isFirst = false;
-        }
-        else
-        {
-            //播放声音
-            
-        }
-
+        Models.TriggerTurnGrab(userId);
     }
 
     /// <summary>
@@ -217,8 +160,6 @@ public class FightHandler : HandlerBase
     /// <param name="cardList"></param>
     private void getCards(List<CardDto> cardList)
     {
-        //给自己玩家创建牌的对象
-
-        //设置倍数为1
+        Models.TriggerGetCards(cardList);
     }
 }

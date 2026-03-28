@@ -136,6 +136,26 @@ namespace FPServer.Network
         }
 
         /// <summary>
+        /// 发送消息给指定用户
+        /// </summary>
+        public void SendToUser(int userId, SocketMsg msg)
+        {
+            var client = _userCache.GetClient(userId);
+            if (client != null)
+            {
+                client.Send(msg);
+            }
+        }
+
+        /// <summary>
+        /// 获取战斗处理器（用于MatchHandler启动游戏）
+        /// </summary>
+        public FightHandler GetFightHandler()
+        {
+            return _fightHandler;
+        }
+
+        /// <summary>
         /// 获取在线客户端
         /// </summary>
         public ClientConnection GetClient(int userId)

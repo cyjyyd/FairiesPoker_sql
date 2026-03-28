@@ -49,6 +49,10 @@ namespace FairiesPoker
         private void win_Load(object sender, EventArgs e)
         {
             button1.BackgroundImage = u.Button;
+            // 确保窗口显示在最前面
+            this.TopMost = true;
+            this.BringToFront();
+            this.Activate();
         }
         private string layout (bool bl)
         {

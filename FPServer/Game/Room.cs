@@ -20,12 +20,17 @@ namespace FPServer.Game
         private readonly List<int> _playerOrder = new();
         private readonly HashSet<int> _readyPlayers = new();
         private readonly ILogger<Room> _logger;
+        private readonly ILoggerFactory _loggerFactory;
 
-        public Room(string roomId, ILogger<Room> logger)
+        // 游戏状态
+        public GameState GameState { get; private set; }
+
+        public Room(string roomId, ILogger<Room> logger, ILoggerFactory loggerFactory)
         {
             RoomId = roomId;
             RoomName = $"房间{roomId}";
             _logger = logger;
+            _loggerFactory = loggerFactory;
         }
 
         /// <summary>
@@ -150,7 +155,57 @@ namespace FPServer.Game
             dto.HostId = HostId;
             dto.RoomId = RoomId;
             dto.RoomName = RoomName;
+
+            // 设置左右玩家ID
+            dto.ResetPosition(HostId); // 使用第一个玩家作为参考
+
             return dto;
+        }
+
+        /// <summary>
+        /// 获取指定玩家的匹配房间DTO（带有正确的左右玩家设置）
+        /// </summary>
+        public MatchRoomDto GetMatchRoomDtoForPlayer(int myUserId)
+        {
+            var dto = new MatchRoomDto();
+            foreach (var kvp in _players)
+            {
+                dto.UIdUserDict[kvp.Key] = kvp.Value;
+            }
+            dto.UIdList = _playerOrder.ToList();
+            dto.ReadyUIdList = _readyPlayers.ToList();
+            dto.HostId = HostId;
+            dto.RoomId = RoomId;
+            dto.RoomName = RoomName;
+
+            // 根据当前玩家设置左右玩家
+            dto.ResetPosition(myUserId);
+
+            return dto;
+        }
+
+        /// <summary>
+        /// 开始游戏
+        /// </summary>
+        public void StartGame()
+        {
+            Status = RoomStatus.PLAYING;
+            GameState = new GameState(_loggerFactory.CreateLogger<GameState>());
+            GameState.InitGame(_playerOrder.ToList());
+            LandlordId = -1;
+            _logger.LogInformation("房间 {RoomId} 开始游戏", RoomId);
+        }
+
+        /// <summary>
+        /// 结束游戏
+        /// </summary>
+        public void EndGame()
+        {
+            Status = RoomStatus.WAITING;
+            GameState = null;
+            LandlordId = -1;
+            _readyPlayers.Clear();
+            _logger.LogInformation("房间 {RoomId} 游戏结束", RoomId);
         }
     }
 }

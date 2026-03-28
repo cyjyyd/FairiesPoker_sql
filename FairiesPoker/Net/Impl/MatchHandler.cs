@@ -1,4 +1,4 @@
-﻿using Protocol.Code;
+using Protocol.Code;
 using Protocol.Dto;
 using System;
 using System.Collections.Generic;
@@ -22,7 +22,7 @@ public class MatchHandler : HandlerBase
                 readyBro(value as MatchRoomDto);
                 break;
             case MatchCode.START_BRO:
-                startBro();
+                startBro(value as MatchRoomDto);
                 break;
             case RoomCode.GET_ROOMS_SRES:
                 getRoomsResponse(value as List<RoomDto>);
@@ -47,10 +47,21 @@ public class MatchHandler : HandlerBase
     /// <summary>
     /// 开始游戏的广播处理
     /// </summary>
-    private void startBro()
+    private void startBro(MatchRoomDto matchRoom)
     {
-        //开始游戏 隐藏状态面板的准备文字
-        Models.TriggerMatchUpdate(Models.GameModel.MatchRoomDto);
+        // 更新房间数据并触发事件（Lobby会检测并启动游戏界面）
+        if (matchRoom != null)
+        {
+            Models.GameModel.MatchRoomDto = matchRoom;
+            // 服务端已经设置了正确的左右玩家，但客户端可能需要重新验证
+            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+            Models.TriggerMatchUpdate(matchRoom);
+        }
+        else
+        {
+            // 使用已有的房间数据
+            Models.TriggerMatchUpdate(Models.GameModel.MatchRoomDto);
+        }
     }
 
     /// <summary>
@@ -103,22 +114,6 @@ public class MatchHandler : HandlerBase
             Models.GameModel.MatchRoomDto = matchRoom;
             matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
             Models.TriggerMatchUpdate(matchRoom);
-        }
-    }
-
-    /// <summary>
-    /// 重置位置
-    ///  更新左右玩家显示
-    /// </summary>
-    private void resetPosition()
-    {
-        GameModel gModel = Models.GameModel;
-        MatchRoomDto matchRoom = gModel.MatchRoomDto;
-
-        //重置一下玩家的位置
-        if (matchRoom != null)
-        {
-            matchRoom.ResetPosition(gModel.UserDto.Id);
         }
     }
 

@@ -664,6 +664,9 @@ namespace FairiesPoker
 
         private void StartGame()
         {
+            // 停止大厅的网络更新定时器（游戏界面会自己处理网络消息）
+            timerNetwork.Stop();
+
             // 隐藏当前窗口
             this.Hide();
 
@@ -671,6 +674,8 @@ namespace FairiesPoker
             DdzMian gameForm = new DdzMian(true);
             gameForm.FormClosed += (s, e) =>
             {
+                // 游戏结束后重新启动大厅的网络更新
+                timerNetwork.Start();
                 this.Show();
                 RequestRoomList();
                 UpdatePlayerInfo();

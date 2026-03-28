@@ -1,5 +1,6 @@
 using FPServer.Database;
 using FPServer.Network;
+using FPServer.Tests;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -12,6 +13,17 @@ namespace FPServer
             // 设置控制台编码
             Console.OutputEncoding = System.Text.Encoding.UTF8;
             Console.InputEncoding = System.Text.Encoding.UTF8;
+
+            // 检查是否运行测试模式
+            if (args.Length > 0 && args[0].ToLower() == "--test")
+            {
+                Console.WriteLine("====================================");
+                Console.WriteLine("  FairiesPoker 游戏逻辑测试");
+                Console.WriteLine("====================================");
+                Console.WriteLine();
+                MultiplayerGameTests.RunTests();
+                return;
+            }
 
             Console.WriteLine("====================================");
             Console.WriteLine("  FairiesPoker Server v1.0");
@@ -70,6 +82,7 @@ namespace FPServer
                 Console.WriteLine();
                 Console.WriteLine("命令:");
                 Console.WriteLine("  online       - 显示在线人数");
+                Console.WriteLine("  test         - 运行游戏逻辑测试");
                 Console.WriteLine("  avatar on    - 开启头像自动审核");
                 Console.WriteLine("  avatar off   - 关闭头像自动审核");
                 Console.WriteLine("  avatar       - 显示头像审核状态");
@@ -97,6 +110,11 @@ namespace FPServer
                     else if (cmd == "online")
                     {
                         logger.LogInformation("当前在线人数: {Count}", server.GetOnlineCount());
+                    }
+                    else if (cmd == "test")
+                    {
+                        Console.WriteLine("\n运行游戏逻辑测试...\n");
+                        MultiplayerGameTests.RunTests();
                     }
                     else if (cmd == "avatar")
                     {
@@ -181,6 +199,7 @@ namespace FPServer
                     {
                         Console.WriteLine("命令:");
                         Console.WriteLine("  online       - 显示在线人数");
+                        Console.WriteLine("  test         - 运行游戏逻辑测试");
                         Console.WriteLine("  avatar on    - 开启头像自动审核");
                         Console.WriteLine("  avatar off   - 关闭头像自动审核");
                         Console.WriteLine("  avatar       - 显示头像审核状态");

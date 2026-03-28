@@ -80,19 +80,37 @@ namespace FPServer.Handlers
             {
                 _logger.LogInformation("用户进入匹配: {UserId}", client.UserId);
 
-                // 发送进入成功
-                var enterMsg = new SocketMsg(OpCode.MATCH, MatchCode.ENTER_SRES, room.GetMatchRoomDto());
+                // 发送进入成功（设置正确的左右玩家）
+                var myRoomDto = room.GetMatchRoomDtoForPlayer(client.UserId);
+                var enterMsg = new SocketMsg(OpCode.MATCH, MatchCode.ENTER_SRES, myRoomDto);
                 _messageHandler.Send(client, enterMsg);
 
-                // 广播给房间内所有玩家
-                var broadcastMsg = new SocketMsg(OpCode.MATCH, MatchCode.ENTER_BRO, room.GetMatchRoomDto());
-                _messageHandler.BroadcastTo(room.GetPlayerIds(), broadcastMsg);
+                // 广播给房间内所有玩家（每个人需要收到自己视角的房间数据）
+                foreach (var userId in room.GetPlayerIds())
+                {
+                    var roomDto = room.GetMatchRoomDtoForPlayer(userId);
+                    var broadcastMsg = new SocketMsg(OpCode.MATCH, MatchCode.ENTER_BRO, roomDto);
+                    var userClient = _userCache.GetClient(userId);
+                    if (userClient != null)
+                    {
+                        _messageHandler.Send(userClient, broadcastMsg);
+                    }
+                }
 
-                // 检查是否满3人，可以开始游戏
+                // 检查是否满3人
                 if (room.IsFull())
                 {
-                    var startMsg = new SocketMsg(OpCode.MATCH, MatchCode.START_BRO, room.GetMatchRoomDto());
-                    _messageHandler.BroadcastTo(room.GetPlayerIds(), startMsg);
+                    // 自动准备所有玩家
+                    foreach (var userId in room.GetPlayerIds())
+                    {
+                        room.SetReady(userId);
+                    }
+
+                    // 广播更新后的房间状态
+                    BroadcastRoomUpdate(room);
+
+                    // 开始游戏
+                    StartGame(room);
                 }
             }
         }
@@ -111,8 +129,7 @@ namespace FPServer.Handlers
                 // 广播给剩余玩家
                 if (room.GetPlayerCount() > 0)
                 {
-                    var leaveMsg = new SocketMsg(OpCode.MATCH, MatchCode.LEAVE_BRO, room.GetMatchRoomDto());
-                    _messageHandler.BroadcastTo(room.GetPlayerIds(), leaveMsg);
+                    BroadcastRoomUpdate(room);
                 }
 
                 if (room.IsEmpty())
@@ -143,16 +160,47 @@ namespace FPServer.Handlers
                 }
 
                 // 广播准备状态
-                var readyMsg = new SocketMsg(OpCode.MATCH, MatchCode.READY_BRO, room.GetMatchRoomDto());
-                _messageHandler.BroadcastTo(room.GetPlayerIds(), readyMsg);
+                BroadcastRoomUpdate(room);
 
                 // 检查是否所有人都准备了（满员情况下）
                 if (room.IsAllReady() && room.IsFull())
                 {
-                    var startMsg = new SocketMsg(OpCode.MATCH, MatchCode.START_BRO, room.GetMatchRoomDto());
-                    _messageHandler.BroadcastTo(room.GetPlayerIds(), startMsg);
+                    // 开始游戏
+                    StartGame(room);
                 }
             }
+        }
+
+        /// <summary>
+        /// 广播房间更新
+        /// </summary>
+        private void BroadcastRoomUpdate(Room room)
+        {
+            foreach (var userId in room.GetPlayerIds())
+            {
+                var roomDto = room.GetMatchRoomDtoForPlayer(userId);
+                var msg = new SocketMsg(OpCode.MATCH, MatchCode.READY_BRO, roomDto);
+                var userClient = _userCache.GetClient(userId);
+                if (userClient != null)
+                {
+                    _messageHandler.Send(userClient, msg);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 开始游戏
+        /// </summary>
+        private void StartGame(Room room)
+        {
+            _logger.LogInformation("房间 {RoomId} 所有人已准备，开始游戏", room.RoomId);
+
+            // 广播游戏开始
+            var startMsg = new SocketMsg(OpCode.MATCH, MatchCode.START_BRO, room.GetMatchRoomDto());
+            _messageHandler.BroadcastTo(room.GetPlayerIds(), startMsg);
+
+            // 通知FightHandler开始游戏（发牌）
+            _messageHandler.GetFightHandler().StartGame(room);
         }
 
         #endregion
@@ -184,7 +232,7 @@ namespace FPServer.Handlers
                 _logger.LogInformation("用户 {UserId} 创建房间: {RoomId}", client.UserId, room.RoomId);
 
                 // 发送房间创建成功（使用 MatchRoomDto 以便正确显示玩家）
-                var msg = new SocketMsg(OpCode.MATCH, RoomCode.CREATE_SRES, room.GetMatchRoomDto());
+                var msg = new SocketMsg(OpCode.MATCH, RoomCode.CREATE_SRES, room.GetMatchRoomDtoForPlayer(client.UserId));
                 _messageHandler.Send(client, msg);
 
                 // 广播房间列表更新给所有在线用户
@@ -214,13 +262,17 @@ namespace FPServer.Handlers
             {
                 _logger.LogInformation("用户 {UserId} 加入房间: {RoomId}", client.UserId, roomId);
 
-                // 发送加入成功（使用 MatchRoomDto）
-                var msg = new SocketMsg(OpCode.MATCH, RoomCode.JOIN_SRES, room.GetMatchRoomDto());
-                _messageHandler.Send(client, msg);
-
-                // 广播给房间内所有玩家（包括自己）
-                var broadcastMsg = new SocketMsg(OpCode.MATCH, RoomCode.UPDATE_BRO, room.GetMatchRoomDto());
-                _messageHandler.BroadcastTo(room.GetPlayerIds(), broadcastMsg);
+                // 广播给房间内所有玩家（每个人收到自己视角的数据）
+                foreach (var userId in room.GetPlayerIds())
+                {
+                    var roomDto = room.GetMatchRoomDtoForPlayer(userId);
+                    var broadcastMsg = new SocketMsg(OpCode.MATCH, RoomCode.UPDATE_BRO, roomDto);
+                    var userClient = _userCache.GetClient(userId);
+                    if (userClient != null)
+                    {
+                        _messageHandler.Send(userClient, broadcastMsg);
+                    }
+                }
 
                 // 广播房间列表更新给所有在线用户
                 BroadcastRoomListUpdate();
@@ -241,8 +293,16 @@ namespace FPServer.Handlers
                 // 广播给剩余玩家
                 if (room.GetPlayerCount() > 0)
                 {
-                    var leaveMsg = new SocketMsg(OpCode.MATCH, RoomCode.UPDATE_BRO, room.GetMatchRoomDto());
-                    _messageHandler.BroadcastTo(room.GetPlayerIds(), leaveMsg);
+                    foreach (var userId in room.GetPlayerIds())
+                    {
+                        var roomDto = room.GetMatchRoomDtoForPlayer(userId);
+                        var leaveMsg = new SocketMsg(OpCode.MATCH, RoomCode.UPDATE_BRO, roomDto);
+                        var userClient = _userCache.GetClient(userId);
+                        if (userClient != null)
+                        {
+                            _messageHandler.Send(userClient, leaveMsg);
+                        }
+                    }
                 }
 
                 if (room.IsEmpty())
