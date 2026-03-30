@@ -49,19 +49,16 @@ public class MatchHandler : HandlerBase
     /// </summary>
     private void startBro(MatchRoomDto matchRoom)
     {
-        // 更新房间数据并触发事件（Lobby会检测并启动游戏界面）
+        // 更新房间数据
         if (matchRoom != null)
         {
             Models.GameModel.MatchRoomDto = matchRoom;
             // 服务端已经设置了正确的左右玩家，但客户端可能需要重新验证
             matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
-            Models.TriggerMatchUpdate(matchRoom);
         }
-        else
-        {
-            // 使用已有的房间数据
-            Models.TriggerMatchUpdate(Models.GameModel.MatchRoomDto);
-        }
+
+        // 触发游戏开始事件，让Lobby启动游戏界面
+        Models.TriggerGameStart();
     }
 
     /// <summary>

@@ -99,6 +99,11 @@ public delegate void GameOverCallback(OverDto overDto);
 /// <param name="multiple">倍数</param>
 public delegate void MultipleChangeCallback(int multiple);
 
+/// <summary>
+/// 游戏开始回调
+/// </summary>
+public delegate void GameStartCallback();
+
 static public class Models
 {
     /// <summary>
@@ -185,6 +190,11 @@ static public class Models
     /// 倍数变化回调
     /// </summary>
     public static event MultipleChangeCallback OnMultipleChange;
+
+    /// <summary>
+    /// 游戏开始回调
+    /// </summary>
+    public static event GameStartCallback OnGameStart;
 
     static Models()
     {
@@ -317,5 +327,13 @@ static public class Models
     public static void TriggerMultipleChange(int multiple)
     {
         OnMultipleChange?.Invoke(multiple);
+    }
+
+    /// <summary>
+    /// 触发游戏开始事件
+    /// </summary>
+    public static void TriggerGameStart()
+    {
+        OnGameStart?.Invoke();
     }
 }

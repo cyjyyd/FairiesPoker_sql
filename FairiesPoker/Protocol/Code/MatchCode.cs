@@ -27,8 +27,7 @@ namespace Protocol.Code
         public const int READY_BRO = 5;
 
         //开始游戏
-        //public const int START_CREQ = 6;
-        //public const int START_SRES = 7;
+        public const int START_CREQ = 7;  // 房主请求开始游戏
         public const int START_BRO = 6;
     }
 }

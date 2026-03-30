@@ -52,6 +52,7 @@ namespace FairiesPoker
             Models.OnRoomListUpdate += OnRoomListUpdateReceived;
             Models.OnMatchUpdate += OnMatchUpdateReceived;
             Models.OnAvatarLoaded += OnAvatarLoadedReceived;
+            Models.OnGameStart += OnGameStartReceived;
 
             // 初始化Emoji面板
             InitEmojiPanel();
@@ -63,6 +64,20 @@ namespace FairiesPoker
             config con = new config();
             ui.setUI(con.UI);
             this.BackgroundImage = ui.Background;
+            this.BackgroundImageLayout = ImageLayout.Stretch;
+
+            // 设置Panel透明度
+            try
+            {
+                SetPanelTransparency();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"设置透明度失败: {ex.Message}");
+            }
+
+            // 为主要Panel绑定拖拽事件
+            BindDragEventsToPanels();
 
             // 显示玩家信息
             UpdatePlayerInfo();
@@ -75,6 +90,125 @@ namespace FairiesPoker
 
             // 初始淡入效果
             timerFadeIn.Start();
+        }
+
+        /// <summary>
+        /// 设置Panel透明度，使背景图片可见
+        /// </summary>
+        private void SetPanelTransparency()
+        {
+            // 设置Panel背景为透明（让窗体背景图片显示出来）
+            // 然后在Panel的Paint事件中绘制半透明覆盖层
+            SetupTransparentPanel(panelTop);
+            SetupTransparentPanel(panelLeft);
+            SetupTransparentPanel(panelRight);
+            SetupTransparentPanel(panelRoom);
+            SetupTransparentPanel(panelChatChannels);
+            SetupTransparentPanel(panelChatInput);
+            SetupTransparentPanel(panelPlayerSelf);
+            SetupTransparentPanel(panelPlayerLeft);
+            SetupTransparentPanel(panelPlayerRight);
+
+            // 设置ListBox透明背景
+            if (lstRooms != null)
+            {
+                lstRooms.EmptyText = "暂无房间";
+            }
+            if (lstChatMessages != null)
+            {
+                lstChatMessages.EmptyText = "暂无消息";
+            }
+
+            // 设置文本框背景
+            if (txtChatInput != null) txtChatInput.BackColor = Color.FromArgb(220, 50, 55, 65);
+        }
+
+        /// <summary>
+        /// 设置Panel为透明背景，并添加半透明绘制
+        /// </summary>
+        private void SetupTransparentPanel(Panel panel)
+        {
+            if (panel == null) return;
+
+            // 启用双缓冲
+            try
+            {
+                typeof(Panel).InvokeMember("DoubleBuffered",
+                    System.Reflection.BindingFlags.SetProperty |
+                    System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.NonPublic,
+                    null, panel, new object[] { true });
+            }
+            catch { }
+
+            // 设置背景透明
+            panel.BackColor = Color.Transparent;
+
+            // 设置子控件背景透明（Label等）
+            foreach (Control child in panel.Controls)
+            {
+                if (child is Label || child is PictureBox)
+                {
+                    child.BackColor = Color.Transparent;
+                }
+            }
+
+            // 移除旧的Paint事件处理器，避免重复
+            panel.Paint -= Panel_Paint;
+            panel.Paint += Panel_Paint;
+        }
+
+        /// <summary>
+        /// Panel绘制半透明背景
+        /// </summary>
+        private void Panel_Paint(object sender, PaintEventArgs e)
+        {
+            Panel panel = sender as Panel;
+            if (panel == null) return;
+
+            // 绘制半透明背景（Alpha=120，约50%透明度）
+            using (SolidBrush brush = new SolidBrush(Color.FromArgb(120, 30, 35, 45)))
+            {
+                e.Graphics.FillRectangle(brush, panel.ClientRectangle);
+            }
+        }
+
+        /// <summary>
+        /// 为主要Panel绑定拖拽事件，使窗口可以通过拖拽Panel移动
+        /// </summary>
+        private void BindDragEventsToPanels()
+        {
+            // 为主要Panel及其子控件添加拖拽事件
+            BindDragEventsRecursive(panelTop);
+            BindDragEventsRecursive(panelLeft);
+            BindDragEventsRecursive(panelRight);
+            BindDragEventsRecursive(panelRoom);
+            BindDragEventsRecursive(panelChatChannels);
+            // 排除按钮和输入框，它们需要响应点击事件
+        }
+
+        /// <summary>
+        /// 递归为控件及其子控件绑定拖拽事件
+        /// </summary>
+        private void BindDragEventsRecursive(Control control)
+        {
+            // 排除按钮、文本框、列表框等需要响应点击的控件
+            if (control is Button || control is TextBox || control is ListBox ||
+                control is ComboBox || control is CheckBox || control is RadioButton)
+            {
+                return;
+            }
+
+            // 为当前控件绑定拖拽事件
+            control.MouseDown += Lobby_MouseDown;
+            control.MouseMove += Lobby_MouseMove;
+            control.MouseUp += Lobby_MouseUp;
+
+            // 递归处理子控件
+            foreach (Control child in control.Controls)
+            {
+                BindDragEventsRecursive(child);
+            }
         }
 
         #region 玩家信息
@@ -486,11 +620,7 @@ namespace FairiesPoker
 
             if (matchRoom.UIdList.Count >= 3)
             {
-                // 3人齐了，可以开始游戏
-                if (matchRoom.ReadyUIdList.Count == 3)
-                {
-                    StartGame();
-                }
+                // 3人齐了，等待房主开始游戏
             }
 
             UpdateRoomPanel();
@@ -519,6 +649,13 @@ namespace FairiesPoker
                 bool isHost = (matchRoom.HostId == myId);
                 bool isFull = matchRoom.UIdList.Count >= 3;
                 bool allReady = matchRoom.ReadyUIdList.Count >= 3;
+                bool isQuickMatch = matchRoom.IsQuickMatch;
+
+                // 快速匹配房间显示"匹配中..."
+                if (isQuickMatch)
+                {
+                    lblRoomTitle.Text = "快速匹配中...";
+                }
 
                 // 自己
                 if (matchRoom.UIdUserDict.ContainsKey(myId))
@@ -527,8 +664,17 @@ namespace FairiesPoker
                     SetPlayerAvatar(picSelfAvatar, me.AvatarUrl);
                     bool isSelfHost = (matchRoom.HostId == myId);
                     lblSelfName.Text = isSelfHost ? $"👑 {me.Name}" : me.Name;
-                    lblSelfStatus.Text = matchRoom.ReadyUIdList.Contains(myId) ? "已准备" : "等待中";
-                    lblSelfStatus.ForeColor = matchRoom.ReadyUIdList.Contains(myId) ? Color.LimeGreen : Color.Gray;
+                    // 快速匹配房间显示"等待匹配"
+                    if (isQuickMatch)
+                    {
+                        lblSelfStatus.Text = "等待匹配";
+                        lblSelfStatus.ForeColor = Color.Yellow;
+                    }
+                    else
+                    {
+                        lblSelfStatus.Text = matchRoom.ReadyUIdList.Contains(myId) ? "已准备" : "等待中";
+                        lblSelfStatus.ForeColor = matchRoom.ReadyUIdList.Contains(myId) ? Color.LimeGreen : Color.Gray;
+                    }
                     lblSelfLevel.Text = $"Lv.{me.Lv}";
                 }
 
@@ -539,8 +685,17 @@ namespace FairiesPoker
                     SetPlayerAvatar(picLeftAvatar, left.AvatarUrl);
                     bool isLeftHost = (matchRoom.HostId == matchRoom.LeftId);
                     lblLeftName.Text = isLeftHost ? $"👑 {left.Name}" : left.Name;
-                    lblLeftStatus.Text = matchRoom.ReadyUIdList.Contains(matchRoom.LeftId) ? "已准备" : "等待中";
-                    lblLeftStatus.ForeColor = matchRoom.ReadyUIdList.Contains(matchRoom.LeftId) ? Color.LimeGreen : Color.Gray;
+                    // 快速匹配房间显示"等待匹配"
+                    if (isQuickMatch)
+                    {
+                        lblLeftStatus.Text = "等待匹配";
+                        lblLeftStatus.ForeColor = Color.Yellow;
+                    }
+                    else
+                    {
+                        lblLeftStatus.Text = matchRoom.ReadyUIdList.Contains(matchRoom.LeftId) ? "已准备" : "等待中";
+                        lblLeftStatus.ForeColor = matchRoom.ReadyUIdList.Contains(matchRoom.LeftId) ? Color.LimeGreen : Color.Gray;
+                    }
                     lblLeftLevel.Text = $"Lv.{left.Lv}";
                 }
                 else
@@ -558,8 +713,17 @@ namespace FairiesPoker
                     SetPlayerAvatar(picRightAvatar, right.AvatarUrl);
                     bool isRightHost = (matchRoom.HostId == matchRoom.RightId);
                     lblRightName.Text = isRightHost ? $"👑 {right.Name}" : right.Name;
-                    lblRightStatus.Text = matchRoom.ReadyUIdList.Contains(matchRoom.RightId) ? "已准备" : "等待中";
-                    lblRightStatus.ForeColor = matchRoom.ReadyUIdList.Contains(matchRoom.RightId) ? Color.LimeGreen : Color.Gray;
+                    // 快速匹配房间显示"等待匹配"
+                    if (isQuickMatch)
+                    {
+                        lblRightStatus.Text = "等待匹配";
+                        lblRightStatus.ForeColor = Color.Yellow;
+                    }
+                    else
+                    {
+                        lblRightStatus.Text = matchRoom.ReadyUIdList.Contains(matchRoom.RightId) ? "已准备" : "等待中";
+                        lblRightStatus.ForeColor = matchRoom.ReadyUIdList.Contains(matchRoom.RightId) ? Color.LimeGreen : Color.Gray;
+                    }
                     lblRightLevel.Text = $"Lv.{right.Lv}";
                 }
                 else
@@ -570,28 +734,37 @@ namespace FairiesPoker
                     lblRightLevel.Text = "";
                 }
 
-                // 更新准备按钮（切换显示）
-                bool isReady = matchRoom.ReadyUIdList.Contains(myId);
-                btnReady.Text = isReady ? "取消准备" : "准备";
-                btnReady.Enabled = true;
-                btnReady.BackColor = isReady ? Color.FromArgb(150, 100, 60) : Color.FromArgb(80, 150, 100);
-
-                // 显示/隐藏开始游戏按钮（只有房主可见）
-                btnStartGame.Visible = isHost;
-                if (isHost)
+                // 更新准备按钮（快速匹配房间隐藏）
+                if (isQuickMatch)
                 {
-                    btnStartGame.Enabled = isFull && allReady;
-                    if (!isFull)
+                    btnReady.Visible = false;
+                    btnStartGame.Visible = false;
+                }
+                else
+                {
+                    bool isReady = matchRoom.ReadyUIdList.Contains(myId);
+                    btnReady.Visible = true;
+                    btnReady.Text = isReady ? "取消准备" : "准备";
+                    btnReady.Enabled = true;
+                    btnReady.BackColor = isReady ? Color.FromArgb(150, 100, 60) : Color.FromArgb(80, 150, 100);
+
+                    // 显示/隐藏开始游戏按钮（只有房主可见）
+                    btnStartGame.Visible = isHost;
+                    if (isHost)
                     {
-                        btnStartGame.Text = "等待玩家...";
-                    }
-                    else if (!allReady)
-                    {
-                        btnStartGame.Text = "等待准备...";
-                    }
-                    else
-                    {
-                        btnStartGame.Text = "开始游戏";
+                        btnStartGame.Enabled = isFull && allReady;
+                        if (!isFull)
+                        {
+                            btnStartGame.Text = "等待玩家...";
+                        }
+                        else if (!allReady)
+                        {
+                            btnStartGame.Text = "等待准备...";
+                        }
+                        else
+                        {
+                            btnStartGame.Text = "开始游戏";
+                        }
                     }
                 }
             }
@@ -638,10 +811,11 @@ namespace FairiesPoker
             var myId = Models.GameModel.UserDto?.Id ?? 0;
             if (matchRoom.HostId != myId) return;
 
-            // 只有房主可以开始游戏，检查是否满员且全部准备
+            // 只有房主可以开始游戏，发送开始游戏请求
             if (matchRoom.UIdList.Count >= 3 && matchRoom.ReadyUIdList.Count >= 3)
             {
-                StartGame();
+                var msg = new SocketMsg(OpCode.MATCH, MatchCode.START_CREQ, null);
+                netManager.Execute(0, msg);
             }
         }
 
@@ -683,6 +857,20 @@ namespace FairiesPoker
             gameForm.Show();
         }
 
+        /// <summary>
+        /// 游戏开始事件处理
+        /// </summary>
+        private void OnGameStartReceived()
+        {
+            if (this.InvokeRequired)
+            {
+                this.Invoke(new Action(OnGameStartReceived));
+                return;
+            }
+
+            StartGame();
+        }
+
         #endregion
 
         #region 窗口事件
@@ -704,6 +892,7 @@ namespace FairiesPoker
                 Models.OnRoomListUpdate -= OnRoomListUpdateReceived;
                 Models.OnMatchUpdate -= OnMatchUpdateReceived;
                 Models.OnAvatarLoaded -= OnAvatarLoadedReceived;
+                Models.OnGameStart -= OnGameStartReceived;
 
                 // 通知服务器下线并安全断开连接
                 if (netManager.IsConnected)
@@ -750,7 +939,11 @@ namespace FairiesPoker
         {
             if (e.Button == MouseButtons.Left)
             {
-                mouseOff = new Point(-e.X, -e.Y);
+                // 获取鼠标在屏幕上的位置
+                Point mousePos = Control.MousePosition;
+                // 转换为窗体坐标
+                Point formPos = this.PointToClient(mousePos);
+                mouseOff = new Point(-formPos.X, -formPos.Y);
                 leftFlag = true;
             }
         }
@@ -780,6 +973,7 @@ namespace FairiesPoker
             Models.OnRoomListUpdate -= OnRoomListUpdateReceived;
             Models.OnMatchUpdate -= OnMatchUpdateReceived;
             Models.OnAvatarLoaded -= OnAvatarLoadedReceived;
+            Models.OnGameStart -= OnGameStartReceived;
 
             // 如果是通过关闭窗口退出的，安全断开连接
             if (netManager != null && netManager.IsConnected)

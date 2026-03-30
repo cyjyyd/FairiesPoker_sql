@@ -60,10 +60,21 @@ namespace FairiesPoker
         private int lastPaiType = 0; // 上一次出牌的牌型
         private int turnTimeoutSeconds = 20; // 出牌超时时间
         private int remainingSeconds = 20; // 剩余秒数
+        private int otherPlayerRemainingSeconds = 20; // 其他玩家剩余秒数
         private List<CardDto> tableCards; // 底牌（三张）
         private List<PictureBox> myCardPictureBoxes; // 多人模式手牌PictureBox列表
         private List<PictureBox> dealCardImages; // 出牌显示用的PictureBox列表
         private List<int> selectedCardIndices; // 选中的牌索引
+        private PictureBox picLeftAvatar; // 左边玩家头像
+        private PictureBox picRightAvatar; // 右边玩家头像
+        private PictureBox picSelfAvatar; // 自己头像
+        private List<PictureBox> leftPlayerCardBacks; // 左边玩家牌背
+        private List<PictureBox> rightPlayerCardBacks; // 右边玩家牌背
+        // 滑动选牌相关字段
+        private bool isSlidingSelection = false; // 是否正在滑动选牌
+        private int slideStartIndex = -1; // 滑动起始牌索引
+        private int slideEndIndex = -1; // 滑动结束牌索引
+        private bool slideSelectMode = true; // 滑动选牌模式（true=选中，false=取消选中）
         #endregion
         #region 窗体设置
         public DdzMian(bool online)
@@ -121,22 +132,29 @@ namespace FairiesPoker
                 groupBox2.Visible = true;
                 groupBox3.Visible = true;
 
-                // 设置玩家名称
+                // 创建头像PictureBox
+                CreateAvatarPictureBoxes();
+
+                // 设置玩家名称和头像
                 var matchRoom = Models.GameModel.MatchRoomDto;
                 if (matchRoom != null)
                 {
                     int myId = Models.GameModel.UserDto.Id;
                     // 自己
                     groupBox2.Text = Models.GameModel.UserDto.Name;
+                    SetAvatarImage(picSelfAvatar, Models.GameModel.UserDto.AvatarUrl);
+
                     // 左边玩家
                     if (matchRoom.LeftId > 0 && matchRoom.UIdUserDict.ContainsKey(matchRoom.LeftId))
                     {
                         groupBox1.Text = matchRoom.UIdUserDict[matchRoom.LeftId].Name;
+                        SetAvatarImage(picLeftAvatar, matchRoom.UIdUserDict[matchRoom.LeftId].AvatarUrl);
                     }
                     // 右边玩家
                     if (matchRoom.RightId > 0 && matchRoom.UIdUserDict.ContainsKey(matchRoom.RightId))
                     {
                         groupBox3.Text = matchRoom.UIdUserDict[matchRoom.RightId].Name;
+                        SetAvatarImage(picRightAvatar, matchRoom.UIdUserDict[matchRoom.RightId].AvatarUrl);
                     }
                 }
 
@@ -144,6 +162,62 @@ namespace FairiesPoker
                 timerNetwork.Interval = 50;
                 timerNetwork.Tick += timerNetwork_Tick;
                 timerNetwork.Start();
+            }
+        }
+
+        /// <summary>
+        /// 创建玩家头像PictureBox
+        /// </summary>
+        private void CreateAvatarPictureBoxes()
+        {
+            // 左边玩家头像
+            picLeftAvatar = new PictureBox();
+            picLeftAvatar.Size = new Size(50, 50);
+            picLeftAvatar.Location = new Point(90, 20);
+            picLeftAvatar.SizeMode = PictureBoxSizeMode.StretchImage;
+            picLeftAvatar.BackgroundImage = Properties.Resources.Pla;
+            picLeftAvatar.BackgroundImageLayout = ImageLayout.Stretch;
+            groupBox1.Controls.Add(picLeftAvatar);
+
+            // 自己头像
+            picSelfAvatar = new PictureBox();
+            picSelfAvatar.Size = new Size(50, 50);
+            picSelfAvatar.Location = new Point(90, 20);
+            picSelfAvatar.SizeMode = PictureBoxSizeMode.StretchImage;
+            picSelfAvatar.BackgroundImage = Properties.Resources.Pla;
+            picSelfAvatar.BackgroundImageLayout = ImageLayout.Stretch;
+            groupBox2.Controls.Add(picSelfAvatar);
+
+            // 右边玩家头像
+            picRightAvatar = new PictureBox();
+            picRightAvatar.Size = new Size(50, 50);
+            picRightAvatar.Location = new Point(90, 20);
+            picRightAvatar.SizeMode = PictureBoxSizeMode.StretchImage;
+            picRightAvatar.BackgroundImage = Properties.Resources.Pla;
+            picRightAvatar.BackgroundImageLayout = ImageLayout.Stretch;
+            groupBox3.Controls.Add(picRightAvatar);
+        }
+
+        /// <summary>
+        /// 设置头像图片
+        /// </summary>
+        private void SetAvatarImage(PictureBox pictureBox, string avatarUrl)
+        {
+            if (string.IsNullOrEmpty(avatarUrl))
+            {
+                pictureBox.BackgroundImage = Properties.Resources.Pla;
+                return;
+            }
+
+            var cachedAvatar = AvatarHandler.GetCachedAvatar(avatarUrl);
+            if (cachedAvatar != null)
+            {
+                pictureBox.BackgroundImage = new Bitmap(cachedAvatar);
+            }
+            else
+            {
+                pictureBox.BackgroundImage = Properties.Resources.Pla;
+                AvatarHandler.RequestDownloadAvatar(avatarUrl);
             }
         }
 
@@ -260,8 +334,14 @@ namespace FairiesPoker
                     if (i % 3 == 0) juese1.ImagePaiSub.Add(pai[i].Index);
                     else if ((i + 2) % 3 == 0)
                     {
+                        int cardIndex = juese2.ImagePaiSub.Count; // 当前牌的位置索引
                         juese2.ImagePaiSub.Add(pai[i].Index);
+                        paiImage[pai[i].Index].Tag = cardIndex; // 设置位置索引作为Tag
                         paiImage[pai[i].Index].Click += new System.EventHandler(paiImage_Click);
+                        // 添加滑动选牌事件
+                        paiImage[pai[i].Index].MouseDown += new MouseEventHandler(PaiImage_MouseDown);
+                        paiImage[pai[i].Index].MouseMove += new MouseEventHandler(PaiImage_MouseMove);
+                        paiImage[pai[i].Index].MouseUp += new MouseEventHandler(PaiImage_MouseUp);
                     }
                     else juese3.ImagePaiSub.Add(pai[i].Index);
                 }
@@ -302,6 +382,11 @@ namespace FairiesPoker
                         a++; j -= 30;
                     }
                     pai_paixu(juese);
+                    // 更新Tags以反映排序后的位置
+                    for (int i = 0; i < juese.ImagePaiSub.Count; i++)
+                    {
+                        paiImage[(int)juese.ImagePaiSub[i]].Tag = i;
+                    }
                 }
                 else
                 {
@@ -1020,6 +1105,10 @@ namespace FairiesPoker
                         paiImage[pai[i].Index].BackgroundImage = pai[pai[i].Index].Image;
                         paiImage[pai[i].Index].Width = 150; paiImage[pai[i].Index].Height = 225;
                         paiImage[pai[i].Index].Click += new System.EventHandler(paiImage_Click);
+                        // 添加滑动选牌事件
+                        paiImage[pai[i].Index].MouseDown += new MouseEventHandler(PaiImage_MouseDown);
+                        paiImage[pai[i].Index].MouseMove += new MouseEventHandler(PaiImage_MouseMove);
+                        paiImage[pai[i].Index].MouseUp += new MouseEventHandler(PaiImage_MouseUp);
                         break;
                     case 3:
                         paiImage[pai[i].Index].SetBounds(1110, 220, 150, 225);
@@ -1027,6 +1116,7 @@ namespace FairiesPoker
                 }
             }
             pai_paixu(juese); image_paixu(juese, 850);
+            // image_paixu已更新Tags，无需额外操作
             shengyupai();
         }
         private void yichu()
@@ -1545,24 +1635,21 @@ namespace FairiesPoker
 
             if (needFollow && lastDealDto != null)
             {
-                // 需要接牌
+                // 需要接牌 - 使用单机模式的提示逻辑
                 ArrayList lastPaiList = new ArrayList();
                 foreach (var card in lastDealDto.SelectCardList)
                 {
                     lastPaiList.Add(card.Weight);
                 }
 
+                // 设置chupai.PaiType以便jiepai使用
+                chupai.PaiType = lastPaiType;
+
+                // 获取可能的出牌
                 ArrayList possibleMoves = jiepai.isRight(lastPaiType, lastPaiList, myWeights);
 
-                if (possibleMoves != null && possibleMoves.Count > 0)
-                {
-                    // 显示第一个可能的出牌
-                    if (tishi >= possibleMoves.Count) tishi = 0;
-                    int[] hint = jiepai.mArrayToArgs((ArrayList)possibleMoves[tishi]);
-                    OnlineShowHint(hint);
-                    tishi++;
-                }
-                else
+                bool found = OnlineTiShiJiePai(possibleMoves, lastPaiType);
+                if (!found)
                 {
                     // 无法接牌，提示不出
                     MessageBox.Show("没有能管住上家的牌，请选择不出！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -1570,14 +1657,169 @@ namespace FairiesPoker
             }
             else
             {
-                // 首出，提示最小的牌
+                // 首出，尝试找最小的单张牌
+                // 如果有牌，提示最小的单张
                 if (myCardList.Count > 0)
                 {
                     // 找最小的牌
                     int minWeight = myCardList.Min(c => c.Weight);
                     OnlineShowHint(new int[] { minWeight });
+                    chupai.PaiType = (int)Guize.一张;
                 }
             }
+        }
+
+        /// <summary>
+        /// 多人模式提示接牌（参考单机模式逻辑）
+        /// </summary>
+        private bool OnlineTiShiJiePai(ArrayList list, int paiType)
+        {
+            // 王炸无法接
+            if (paiType == (int)Guize.天炸) return false;
+
+            #region 单张
+            else if (paiType == (int)Guize.一张)
+            {
+                if (list != null && list.Count >= 4)
+                {
+                    int[] jie = null;
+                    if (((ArrayList)list[0]).Count != 0) jie = jiepai.mArrayToArgs((ArrayList)list[0]);
+                    else if (((ArrayList)list[1]).Count != 0) jie = jiepai.mArrayToArgs((ArrayList)list[1]);
+                    else if (((ArrayList)list[2]).Count != 0) jie = jiepai.mArrayToArgs((ArrayList)list[2]);
+                    else if (((ArrayList)list[3]).Count != 0) jie = jiepai.mArrayToArgs((ArrayList)list[3]);
+
+                    if (jie != null)
+                    {
+                        if (tishi >= jie.Length) tishi = 0;
+                        int[] _jie = new int[] { jie[tishi] };
+                        OnlineShowHint(_jie);
+                        tishi++;
+                        chupai.PaiType = (int)Guize.一张;
+                        return true;
+                    }
+                }
+            }
+            #endregion
+            #region 对子
+            else if (paiType == (int)Guize.对子)
+            {
+                if (list != null && list.Count >= 3)
+                {
+                    int[] jie = null;
+                    if (((ArrayList)list[0]).Count != 0) jie = jiepai.mArrayToArgs((ArrayList)list[0]);
+                    else if (((ArrayList)list[1]).Count != 0) jie = jiepai.mArrayToArgs((ArrayList)list[1]);
+                    else if (((ArrayList)list[2]).Count != 0) jie = jiepai.mArrayToArgs((ArrayList)list[2]);
+
+                    if (jie != null)
+                    {
+                        if (tishi >= jie.Length) tishi = 0;
+                        int[] _jie = new int[] { jie[tishi], jie[tishi] };
+                        OnlineShowHint(_jie);
+                        tishi++;
+                        chupai.PaiType = (int)Guize.对子;
+                        return true;
+                    }
+                }
+            }
+            #endregion
+            #region 三张
+            else if (paiType == (int)Guize.三不带)
+            {
+                if (list != null && list.Count >= 2)
+                {
+                    int[] jie = null;
+                    if (((ArrayList)list[0]).Count != 0) jie = jiepai.mArrayToArgs((ArrayList)list[0]);
+                    else if (((ArrayList)list[1]).Count != 0) jie = jiepai.mArrayToArgs((ArrayList)list[1]);
+
+                    if (jie != null)
+                    {
+                        if (tishi >= jie.Length) tishi = 0;
+                        int[] _jie = new int[] { jie[tishi], jie[tishi], jie[tishi] };
+                        OnlineShowHint(_jie);
+                        tishi++;
+                        chupai.PaiType = (int)Guize.三不带;
+                        return true;
+                    }
+                }
+            }
+            #endregion
+            #region 炸弹
+            else if (paiType == (int)Guize.炸弹)
+            {
+                if (list != null && list.Count != 0)
+                {
+                    int[] jie = jiepai.mArrayToArgs(list);
+                    if (jie != null)
+                    {
+                        if (tishi >= jie.Length) tishi = 0;
+                        int[] _jie = new int[] { jie[tishi], jie[tishi], jie[tishi], jie[tishi] };
+                        OnlineShowHint(_jie);
+                        tishi++;
+                        chupai.PaiType = (int)Guize.炸弹;
+                        return true;
+                    }
+                }
+            }
+            #endregion
+            #region 三带一,三带二,顺子,连对,飞机不带
+            else if (paiType > 4 && paiType < 13)
+            {
+                if (list != null && list.Count != 0)
+                {
+                    if (tishi >= list.Count) tishi = 0;
+                    int[] jie = jiepai.mArrayToArgs((ArrayList)list[tishi]);
+                    OnlineShowHint(jie);
+                    tishi++;
+                    chupai.PaiType = paiType;
+                    return true;
+                }
+            }
+            #endregion
+            #region 四带二,四带两对,飞机带,三飞机带,四飞机带
+            else if (paiType > 12 && paiType < 20)
+            {
+                if (list != null)
+                {
+                    int[] jie = jiepai.mArrayToArgs(list);
+                    if (jie != null && jie.Length > 0)
+                    {
+                        OnlineShowHint(jie);
+                        chupai.PaiType = paiType;
+                        return true;
+                    }
+                }
+            }
+            #endregion
+
+            #region 如果同类型牌要不起，就判断是否有炸弹
+            if (paiType != (int)Guize.炸弹)
+            {
+                ArrayList bombList = jiepai.findZhadan(juese2.ShengYuPai);
+                int[] bombJie = jiepai.mArrayToArgs(bombList);
+                if (bombJie != null && bombJie.Length > 0)
+                {
+                    if (tishi >= bombJie.Length) tishi = 0;
+                    int[] _jie = new int[] { bombJie[tishi], bombJie[tishi], bombJie[tishi], bombJie[tishi] };
+                    OnlineShowHint(_jie);
+                    tishi++;
+                    chupai.PaiType = (int)Guize.炸弹;
+                    return true;
+                }
+            }
+            #endregion
+
+            #region 检查王炸
+            ArrayList rocketList = jiepai.findTianzha(juese2.ShengYuPai);
+            int[] rocket = jiepai.mArrayToArgs(rocketList);
+            if (rocket != null && rocket.Length == 2)
+            {
+                OnlineShowHint(rocket);
+                chupai.PaiType = (int)Guize.天炸;
+                return true;
+            }
+            #endregion
+
+            return false;
         }
 
         /// <summary>
@@ -1609,18 +1851,172 @@ namespace FairiesPoker
             else ((PictureBox)sender).Top = 483;
         }
 
+        #region 滑动选牌功能（单机模式）
+        /// <summary>
+        /// 单机模式牌图片鼠标按下事件（开始滑动选牌）
+        /// </summary>
+        private void PaiImage_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left) return;
+            PictureBox pb = sender as PictureBox;
+            if (pb == null) return;
+
+            // 开始滑动选牌，阻止窗体拖动
+            isSlidingSelection = true;
+            leftFlag = false; // 禁止窗体拖动
+            int index = (int)pb.Tag;
+            slideStartIndex = index;
+            slideEndIndex = index;
+            // 记录按下时的状态，用于判断是否需要切换
+            slideSelectMode = (pb.Top == 483);
+
+            // 捕获鼠标，确保即使鼠标离开控件也能接收鼠标事件
+            pb.Capture = true;
+        }
+
+        /// <summary>
+        /// 单机模式牌图片鼠标移动事件（处理滑动选牌）
+        /// </summary>
+        private void PaiImage_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!isSlidingSelection) return;
+
+            // 获取鼠标在窗体中的位置
+            Point formPoint = this.PointToClient(Control.MousePosition);
+            int currentIndex = FindCardIndexAtPositionSingle(formPoint);
+
+            if (currentIndex >= 0 && currentIndex != slideEndIndex)
+            {
+                slideEndIndex = currentIndex;
+                UpdateSlideSelectionPreview();
+            }
+        }
+
+        /// <summary>
+        /// 单机模式牌图片鼠标释放事件
+        /// </summary>
+        private void PaiImage_MouseUp(object sender, MouseEventArgs e)
+        {
+            if (!isSlidingSelection) return;
+
+            // 释放鼠标捕获
+            if (sender is PictureBox pb)
+            {
+                pb.Capture = false;
+            }
+
+            // 判断是否有滑动
+            bool hasSlided = (slideStartIndex != slideEndIndex);
+
+            if (hasSlided)
+            {
+                // 滑动选牌：更新所有滑动过的牌的状态
+                ApplySlideSelection();
+            }
+            // 单次点击不做处理，让Click事件处理
+
+            isSlidingSelection = false;
+            slideStartIndex = -1;
+            slideEndIndex = -1;
+        }
+
+        /// <summary>
+        /// 更新滑动选牌预览（单机模式）
+        /// </summary>
+        private void UpdateSlideSelectionPreview()
+        {
+            int minIndex = Math.Min(slideStartIndex, slideEndIndex);
+            int maxIndex = Math.Max(slideStartIndex, slideEndIndex);
+
+            // 使用juese2.ImagePaiSub直接获取牌图片索引（Tag对应ImagePaiSub中的位置）
+            for (int i = minIndex; i <= maxIndex; i++)
+            {
+                if (i >= 0 && i < juese2.ImagePaiSub.Count)
+                {
+                    int paiIndex = (int)juese2.ImagePaiSub[i];
+                    if (paiIndex >= 0 && paiIndex < paiImage.Length && paiImage[paiIndex] != null)
+                    {
+                        if (slideSelectMode)
+                            paiImage[paiIndex].Top = 453; // 选中状态
+                        else
+                            paiImage[paiIndex].Top = 483; // 未选中状态
+                    }
+                }
+            }
+        }
+        #endregion
+
         private void DdzMian_MouseDown(object sender, MouseEventArgs e)
         {
             this.Focus();
-            if (e.Button == MouseButtons.Left)
+            if (e.Button == MouseButtons.Left && !isSlidingSelection)
             {
-                mouseOff = new Point(-e.X, -e.Y);
-                leftFlag = true;
+                // 检查鼠标是否在牌区域内，如果是则不启动窗口移动
+                Point mousePos = e.Location;
+                bool isInCardArea = IsMouseInCardArea(mousePos);
+
+                if (!isInCardArea)
+                {
+                    mouseOff = new Point(-e.X, -e.Y);
+                    leftFlag = true;
+                }
             }
+        }
+
+        /// <summary>
+        /// 检查鼠标是否在牌区域内
+        /// </summary>
+        /// <summary>
+        /// 检查鼠标是否在牌区域内（检测下半区，减少误触窗口移动）
+        /// </summary>
+        private bool IsMouseInCardArea(Point point)
+        {
+            // 将按钮以下的下半区都纳入检测范围
+            // 手牌区域在底部，按钮大约在Y=200左右的位置
+            // 设置检测线为Y=250，此线以下的区域都视为牌区域
+            int detectionLineY = 250;
+
+            // 如果鼠标在检测线以下，视为在牌区域
+            if (point.Y >= detectionLineY)
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private void DdzMian_MouseMove(object sender, MouseEventArgs e)
         {
+            // 处理滑动选牌
+            if (isSlidingSelection)
+            {
+                // 获取鼠标在窗体中的位置
+                Point formPoint = this.PointToClient(Control.MousePosition);
+                int currentIndex = -1;
+
+                if (online)
+                {
+                    // 联机模式：遍历手牌PictureBox找到鼠标所在的牌
+                    currentIndex = FindCardIndexAtPosition(formPoint, myCardPictureBoxes);
+                }
+                else
+                {
+                    // 单机模式：遍历玩家手牌找到鼠标所在的牌
+                    currentIndex = FindCardIndexAtPositionSingle(formPoint);
+                }
+
+                if (currentIndex >= 0 && currentIndex != slideEndIndex)
+                {
+                    slideEndIndex = currentIndex;
+                    if (online)
+                        UpdateOnlineSlideSelectionPreview();
+                    else
+                        UpdateSlideSelectionPreview();
+                }
+                return;
+            }
+
+            // 处理窗体拖动
             if (leftFlag)
             {
                 Point mouseSet = Control.MousePosition;
@@ -1629,11 +2025,165 @@ namespace FairiesPoker
             }
         }
 
+        /// <summary>
+        /// 查找鼠标位置对应的牌索引（联机模式）
+        /// </summary>
+        private int FindCardIndexAtPosition(Point point, List<PictureBox> cardList)
+        {
+            // 牌是重叠的，从右到左排列（索引0在最右边）
+            // 每张牌只露出左边30像素，最后一张牌完全可见
+            // 需要从右到左检测（从索引0开始）
+
+            for (int i = 0; i < cardList.Count; i++)
+            {
+                var pb = cardList[i];
+                if (pb != null && pb.Visible)
+                {
+                    // 计算可见区域
+                    int visibleWidth;
+                    if (i == cardList.Count - 1)
+                    {
+                        // 最后一张牌（最左边）完全可见
+                        visibleWidth = pb.Width;
+                    }
+                    else
+                    {
+                        // 其他牌只露出左边30像素
+                        visibleWidth = 30;
+                    }
+
+                    // 创建可见区域的矩形
+                    Rectangle visibleBounds = new Rectangle(pb.Left, pb.Top, visibleWidth, pb.Height);
+                    if (visibleBounds.Contains(point))
+                    {
+                        return i;
+                    }
+                }
+            }
+            return -1;
+        }
+
+        /// <summary>
+        /// 查找鼠标位置对应的牌索引（单机模式）
+        /// </summary>
+        private int FindCardIndexAtPositionSingle(Point point)
+        {
+            // 牌是重叠的，从右到左排列（索引0在最右边）
+            // 每张牌只露出左边30像素，最后一张牌完全可见
+            // 需要从右到左检测（从索引0开始）
+
+            for (int i = 0; i < juese2.ImagePaiSub.Count; i++)
+            {
+                int paiIndex = (int)juese2.ImagePaiSub[i];
+                if (paiIndex >= 0 && paiIndex < paiImage.Length && paiImage[paiIndex] != null)
+                {
+                    var pb = paiImage[paiIndex];
+
+                    // 计算可见区域（考虑牌的当前位置，可能是选中状态Top=453或未选中状态Top=483）
+                    int visibleWidth;
+                    if (i == juese2.ImagePaiSub.Count - 1)
+                    {
+                        // 最后一张牌（最左边）完全可见
+                        visibleWidth = pb.Width;
+                    }
+                    else
+                    {
+                        // 其他牌只露出左边30像素
+                        visibleWidth = 30;
+                    }
+
+                    // 使用牌的实际位置创建可见区域的矩形
+                    Rectangle visibleBounds = new Rectangle(pb.Left, pb.Top, visibleWidth, pb.Height);
+                    if (visibleBounds.Contains(point))
+                    {
+                        return i;
+                    }
+                }
+            }
+            return -1;
+        }
+
         private void DdzMian_MouseUp(object sender, MouseEventArgs e)
         {
+            // 处理滑动选牌结束
+            if (isSlidingSelection)
+            {
+                // 判断是否有滑动（slideStartIndex != slideEndIndex）
+                bool hasSlided = (slideStartIndex != slideEndIndex);
+
+                if (hasSlided)
+                {
+                    // 滑动选牌：更新所有滑动过的牌的状态
+                    if (online)
+                        ApplyOnlineSlideSelection();
+                    else
+                        ApplySlideSelection();
+                }
+                // 单次点击不做处理，让Click事件处理
+
+                isSlidingSelection = false;
+                slideStartIndex = -1;
+                slideEndIndex = -1;
+                return;
+            }
+
             if (leftFlag)
             {
                 leftFlag = false;
+            }
+        }
+
+        /// <summary>
+        /// 应用滑动选牌结果（单机模式）
+        /// </summary>
+        private void ApplySlideSelection()
+        {
+            int minIndex = Math.Min(slideStartIndex, slideEndIndex);
+            int maxIndex = Math.Max(slideStartIndex, slideEndIndex);
+
+            for (int i = minIndex; i <= maxIndex; i++)
+            {
+                if (i >= 0 && i < juese2.ImagePaiSub.Count)
+                {
+                    int paiIndex = (int)juese2.ImagePaiSub[i];
+                    if (paiIndex >= 0 && paiIndex < paiImage.Length && paiImage[paiIndex] != null)
+                    {
+                        if (slideSelectMode)
+                            paiImage[paiIndex].Top = 453; // 选中状态
+                        else
+                            paiImage[paiIndex].Top = 483; // 未选中状态
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 应用滑动选牌结果（联机模式）
+        /// </summary>
+        private void ApplyOnlineSlideSelection()
+        {
+            int minIndex = Math.Min(slideStartIndex, slideEndIndex);
+            int maxIndex = Math.Max(slideStartIndex, slideEndIndex);
+
+            for (int i = minIndex; i <= maxIndex; i++)
+            {
+                if (i >= 0 && i < myCardPictureBoxes.Count)
+                {
+                    var pb = myCardPictureBoxes[i];
+                    if (slideSelectMode)
+                    {
+                        pb.Top = 453; // 选中状态
+                        if (!selectedCardIndices.Contains(i))
+                        {
+                            selectedCardIndices.Add(i);
+                        }
+                    }
+                    else
+                    {
+                        pb.Top = 483; // 未选中状态
+                        selectedCardIndices.Remove(i);
+                    }
+                }
             }
         }
 
@@ -1730,22 +2280,31 @@ namespace FairiesPoker
             myCardPictureBoxes = new List<PictureBox>();
             dealCardImages = new List<PictureBox>();
             selectedCardIndices = new List<int>();
+            leftPlayerCardBacks = new List<PictureBox>();
+            rightPlayerCardBacks = new List<PictureBox>();
             newPlayer();
 
-            // 按权值降序排序手牌
+            // 按权值降序排序手牌（与单机模式一致）
             myCardList = myCardList.OrderByDescending(c => c.Weight).ToList();
 
-            // 初始化手牌图片
-            int startX = 805 - (myCardList.Count * 30) / 2;
+            // 初始化手牌图片（使用与单机模式一致的居中逻辑）
+            // 单机模式公式: 640 + (牌数 * 30 + 120) / 2 - 150
+            // 对于17张牌: 640 + (510 + 120) / 2 - 150 = 805
+            int startX = 640 + (myCardList.Count * 30 + 120) / 2 - 150;
             for (int i = 0; i < myCardList.Count; i++)
             {
                 var card = myCardList[i];
                 PictureBox pb = new PictureBox();
+                // 位置：从右到左，每张牌递减30（与单机模式一致）
                 pb.SetBounds(startX - i * 30, 483, 150, 225);
                 pb.BackgroundImage = GetCardImage(card.Weight, card.Color);
                 pb.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
                 pb.Tag = i; // 存储牌索引
                 pb.Click += new System.EventHandler(OnlinePaiImage_Click);
+                // 添加滑动选牌事件
+                pb.MouseDown += new MouseEventHandler(OnlinePaiImage_MouseDown);
+                pb.MouseMove += new MouseEventHandler(OnlinePaiImage_MouseMove);
+                pb.MouseUp += new MouseEventHandler(OnlinePaiImage_MouseUp);
                 this.Controls.Add(pb);
                 myCardPictureBoxes.Add(pb);
 
@@ -1754,7 +2313,102 @@ namespace FairiesPoker
                 juese2.ShengYuPai.Add(card.Weight);
             }
 
+            // 初始化其他玩家的牌背显示（17张牌）
+            InitOtherPlayersCardBacks();
+
             shengyupai();
+        }
+
+        /// <summary>
+        /// 初始化其他玩家的牌背显示
+        /// </summary>
+        private void InitOtherPlayersCardBacks()
+        {
+            // 左边玩家的牌背（17张）
+            int leftX = 20;
+            int leftY = 220;
+            for (int i = 0; i < 17; i++)
+            {
+                PictureBox pb = new PictureBox();
+                pb.SetBounds(leftX, leftY + (i < 6 ? i * 30 : (i < 12 ? (i - 6) * 30 : (i - 12) * 30)), 150, 225);
+                pb.BackgroundImage = Properties.Resources.牌背3;
+                pb.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
+                pb.Tag = -1; // 标识为其他玩家的牌
+                this.Controls.Add(pb);
+                pb.BringToFront();
+                leftPlayerCardBacks.Add(pb);
+
+                // 更新juese1数据
+                juese1.ShengYuPai.Add(0);
+            }
+
+            // 重新排列左边玩家的牌背
+            int cardIndex = 0;
+            for (int layer = 0; layer < 3; layer++)
+            {
+                for (int i = 0; i < 6 && cardIndex < leftPlayerCardBacks.Count; i++)
+                {
+                    var pb = leftPlayerCardBacks[cardIndex];
+                    pb.SetBounds(leftX, leftY + layer * 10, 150, 225);
+                    cardIndex++;
+                }
+            }
+
+            // 右边玩家的牌背（17张）
+            int rightX = 1110;
+            int rightY = 220;
+            for (int i = 0; i < 17; i++)
+            {
+                PictureBox pb = new PictureBox();
+                pb.SetBounds(rightX, rightY + (i < 6 ? i * 30 : (i < 12 ? (i - 6) * 30 : (i - 12) * 30)), 150, 225);
+                pb.BackgroundImage = Properties.Resources.牌背3;
+                pb.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
+                pb.Tag = -1; // 标识为其他玩家的牌
+                this.Controls.Add(pb);
+                pb.BringToFront();
+                rightPlayerCardBacks.Add(pb);
+
+                // 更新juese3数据
+                juese3.ShengYuPai.Add(0);
+            }
+
+            // 重新排列右边玩家的牌背
+            cardIndex = 0;
+            for (int layer = 0; layer < 3; layer++)
+            {
+                for (int i = 0; i < 6 && cardIndex < rightPlayerCardBacks.Count; i++)
+                {
+                    var pb = rightPlayerCardBacks[cardIndex];
+                    pb.SetBounds(rightX, rightY + layer * 10, 150, 225);
+                    cardIndex++;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 更新其他玩家的牌背数量
+        /// </summary>
+        private void UpdateOtherPlayerCardBacks(int leftCount, int rightCount)
+        {
+            // 更新左边玩家牌背数量
+            while (leftPlayerCardBacks.Count > leftCount)
+            {
+                var pb = leftPlayerCardBacks[leftPlayerCardBacks.Count - 1];
+                pb.Visible = false;
+                this.Controls.Remove(pb);
+                pb.Dispose();
+                leftPlayerCardBacks.RemoveAt(leftPlayerCardBacks.Count - 1);
+            }
+
+            // 更新右边玩家牌背数量
+            while (rightPlayerCardBacks.Count > rightCount)
+            {
+                var pb = rightPlayerCardBacks[rightPlayerCardBacks.Count - 1];
+                pb.Visible = false;
+                this.Controls.Remove(pb);
+                pb.Dispose();
+                rightPlayerCardBacks.RemoveAt(rightPlayerCardBacks.Count - 1);
+            }
         }
 
         /// <summary>
@@ -1762,18 +2416,53 @@ namespace FairiesPoker
         /// </summary>
         private Image GetCardImage(int weight, int color)
         {
-            // 根据权值获取图片资源名称
-            string resourceName = GetCardResourceName(weight, color);
-            var prop = typeof(Properties.Resources).GetProperty(resourceName);
-            if (prop != null)
+            try
             {
-                return prop.GetValue(null) as Image;
+                // 获取UI设置
+                string uiFolder = "5"; // 默认
+                try
+                {
+                    uiFolder = new config().UI.ToString();
+                }
+                catch { }
+
+                // 服务器花色映射: 0=Hearts, 1=Diamonds, 2=Clubs, 3=Spades
+                // 客户端花色映射: heitao, hongtao, meihua, fangkuai
+                string[] colorNames = { "hongtao", "fangkuai", "meihua", "heitao" };
+
+                string fileName;
+                if (weight == 16)
+                {
+                    // 小王
+                    fileName = Application.StartupPath + @"\Pokers\" + uiFolder + "\\16.png";
+                }
+                else if (weight == 17)
+                {
+                    // 大王
+                    fileName = Application.StartupPath + @"\Pokers\" + uiFolder + "\\17.png";
+                }
+                else if (weight >= 3 && weight <= 15 && color >= 0 && color <= 3)
+                {
+                    // 普通牌
+                    fileName = Application.StartupPath + @"\Pokers\" + uiFolder + "\\" + colorNames[color] + weight + ".png";
+                }
+                else
+                {
+                    return Properties.Resources.牌背3;
+                }
+
+                if (System.IO.File.Exists(fileName))
+                {
+                    return Image.FromFile(fileName);
+                }
             }
+            catch { }
+
             return Properties.Resources.牌背3;
         }
 
         /// <summary>
-        /// 获取牌资源名称
+        /// 获取牌资源名称（已废弃，保留兼容）
         /// </summary>
         private string GetCardResourceName(int weight, int color)
         {
@@ -1819,6 +2508,108 @@ namespace FairiesPoker
             }
         }
 
+        #region 滑动选牌功能（联机模式）
+        /// <summary>
+        /// 联机模式牌图片鼠标按下事件（开始滑动选牌）
+        /// </summary>
+        private void OnlinePaiImage_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (!isMyTurn) return;
+            if (e.Button != MouseButtons.Left) return;
+            PictureBox pb = sender as PictureBox;
+            if (pb == null) return;
+
+            // 开始滑动选牌，阻止窗体拖动
+            isSlidingSelection = true;
+            leftFlag = false; // 禁止窗体拖动
+            int index = (int)pb.Tag;
+            slideStartIndex = index;
+            slideEndIndex = index;
+            // 记录按下时的状态，用于判断是否需要切换
+            slideSelectMode = (pb.Top == 483);
+
+            // 捕获鼠标，确保即使鼠标离开控件也能接收鼠标事件
+            pb.Capture = true;
+        }
+
+        /// <summary>
+        /// 联机模式牌图片鼠标移动事件（处理滑动选牌）
+        /// </summary>
+        private void OnlinePaiImage_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!isSlidingSelection || !isMyTurn) return;
+
+            // 获取鼠标在窗体中的位置
+            Point formPoint = this.PointToClient(Control.MousePosition);
+            int currentIndex = FindCardIndexAtPosition(formPoint, myCardPictureBoxes);
+
+            if (currentIndex >= 0 && currentIndex != slideEndIndex)
+            {
+                slideEndIndex = currentIndex;
+                UpdateOnlineSlideSelectionPreview();
+            }
+        }
+
+        /// <summary>
+        /// 联机模式牌图片鼠标释放事件
+        /// </summary>
+        private void OnlinePaiImage_MouseUp(object sender, MouseEventArgs e)
+        {
+            if (!isSlidingSelection) return;
+
+            // 释放鼠标捕获
+            if (sender is PictureBox pb)
+            {
+                pb.Capture = false;
+            }
+
+            // 判断是否有滑动
+            bool hasSlided = (slideStartIndex != slideEndIndex);
+
+            if (hasSlided)
+            {
+                // 滑动选牌：更新所有滑动过的牌的状态
+                ApplyOnlineSlideSelection();
+            }
+            // 单次点击不做处理，让Click事件处理
+
+            isSlidingSelection = false;
+            slideStartIndex = -1;
+            slideEndIndex = -1;
+        }
+
+        /// <summary>
+        /// 更新滑动选牌预览（联机模式）
+        /// </summary>
+        private void UpdateOnlineSlideSelectionPreview()
+        {
+            int minIndex = Math.Min(slideStartIndex, slideEndIndex);
+            int maxIndex = Math.Max(slideStartIndex, slideEndIndex);
+
+            for (int i = minIndex; i <= maxIndex; i++)
+            {
+                if (i >= 0 && i < myCardPictureBoxes.Count)
+                {
+                    var pb = myCardPictureBoxes[i];
+                    if (slideSelectMode)
+                    {
+                        pb.Top = 453; // 选中状态
+                        if (!selectedCardIndices.Contains(i))
+                        {
+                            selectedCardIndices.Add(i);
+                        }
+                    }
+                    else
+                    {
+                        pb.Top = 483; // 未选中状态
+                        selectedCardIndices.Remove(i);
+                    }
+                }
+            }
+        }
+
+        #endregion
+
         /// <summary>
         /// 转换抢地主
         /// </summary>
@@ -1837,19 +2628,14 @@ namespace FairiesPoker
                 button3.Visible = true;
                 button2.Text = "抢地主";
                 button3.Text = "不抢";
+
+                // 开始自己的倒计时
+                StartTurnTimer();
             }
             else
             {
-                // 显示其他玩家正在抢地主
-                string playerName = GetPlayerName(userId);
-                if (userId == Models.GameModel.MatchRoomDto.LeftId)
-                {
-                    label1.Text = "思考中...";
-                }
-                else if (userId == Models.GameModel.MatchRoomDto.RightId)
-                {
-                    label2.Text = "思考中...";
-                }
+                // 显示其他玩家正在抢地主（显示倒计时）
+                StartOtherPlayerTimer(userId);
             }
         }
 
@@ -1864,7 +2650,28 @@ namespace FairiesPoker
                 return;
             }
 
+            // 停止计时器
+            StopTurnTimer();
+            HideDealButtons();
+
             landlordId = grabDto.UserId;
+
+            // 播放背景音乐
+            if (con.BackMusic)
+            {
+                string mpath = "";
+                switch (ui.uiselect)
+                {
+                    case 1: mpath = Path.UI_TB.ToString(); break;
+                    case 2: mpath = Path.UI_LT.ToString(); break;
+                    case 3: mpath = Path.UI_FR.ToString(); break;
+                    case 4: mpath = Path.UI_SW.ToString(); break;
+                    case 5: mpath = Path.UI_PF.ToString(); break;
+                    case 6: mpath = Path.UI_LN.ToString(); break;
+                    case 7: mpath = Path.UI_LN.ToString(); break;
+                }
+                audioPlayer.Play(Application.StartupPath + "\\" + mpath + "\\background.mp3", true);
+            }
 
             // 显示底牌
             pic1.BackgroundImage = GetPaiImage(grabDto.TableCardList[0]);
@@ -1873,12 +2680,12 @@ namespace FairiesPoker
 
             tableCards = grabDto.TableCardList;
 
-            // 更新地主标识
+            // 更新地主标识（用文字标识，不显示图标）
             if (landlordId == Models.GameModel.UserDto.Id)
             {
-                pic_dz.SetBounds(1090, 645, 60, 60);
-                pic_dz.Visible = true;
-                pic_dz.Image = Properties.Resources.hook;
+                // 自己是地主
+                string name = Models.GameModel.UserDto.Name;
+                groupBox2.Text = "【地主】" + name;
                 juese2.Dizhu = true;
 
                 // 给地主添加底牌
@@ -1886,16 +2693,16 @@ namespace FairiesPoker
             }
             else if (landlordId == Models.GameModel.MatchRoomDto.LeftId)
             {
-                pic_dz.SetBounds(100, 463, 60, 60);
-                pic_dz.Visible = true;
-                pic_dz.Image = Properties.Resources.hook;
+                // 左边玩家是地主
+                string name = Models.GameModel.MatchRoomDto.UIdUserDict[landlordId].Name;
+                groupBox1.Text = "【地主】" + name;
                 juese1.Dizhu = true;
             }
             else if (landlordId == Models.GameModel.MatchRoomDto.RightId)
             {
-                pic_dz.SetBounds(1190, 144, 60, 60);
-                pic_dz.Visible = true;
-                pic_dz.Image = Properties.Resources.hook;
+                // 右边玩家是地主
+                string name = Models.GameModel.MatchRoomDto.UIdUserDict[landlordId].Name;
+                groupBox3.Text = "【地主】" + name;
                 juese3.Dizhu = true;
             }
         }
@@ -1933,8 +2740,10 @@ namespace FairiesPoker
             juese2.ImagePaiSub.Clear();
             juese2.ShengYuPai.Clear();
 
-            // 重新创建所有手牌的PictureBox
-            int startX = 805 - (myCardList.Count * 30) / 2;
+            // 重新创建所有手牌的PictureBox（使用与单机模式一致的居中逻辑）
+            // 单机模式公式: 640 + (牌数 * 30 + 120) / 2 - 150
+            // 对于20张牌: 640 + (600 + 120) / 2 - 150 = 850
+            int startX = 640 + (myCardList.Count * 30 + 120) / 2 - 150;
             for (int i = 0; i < myCardList.Count; i++)
             {
                 var card = myCardList[i];
@@ -1944,6 +2753,10 @@ namespace FairiesPoker
                 pb.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
                 pb.Tag = i;
                 pb.Click += new System.EventHandler(OnlinePaiImage_Click);
+                // 添加滑动选牌事件
+                pb.MouseDown += new MouseEventHandler(OnlinePaiImage_MouseDown);
+                pb.MouseMove += new MouseEventHandler(OnlinePaiImage_MouseMove);
+                pb.MouseUp += new MouseEventHandler(OnlinePaiImage_MouseUp);
                 this.Controls.Add(pb);
                 myCardPictureBoxes.Add(pb);
                 juese2.ImagePaiSub.Add(i);
@@ -2007,15 +2820,8 @@ namespace FairiesPoker
                 StopTurnTimer();
                 HideDealButtons();
 
-                string playerName = GetPlayerName(userId);
-                if (userId == Models.GameModel.MatchRoomDto.LeftId)
-                {
-                    label1.Text = "思考中...";
-                }
-                else if (userId == Models.GameModel.MatchRoomDto.RightId)
-                {
-                    label2.Text = "思考中...";
-                }
+                // 开始其他玩家的倒计时显示
+                StartOtherPlayerTimer(userId);
             }
         }
 
@@ -2029,6 +2835,9 @@ namespace FairiesPoker
                 this.Invoke(new Action<DealDto>(OnDealBroadcastReceived), dealDto);
                 return;
             }
+
+            // 停止计时器
+            timerTurnTimeout.Stop();
 
             lastDealDto = dealDto;
             lastPaiType = dealDto.Type;
@@ -2160,12 +2969,15 @@ namespace FairiesPoker
                 }
             }
 
-            // 更新PictureBox的Tag和位置
-            int startX = 805 - (myCardPictureBoxes.Count * 30) / 2;
+            // 更新PictureBox的Tag和位置（使用与单机模式一致的居中逻辑）
+            // 计算居中起始位置: 640 + (牌数 * 30 + 120) / 2 - 150
+            int startX = 640 + (myCardPictureBoxes.Count * 30 + 120) / 2 - 150;
             for (int i = 0; i < myCardPictureBoxes.Count; i++)
             {
                 myCardPictureBoxes[i].Tag = i;
                 myCardPictureBoxes[i].Left = startX - i * 30;
+                myCardPictureBoxes[i].Top = 483;
+                myCardPictureBoxes[i].BringToFront();
             }
 
             selectedCardIndices.Clear();
@@ -2182,12 +2994,16 @@ namespace FairiesPoker
                 label4.Text = "剩余牌：" + count;
                 juese1.ShengYuPai.Clear();
                 for (int i = 0; i < count; i++) juese1.ShengYuPai.Add(0);
+                // 更新左边玩家牌背
+                UpdateOtherPlayerCardBacks(count, rightPlayerCardBacks.Count);
             }
             else if (userId == Models.GameModel.MatchRoomDto.RightId)
             {
                 label6.Text = "剩余牌：" + count;
                 juese3.ShengYuPai.Clear();
                 for (int i = 0; i < count; i++) juese3.ShengYuPai.Add(0);
+                // 更新右边玩家牌背
+                UpdateOtherPlayerCardBacks(leftPlayerCardBacks.Count, count);
             }
         }
 
@@ -2249,7 +3065,8 @@ namespace FairiesPoker
             }
             else
             {
-                // 不出成功
+                // 不出成功，重置选中的牌位置
+                ResetSelectedCards();
                 StopTurnTimer();
                 HideDealButtons();
                 label3.Text = "不出";
@@ -2348,15 +3165,48 @@ namespace FairiesPoker
         #region 多人模式出牌计时器
 
         /// <summary>
-        /// 开始出牌计时
+        /// 开始出牌计时（自己）
         /// </summary>
         private void StartTurnTimer()
         {
+            isMyTurn = true;
             remainingSeconds = turnTimeoutSeconds;
             lblTurnTimer.Text = remainingSeconds.ToString();
             lblTurnTimer.Visible = true;
             lblTurnTimer.ForeColor = Color.White;
             timerTurnTimeout.Start();
+        }
+
+        /// <summary>
+        /// 开始其他玩家出牌计时
+        /// </summary>
+        private void StartOtherPlayerTimer(int userId)
+        {
+            isMyTurn = false;
+            otherPlayerRemainingSeconds = turnTimeoutSeconds;
+            timerTurnTimeout.Start();
+
+            // 立即显示倒计时
+            UpdateOtherPlayerTimerDisplay(userId, otherPlayerRemainingSeconds);
+        }
+
+        /// <summary>
+        /// 更新其他玩家的倒计时显示
+        /// </summary>
+        private void UpdateOtherPlayerTimerDisplay(int userId, int seconds)
+        {
+            string timerText = seconds.ToString();
+
+            if (userId == Models.GameModel.MatchRoomDto.LeftId)
+            {
+                label1.Text = timerText;
+                label1.ForeColor = seconds <= 5 ? Color.Red : (seconds <= 10 ? Color.Yellow : Color.White);
+            }
+            else if (userId == Models.GameModel.MatchRoomDto.RightId)
+            {
+                label2.Text = timerText;
+                label2.ForeColor = seconds <= 5 ? Color.Red : (seconds <= 10 ? Color.Yellow : Color.White);
+            }
         }
 
         /// <summary>
@@ -2366,6 +3216,9 @@ namespace FairiesPoker
         {
             timerTurnTimeout.Stop();
             lblTurnTimer.Visible = false;
+            // 清除其他玩家的倒计时显示
+            label1.Text = "";
+            label2.Text = "";
             isMyTurn = false;
         }
 
@@ -2374,24 +3227,40 @@ namespace FairiesPoker
         /// </summary>
         private void timerTurnTimeout_Tick(object sender, EventArgs e)
         {
-            remainingSeconds--;
-            lblTurnTimer.Text = remainingSeconds.ToString();
+            if (isMyTurn)
+            {
+                // 自己的倒计时
+                remainingSeconds--;
+                lblTurnTimer.Text = remainingSeconds.ToString();
 
-            // 改变颜色提示
-            if (remainingSeconds <= 5)
-            {
-                lblTurnTimer.ForeColor = Color.Red;
-            }
-            else if (remainingSeconds <= 10)
-            {
-                lblTurnTimer.ForeColor = Color.Yellow;
-            }
+                // 改变颜色提示
+                if (remainingSeconds <= 5)
+                {
+                    lblTurnTimer.ForeColor = Color.Red;
+                }
+                else if (remainingSeconds <= 10)
+                {
+                    lblTurnTimer.ForeColor = Color.Yellow;
+                }
 
-            if (remainingSeconds <= 0)
+                if (remainingSeconds <= 0)
+                {
+                    // 超时，自动不出
+                    StopTurnTimer();
+                    AutoPass();
+                }
+            }
+            else
             {
-                // 超时，自动不出
-                StopTurnTimer();
-                AutoPass();
+                // 其他玩家的倒计时
+                otherPlayerRemainingSeconds--;
+                UpdateOtherPlayerTimerDisplay(currentTurnUserId, otherPlayerRemainingSeconds);
+
+                if (otherPlayerRemainingSeconds <= 0)
+                {
+                    // 其他玩家超时，停止计时器
+                    timerTurnTimeout.Stop();
+                }
             }
         }
 

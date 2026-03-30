@@ -91,6 +91,9 @@ namespace FPServer.Network
             {
                 _logger.LogInformation("用户下线: {UserId} {Username}", client.UserId, client.Username);
 
+                // 获取用户所在房间，通知其他玩家
+                var room = _roomManager.GetRoomByPlayerId(client.UserId);
+
                 // 从在线缓存移除
                 _userCache.RemoveUser(client.UserId);
 
@@ -106,8 +109,27 @@ namespace FPServer.Network
                     _logger.LogError(ex, "更新用户离线状态失败");
                 }
 
-                // 处理房间离开
-                _roomManager.LeaveRoom(client.UserId);
+                // 处理房间离开并通知其他玩家
+                if (room != null)
+                {
+                    // 移除玩家
+                    _roomManager.LeaveRoom(client.UserId);
+
+                    // 通知房间内其他玩家
+                    if (room.GetPlayerCount() > 0)
+                    {
+                        foreach (var userId in room.GetPlayerIds())
+                        {
+                            var roomDto = room.GetMatchRoomDtoForPlayer(userId);
+                            var leaveMsg = new SocketMsg(OpCode.MATCH, RoomCode.UPDATE_BRO, roomDto);
+                            var userClient = _userCache.GetClient(userId);
+                            if (userClient != null)
+                            {
+                                Send(userClient, leaveMsg);
+                            }
+                        }
+                    }
+                }
             }
         }
 

@@ -45,6 +45,9 @@ namespace FPServer.Handlers
                 case MatchCode.READY_CREQ:
                     HandleReady(client);
                     break;
+                case MatchCode.START_CREQ:
+                    HandleStartGame(client);
+                    break;
 
                 // 房间相关
                 case RoomCode.GET_ROOMS_CREQ:
@@ -100,17 +103,16 @@ namespace FPServer.Handlers
                 // 检查是否满3人
                 if (room.IsFull())
                 {
-                    // 自动准备所有玩家
-                    foreach (var userId in room.GetPlayerIds())
+                    // 如果是快速匹配房间，直接开始游戏
+                    if (room.IsQuickMatch)
                     {
-                        room.SetReady(userId);
+                        StartGame(room);
                     }
-
-                    // 广播更新后的房间状态
-                    BroadcastRoomUpdate(room);
-
-                    // 开始游戏
-                    StartGame(room);
+                    else
+                    {
+                        // 自定义房间广播更新后的房间状态
+                        BroadcastRoomUpdate(room);
+                    }
                 }
             }
         }
@@ -161,14 +163,33 @@ namespace FPServer.Handlers
 
                 // 广播准备状态
                 BroadcastRoomUpdate(room);
-
-                // 检查是否所有人都准备了（满员情况下）
-                if (room.IsAllReady() && room.IsFull())
-                {
-                    // 开始游戏
-                    StartGame(room);
-                }
             }
+        }
+
+        /// <summary>
+        /// 房主开始游戏
+        /// </summary>
+        private void HandleStartGame(ClientConnection client)
+        {
+            var room = _roomManager.GetRoomByPlayerId(client.UserId);
+            if (room == null) return;
+
+            // 只有房主可以开始游戏
+            if (room.HostId != client.UserId)
+            {
+                _logger.LogWarning("非房主尝试开始游戏: {UserId}", client.UserId);
+                return;
+            }
+
+            // 检查是否满员且全部准备
+            if (!room.IsFull() || !room.IsAllReady())
+            {
+                _logger.LogWarning("房间未满足开始条件");
+                return;
+            }
+
+            // 开始游戏
+            StartGame(room);
         }
 
         /// <summary>

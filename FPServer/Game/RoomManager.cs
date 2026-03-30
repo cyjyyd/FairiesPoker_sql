@@ -27,18 +27,22 @@ namespace FPServer.Game
         {
             lock (_lock)
             {
-                // 查找未满的房间
-                var availableRoom = _rooms.Values.FirstOrDefault(r => !r.IsFull() && r.IsWaiting());
+                // 查找未满的快速匹配房间
+                var availableRoom = _rooms.Values.FirstOrDefault(r => !r.IsFull() && r.IsWaiting() && r.IsQuickMatch);
                 if (availableRoom != null)
                 {
                     return availableRoom;
                 }
 
-                // 创建新房间
+                // 创建新的快速匹配房间
                 var roomId = Guid.NewGuid().ToString("N").Substring(0, 8);
-                var newRoom = new Room(roomId, _loggerFactory.CreateLogger<Room>(), _loggerFactory);
+                var newRoom = new Room(roomId, _loggerFactory.CreateLogger<Room>(), _loggerFactory)
+                {
+                    IsQuickMatch = true,
+                    RoomName = "快速匹配"
+                };
                 _rooms[roomId] = newRoom;
-                _logger.LogInformation("创建新房间: {RoomId}", roomId);
+                _logger.LogInformation("创建新快速匹配房间: {RoomId}", roomId);
                 return newRoom;
             }
         }
@@ -93,13 +97,13 @@ namespace FPServer.Game
         }
 
         /// <summary>
-        /// 获取所有房间
+        /// 获取所有房间（不包括快速匹配房间）
         /// </summary>
         public List<Room> GetAllRooms()
         {
             lock (_lock)
             {
-                return _rooms.Values.Where(r => r.IsWaiting()).ToList();
+                return _rooms.Values.Where(r => r.IsWaiting() && !r.IsQuickMatch).ToList();
             }
         }
 

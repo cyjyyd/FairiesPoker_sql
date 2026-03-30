@@ -55,6 +55,12 @@ namespace Protocol.Dto
         [ProtoMember(8)]
         public string RoomName;
 
+        /// <summary>
+        /// 是否是快速匹配房间
+        /// </summary>
+        [ProtoMember(9)]
+        public bool IsQuickMatch;
+
         public MatchRoomDto()
         {
             this.UIdUserDict = new Dictionary<int, UserDto>();
@@ -62,6 +68,7 @@ namespace Protocol.Dto
             //fix bug
             this.UIdList = new List<int>();
             this.HostId = -1;
+            this.IsQuickMatch = false;
         }
 
         //CTRL K D 整理代码

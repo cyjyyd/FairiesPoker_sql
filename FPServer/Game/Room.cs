@@ -15,6 +15,7 @@ namespace FPServer.Game
         public int LandlordId { get; set; } = -1;
         public int Multiple { get; set; } = 1;
         public int Status { get; set; } = RoomStatus.WAITING;
+        public bool IsQuickMatch { get; set; } = false; // 是否是快速匹配房间
 
         private readonly Dictionary<int, UserDto> _players = new();
         private readonly List<int> _playerOrder = new();
@@ -155,6 +156,7 @@ namespace FPServer.Game
             dto.HostId = HostId;
             dto.RoomId = RoomId;
             dto.RoomName = RoomName;
+            dto.IsQuickMatch = IsQuickMatch;
 
             // 设置左右玩家ID
             dto.ResetPosition(HostId); // 使用第一个玩家作为参考
@@ -177,6 +179,7 @@ namespace FPServer.Game
             dto.HostId = HostId;
             dto.RoomId = RoomId;
             dto.RoomName = RoomName;
+            dto.IsQuickMatch = IsQuickMatch;
 
             // 根据当前玩家设置左右玩家
             dto.ResetPosition(myUserId);

@@ -46,14 +46,14 @@ namespace FairiesPoker
             btnQuickMatch = new System.Windows.Forms.Button();
             btnJoinRoom = new System.Windows.Forms.Button();
             btnCreateRoom = new System.Windows.Forms.Button();
-            lstRooms = new System.Windows.Forms.ListBox();
+            lstRooms = new TransparentListBox();
             lblRoomList = new System.Windows.Forms.Label();
             panelRight = new System.Windows.Forms.Panel();
             panelChatInput = new System.Windows.Forms.Panel();
             btnSendChat = new System.Windows.Forms.Button();
             btnEmoji = new System.Windows.Forms.Button();
             txtChatInput = new System.Windows.Forms.TextBox();
-            lstChatMessages = new System.Windows.Forms.ListBox();
+            lstChatMessages = new TransparentListBox();
             panelChatChannels = new System.Windows.Forms.Panel();
             btnChannelPrivate = new System.Windows.Forms.Button();
             btnChannelRoom = new System.Windows.Forms.Button();
@@ -299,13 +299,9 @@ namespace FairiesPoker
             btnCreateRoom.Text = "创建房间";
             btnCreateRoom.UseVisualStyleBackColor = false;
             btnCreateRoom.Click += btnCreateRoom_Click;
-            // 
+            //
             // lstRooms
-            // 
-            lstRooms.BackColor = System.Drawing.Color.FromArgb(40, 40, 50);
-            lstRooms.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            lstRooms.ForeColor = System.Drawing.Color.White;
-            lstRooms.FormattingEnabled = true;
+            //
             lstRooms.Location = new System.Drawing.Point(22, 75);
             lstRooms.Margin = new System.Windows.Forms.Padding(4);
             lstRooms.Name = "lstRooms";
@@ -390,14 +386,10 @@ namespace FairiesPoker
             txtChatInput.Size = new System.Drawing.Size(270, 23);
             txtChatInput.TabIndex = 0;
             txtChatInput.KeyDown += txtChatInput_KeyDown;
-            // 
+            //
             // lstChatMessages
-            // 
-            lstChatMessages.BackColor = System.Drawing.Color.FromArgb(40, 40, 50);
-            lstChatMessages.BorderStyle = System.Windows.Forms.BorderStyle.None;
+            //
             lstChatMessages.Dock = System.Windows.Forms.DockStyle.Fill;
-            lstChatMessages.ForeColor = System.Drawing.Color.White;
-            lstChatMessages.FormattingEnabled = true;
             lstChatMessages.Location = new System.Drawing.Point(0, 60);
             lstChatMessages.Margin = new System.Windows.Forms.Padding(4);
             lstChatMessages.Name = "lstChatMessages";
@@ -770,14 +762,14 @@ namespace FairiesPoker
         private System.Windows.Forms.Button btnQuickMatch;
         private System.Windows.Forms.Button btnJoinRoom;
         private System.Windows.Forms.Button btnCreateRoom;
-        private System.Windows.Forms.ListBox lstRooms;
+        private TransparentListBox lstRooms;
         private System.Windows.Forms.Label lblRoomList;
         private System.Windows.Forms.Panel panelRight;
         private System.Windows.Forms.Panel panelChatInput;
         private System.Windows.Forms.Button btnSendChat;
         private System.Windows.Forms.Button btnEmoji;
         private System.Windows.Forms.TextBox txtChatInput;
-        private System.Windows.Forms.ListBox lstChatMessages;
+        private TransparentListBox lstChatMessages;
         private System.Windows.Forms.Panel panelChatChannels;
         private System.Windows.Forms.Button btnChannelPrivate;
         private System.Windows.Forms.Button btnChannelRoom;
