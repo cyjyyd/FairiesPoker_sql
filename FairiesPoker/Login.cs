@@ -231,7 +231,13 @@ namespace FairiesPoker
 
         private void linkLabel2_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-
+            if (!netManager.IsConnected)
+            {
+                MessageBox.Show("未连接到服务器，请检查服务器是否启动", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            ChangePassword cp = new ChangePassword(netManager);
+            cp.ShowDialog();
         }
 
         private void Login_Shown(object sender, EventArgs e)

@@ -19,6 +19,9 @@ public class AccountHandler : HandlerBase
             case AccountCode.REGIST_SRES:
                 registResponse(Convert.ToInt32(value));
                 break;
+            case AccountCode.CHANGE_PASSWORD_SRES:
+                changePasswordResponse(Convert.ToInt32(value));
+                break;
             default:
                 break;
         }
@@ -73,6 +76,34 @@ public class AccountHandler : HandlerBase
                 break;
             default:
                 Models.TriggerRegisterResult(false);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 修改密码响应
+    /// </summary>
+    private void changePasswordResponse(int result)
+    {
+        switch (result)
+        {
+            case 0:
+                Models.TriggerChangePasswordResult(true, "密码修改成功！");
+                break;
+            case -1:
+                Models.TriggerChangePasswordResult(false, "用户名不存在");
+                break;
+            case -2:
+                Models.TriggerChangePasswordResult(false, "旧密码错误");
+                break;
+            case -3:
+                Models.TriggerChangePasswordResult(false, "服务器错误，请稍后重试");
+                break;
+            case -4:
+                Models.TriggerChangePasswordResult(false, "新密码不能与旧密码相同");
+                break;
+            default:
+                Models.TriggerChangePasswordResult(false, "修改失败，请重试");
                 break;
         }
     }

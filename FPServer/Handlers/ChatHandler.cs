@@ -32,6 +32,8 @@ namespace FPServer.Handlers
 
         public void Handle(ClientConnection client, int subCode, object value)
         {
+            _logger.LogInformation("ChatHandler收到请求: UserId={UserId}, SubCode={SubCode}", client.UserId, subCode);
+
             if (client.UserId <= 0)
             {
                 _logger.LogWarning("未登录用户尝试聊天操作");
@@ -44,7 +46,12 @@ namespace FPServer.Handlers
                     HandleSendChat(client, value as ChatDto);
                     break;
                 case ChatCode.GET_HISTORY_CREQ:
+                    _logger.LogInformation("处理获取历史消息请求");
                     HandleGetHistory(client, value as HistoryRequestDto);
+                    break;
+                case ChatCode.GET_PRIVATE_USERS_CREQ:
+                    _logger.LogInformation("处理获取私聊历史用户请求");
+                    HandleGetPrivateUsers(client);
                     break;
                 default:
                     _logger.LogWarning("未知聊天操作码: {SubCode}", subCode);
@@ -74,10 +81,10 @@ namespace FPServer.Handlers
                 return;
             }
 
-            // 填充消息信息
+            // 填充消息信息 - 使用本地时区时间戳
             chatDto.UserId = client.UserId;
             chatDto.UserName = userDto.Name;
-            chatDto.Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            chatDto.Timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds();
 
             _logger.LogDebug("用户 {UserId} 发送聊天消息: {Text}", client.UserId, chatDto.Text);
 
@@ -144,14 +151,44 @@ namespace FPServer.Handlers
 
             try
             {
-                var messages = await GetHistoryMessagesAsync(client.UserId, requestDto);
+                List<ChatDto> messages;
+
+                // 如果 beforeTimestamp = 0 且是全服消息，返回今日消息
+                if (requestDto.BeforeTimestamp == 0 && requestDto.ChatType == ChatTypes.WORLD)
+                {
+                    messages = await GetTodayMessages(client.UserId);
+                    _logger.LogDebug("用户 {UserId} 获取今日消息: {Count}条", client.UserId, messages.Count);
+                }
+                else
+                {
+                    messages = await GetHistoryMessagesAsync(client.UserId, requestDto);
+                    _logger.LogDebug("用户 {UserId} 获取历史消息: {Count}条", client.UserId, messages.Count);
+                }
+
                 var responseMsg = new SocketMsg(OpCode.CHAT, ChatCode.GET_HISTORY_SRES, messages);
                 _messageHandler.Send(client, responseMsg);
-                _logger.LogDebug("用户 {UserId} 获取历史消息: {Count}条", client.UserId, messages.Count);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "获取历史消息失败");
+            }
+        }
+
+        /// <summary>
+        /// 处理获取私聊历史用户列表请求
+        /// </summary>
+        private async void HandleGetPrivateUsers(ClientConnection client)
+        {
+            try
+            {
+                var privateUsers = await GetPrivateHistoryUsersAsync(client.UserId);
+                var responseMsg = new SocketMsg(OpCode.CHAT, ChatCode.GET_PRIVATE_USERS_SRES, privateUsers);
+                _messageHandler.Send(client, responseMsg);
+                _logger.LogDebug("用户 {UserId} 获取私聊历史用户列表: {Count}人", client.UserId, privateUsers.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "获取私聊历史用户列表失败");
             }
         }
 
@@ -185,7 +222,8 @@ namespace FPServer.Handlers
         private async Task<List<ChatDto>> GetHistoryMessagesAsync(int userId, HistoryRequestDto requestDto)
         {
             var messages = new List<ChatDto>();
-            var cutoffTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - MESSAGE_RETENTION_MS;
+            // 使用本地时区的截止时间
+            var cutoffTime = DateTimeOffset.Now.ToUnixTimeMilliseconds() - MESSAGE_RETENTION_MS;
 
             try
             {
@@ -197,21 +235,21 @@ namespace FPServer.Handlers
                     // 私聊历史：获取与目标用户的所有私聊消息
                     sql = @"SELECT user_id, user_name, target_user_id, text, timestamp
                             FROM chat_messages
-                            WHERE chat_type = @chatType
-                            AND ((user_id = @userId AND target_user_id = @targetUserId)
-                                 OR (user_id = @targetUserId AND target_user_id = @userId))
-                            AND timestamp > @cutoffTime
-                            AND timestamp < @beforeTimestamp
+                            WHERE chat_type = ?chatType
+                            AND ((user_id = ?userId AND target_user_id = ?targetUserId)
+                                 OR (user_id = ?targetUserId AND target_user_id = ?userId))
+                            AND timestamp > ?cutoffTime
+                            AND timestamp < ?beforeTimestamp
                             ORDER BY timestamp DESC
-                            LIMIT @limit";
+                            LIMIT ?limit";
                     parameters = new MySqlParameter[]
                     {
-                        new MySqlParameter("@chatType", ChatTypes.PRIVATE),
-                        new MySqlParameter("@userId", userId),
-                        new MySqlParameter("@targetUserId", requestDto.TargetUserId),
-                        new MySqlParameter("@cutoffTime", cutoffTime),
-                        new MySqlParameter("@beforeTimestamp", requestDto.BeforeTimestamp > 0 ? requestDto.BeforeTimestamp : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()),
-                        new MySqlParameter("@limit", requestDto.Limit > 0 ? requestDto.Limit : 20)
+                        new MySqlParameter("?chatType", MySqlDbType.Int32) { Value = ChatTypes.PRIVATE },
+                        new MySqlParameter("?userId", MySqlDbType.Int32) { Value = userId },
+                        new MySqlParameter("?targetUserId", MySqlDbType.Int32) { Value = requestDto.TargetUserId },
+                        new MySqlParameter("?cutoffTime", MySqlDbType.Int64) { Value = cutoffTime },
+                        new MySqlParameter("?beforeTimestamp", MySqlDbType.Int64) { Value = requestDto.BeforeTimestamp > 0 ? requestDto.BeforeTimestamp : DateTimeOffset.Now.ToUnixTimeMilliseconds() },
+                        new MySqlParameter("?limit", MySqlDbType.Int32) { Value = requestDto.Limit > 0 ? requestDto.Limit : 20 }
                     };
                 }
                 else
@@ -219,17 +257,17 @@ namespace FPServer.Handlers
                     // 全服历史
                     sql = @"SELECT user_id, user_name, target_user_id, text, timestamp
                             FROM chat_messages
-                            WHERE chat_type = @chatType
-                            AND timestamp > @cutoffTime
-                            AND timestamp < @beforeTimestamp
+                            WHERE chat_type = ?chatType
+                            AND timestamp > ?cutoffTime
+                            AND timestamp < ?beforeTimestamp
                             ORDER BY timestamp DESC
-                            LIMIT @limit";
+                            LIMIT ?limit";
                     parameters = new MySqlParameter[]
                     {
-                        new MySqlParameter("@chatType", ChatTypes.WORLD),
-                        new MySqlParameter("@cutoffTime", cutoffTime),
-                        new MySqlParameter("@beforeTimestamp", requestDto.BeforeTimestamp > 0 ? requestDto.BeforeTimestamp : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()),
-                        new MySqlParameter("@limit", requestDto.Limit > 0 ? requestDto.Limit : 20)
+                        new MySqlParameter("?chatType", MySqlDbType.Int32) { Value = ChatTypes.WORLD },
+                        new MySqlParameter("?cutoffTime", MySqlDbType.Int64) { Value = cutoffTime },
+                        new MySqlParameter("?beforeTimestamp", MySqlDbType.Int64) { Value = requestDto.BeforeTimestamp > 0 ? requestDto.BeforeTimestamp : DateTimeOffset.Now.ToUnixTimeMilliseconds() },
+                        new MySqlParameter("?limit", MySqlDbType.Int32) { Value = requestDto.Limit > 0 ? requestDto.Limit : 20 }
                     };
                 }
 
@@ -264,23 +302,31 @@ namespace FPServer.Handlers
         public async Task<List<ChatDto>> GetTodayMessages(int userId)
         {
             var messages = new List<ChatDto>();
-            var todayStart = DateTimeOffset.UtcNow.Date;
-            var todayStartMs = new DateTimeOffset(todayStart).ToUnixTimeMilliseconds();
+            // 使用本地时区的今日零点时间戳
+            var now = DateTimeOffset.Now;
+            var todayStart = new DateTimeOffset(now.Date, now.Offset);
+            var todayStartMs = todayStart.ToUnixTimeMilliseconds();
+
+            _logger.LogInformation("获取今日消息: 本地今日零点时间戳={TodayStartMs}, 当前本地时间戳={NowMs}, 当前时间={Now}",
+                todayStartMs, now.ToUnixTimeMilliseconds(), now.ToString("yyyy-MM-dd HH:mm:ss"));
 
             try
             {
-                // 获取今日全服消息
-                var sql = @"SELECT user_id, user_name, target_user_id, text, timestamp, chat_type
+                // 获取今日全服消息 - 明确指定参数类型
+                var sql = @"SELECT id, chat_type, user_id, user_name, target_user_id, text, timestamp
                             FROM chat_messages
-                            WHERE chat_type = @chatType
-                            AND timestamp >= @todayStart
+                            WHERE chat_type = ?chatType
+                            AND timestamp >= ?todayStart
                             ORDER BY timestamp ASC
                             LIMIT 100";
                 var parameters = new MySqlParameter[]
                 {
-                    new MySqlParameter("@chatType", ChatTypes.WORLD),
-                    new MySqlParameter("@todayStart", todayStartMs)
+                    new MySqlParameter("?chatType", MySqlDbType.Int32) { Value = ChatTypes.WORLD },
+                    new MySqlParameter("?todayStart", MySqlDbType.Int64) { Value = todayStartMs }
                 };
+
+                _logger.LogInformation("执行SQL: {Sql}, chatType={ChatType}, todayStart={TodayStart}",
+                    sql, ChatTypes.WORLD, todayStartMs);
 
                 using var reader = await DbHelper.Instance.ExecuteReaderAsync(sql, parameters);
                 while (await reader.ReadAsync())
@@ -295,21 +341,24 @@ namespace FPServer.Handlers
                         Timestamp = reader.GetInt64("timestamp")
                     };
                     messages.Add(chatDto);
+                    _logger.LogInformation("读取到消息: id={Id}, timestamp={Timestamp}, text={Text}",
+                        reader.GetInt32("id"), chatDto.Timestamp, chatDto.Text);
                 }
+                _logger.LogInformation("获取到全服今日消息 {Count} 条", messages.Count);
 
                 // 获取今日与该用户相关的私聊消息
-                sql = @"SELECT user_id, user_name, target_user_id, text, timestamp, chat_type
+                sql = @"SELECT id, chat_type, user_id, user_name, target_user_id, text, timestamp
                         FROM chat_messages
-                        WHERE chat_type = @chatType
-                        AND (user_id = @userId OR target_user_id = @userId)
-                        AND timestamp >= @todayStart
+                        WHERE chat_type = ?chatType
+                        AND (user_id = ?userId OR target_user_id = ?userId)
+                        AND timestamp >= ?todayStart
                         ORDER BY timestamp ASC
                         LIMIT 50";
                 parameters = new MySqlParameter[]
                 {
-                    new MySqlParameter("@chatType", ChatTypes.PRIVATE),
-                    new MySqlParameter("@userId", userId),
-                    new MySqlParameter("@todayStart", todayStartMs)
+                    new MySqlParameter("?chatType", MySqlDbType.Int32) { Value = ChatTypes.PRIVATE },
+                    new MySqlParameter("?userId", MySqlDbType.Int32) { Value = userId },
+                    new MySqlParameter("?todayStart", MySqlDbType.Int64) { Value = todayStartMs }
                 };
 
                 using var reader2 = await DbHelper.Instance.ExecuteReaderAsync(sql, parameters);
@@ -329,6 +378,7 @@ namespace FPServer.Handlers
 
                 // 按时间排序
                 messages.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
+                _logger.LogInformation("获取今日消息总数: {Count}条", messages.Count);
             }
             catch (Exception ex)
             {
@@ -336,6 +386,85 @@ namespace FPServer.Handlers
             }
 
             return messages;
+        }
+
+        /// <summary>
+        /// 获取私聊历史用户列表（与当前用户有过私聊的用户）
+        /// </summary>
+        private async Task<List<UserDto>> GetPrivateHistoryUsersAsync(int userId)
+        {
+            var users = new List<UserDto>();
+            var userIdSet = new HashSet<int>();
+            var cutoffTime = DateTimeOffset.Now.ToUnixTimeMilliseconds() - MESSAGE_RETENTION_MS;
+
+            try
+            {
+                // 查询与当前用户有过私聊的所有用户ID
+                var sql = @"SELECT DISTINCT
+                            CASE
+                                WHEN user_id = ?userId THEN target_user_id
+                                ELSE user_id
+                            END AS other_user_id
+                            FROM chat_messages
+                            WHERE chat_type = ?chatType
+                            AND (user_id = ?userId OR target_user_id = ?userId)
+                            AND timestamp > ?cutoffTime
+                            AND target_user_id > 0";
+
+                var parameters = new MySqlParameter[]
+                {
+                    new MySqlParameter("?chatType", MySqlDbType.Int32) { Value = ChatTypes.PRIVATE },
+                    new MySqlParameter("?userId", MySqlDbType.Int32) { Value = userId },
+                    new MySqlParameter("?cutoffTime", MySqlDbType.Int64) { Value = cutoffTime }
+                };
+
+                using var reader = await DbHelper.Instance.ExecuteReaderAsync(sql, parameters);
+                while (await reader.ReadAsync())
+                {
+                    var otherUserId = reader.GetInt32("other_user_id");
+                    if (otherUserId > 0 && otherUserId != userId)
+                    {
+                        userIdSet.Add(otherUserId);
+                    }
+                }
+
+                // 获取这些用户的详细信息
+                foreach (var otherUserId in userIdSet)
+                {
+                    var userDto = _userCache.GetUserData(otherUserId);
+                    if (userDto != null)
+                    {
+                        // 在线用户，使用缓存数据
+                        users.Add(userDto);
+                    }
+                    else
+                    {
+                        // 离线用户，从数据库获取
+                        var userSql = "SELECT id, nickname, beans, win_count, lose_count, run_count, level, exp FROM users WHERE id = ?uid";
+                        var userParams = new MySqlParameter[] { new MySqlParameter("?uid", MySqlDbType.Int32) { Value = otherUserId } };
+                        using var userReader = await DbHelper.Instance.ExecuteReaderAsync(userSql, userParams);
+                        if (await userReader.ReadAsync())
+                        {
+                            users.Add(new UserDto(
+                                userReader.GetInt32("id"),
+                                userReader.GetString("nickname"),
+                                userReader.GetInt32("beans"),
+                                userReader.GetInt32("win_count"),
+                                userReader.GetInt32("lose_count"),
+                                userReader.GetInt32("run_count"),
+                                userReader.GetInt32("level"),
+                                userReader.GetInt32("exp")
+                            ));
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "获取私聊历史用户列表失败");
+            }
+
+            return users;
         }
     }
 }

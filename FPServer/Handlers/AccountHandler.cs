@@ -42,6 +42,9 @@ namespace FPServer.Handlers
                 case AccountCode.LOGOUT_CREQ:
                     HandleLogout(client);
                     break;
+                case AccountCode.CHANGE_PASSWORD_CREQ:
+                    HandleChangePassword(client, value as ChangePasswordDto);
+                    break;
                 default:
                     _logger.LogWarning("未知账号操作码: {SubCode}", subCode);
                     break;
@@ -259,6 +262,78 @@ namespace FPServer.Handlers
 
             // 发送登出成功响应
             var msg = new SocketMsg(OpCode.ACCOUNT, AccountCode.LOGOUT_SRES, 0);
+            _messageHandler.Send(client, msg);
+        }
+
+        /// <summary>
+        /// 处理修改密码请求
+        /// </summary>
+        private async void HandleChangePassword(ClientConnection client, ChangePasswordDto dto)
+        {
+            if (dto == null || string.IsNullOrEmpty(dto.Account) ||
+                string.IsNullOrEmpty(dto.OldPassword) || string.IsNullOrEmpty(dto.NewPassword))
+            {
+                SendChangePasswordResponse(client, -3); // 输入不合法
+                return;
+            }
+
+            string username = dto.Account.Trim();
+            string oldPassword = dto.OldPassword;
+            string newPassword = dto.NewPassword;
+
+            try
+            {
+                // 查询用户
+                using var reader = await DbHelper.Instance.ExecuteReaderAsync(
+                    "SELECT id, password_hash FROM users WHERE username = @username",
+                    new MySqlParameter("@username", username));
+
+                if (!await reader.ReadAsync())
+                {
+                    SendChangePasswordResponse(client, -1); // 用户不存在
+                    return;
+                }
+
+                int userId = reader.GetInt32("id");
+                string storedHash = reader.GetString("password_hash");
+                reader.Close();
+
+                // 验证旧密码
+                if (!BCrypt.Net.BCrypt.Verify(oldPassword, storedHash))
+                {
+                    SendChangePasswordResponse(client, -2); // 旧密码错误
+                    return;
+                }
+
+                // 新密码不能与旧密码相同
+                if (BCrypt.Net.BCrypt.Verify(newPassword, storedHash))
+                {
+                    SendChangePasswordResponse(client, -4); // 新密码不能与旧密码相同
+                    return;
+                }
+
+                // 使用BCrypt加密新密码
+                string newHashedPassword = BCrypt.Net.BCrypt.HashPassword(newPassword, 12);
+
+                // 更新密码
+                await DbHelper.Instance.ExecuteNonQueryAsync(
+                    "UPDATE users SET password_hash = @password WHERE id = @id",
+                    new MySqlParameter("@password", newHashedPassword),
+                    new MySqlParameter("@id", userId));
+
+                _logger.LogInformation("用户修改密码成功: {Username}", username);
+                SendChangePasswordResponse(client, 0); // 修改成功
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "修改密码失败: {Username}", username);
+                SendChangePasswordResponse(client, -3); // 服务器错误
+            }
+        }
+
+        private void SendChangePasswordResponse(ClientConnection client, int result)
+        {
+            var msg = new SocketMsg(OpCode.ACCOUNT, AccountCode.CHANGE_PASSWORD_SRES, result);
             _messageHandler.Send(client, msg);
         }
     }

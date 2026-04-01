@@ -9,6 +9,13 @@ using System.Collections.Generic;
 public delegate void RegisterResultCallback(bool success);
 
 /// <summary>
+/// 修改密码结果回调
+/// </summary>
+/// <param name="success">是否成功</param>
+/// <param name="message">消息</param>
+public delegate void ChangePasswordResultCallback(bool success, string message);
+
+/// <summary>
 /// 头像上传结果回调
 /// </summary>
 /// <param name="success">是否成功</param>
@@ -117,6 +124,12 @@ public delegate void ChatHistoryCallback(List<ChatDto> messages, bool isAppend);
 /// <param name="users">在线用户列表</param>
 public delegate void OnlineUsersCallback(List<UserDto> users);
 
+/// <summary>
+/// 私聊历史用户列表回调（包含在线状态）
+/// </summary>
+/// <param name="users">私聊历史用户列表</param>
+public delegate void PrivateUsersCallback(List<UserDto> users);
+
 static public class Models
 {
     /// <summary>
@@ -128,6 +141,11 @@ static public class Models
     /// 注册结果回调
     /// </summary>
     public static event RegisterResultCallback OnRegisterResult;
+
+    /// <summary>
+    /// 修改密码结果回调
+    /// </summary>
+    public static event ChangePasswordResultCallback OnChangePasswordResult;
 
     /// <summary>
     /// 头像上传结果回调
@@ -219,6 +237,11 @@ static public class Models
     /// </summary>
     public static event OnlineUsersCallback OnOnlineUsers;
 
+    /// <summary>
+    /// 私聊历史用户列表回调
+    /// </summary>
+    public static event PrivateUsersCallback OnPrivateUsers;
+
     static Models()
     {
         GameModel = new GameModel();
@@ -230,6 +253,14 @@ static public class Models
     public static void TriggerRegisterResult(bool success)
     {
         OnRegisterResult?.Invoke(success);
+    }
+
+    /// <summary>
+    /// 触发修改密码结果事件
+    /// </summary>
+    public static void TriggerChangePasswordResult(bool success, string message)
+    {
+        OnChangePasswordResult?.Invoke(success, message);
     }
 
     /// <summary>
@@ -374,5 +405,13 @@ static public class Models
     public static void TriggerOnlineUsers(List<UserDto> users)
     {
         OnOnlineUsers?.Invoke(users);
+    }
+
+    /// <summary>
+    /// 触发私聊历史用户列表事件
+    /// </summary>
+    public static void TriggerPrivateUsers(List<UserDto> users)
+    {
+        OnPrivateUsers?.Invoke(users);
     }
 }

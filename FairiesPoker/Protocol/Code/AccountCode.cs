@@ -18,5 +18,9 @@ namespace Protocol.Code
         //登出的操作码
         public const int LOGOUT_CREQ = 3;//client request 登出请求
         public const int LOGOUT_SRES = 4;//server response 登出响应
+
+        //修改密码的操作码
+        public const int CHANGE_PASSWORD_CREQ = 5;//client request 修改密码请求
+        public const int CHANGE_PASSWORD_SRES = 6;//server response 修改密码响应
     }
 }

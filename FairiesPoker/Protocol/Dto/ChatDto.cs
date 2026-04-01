@@ -50,7 +50,8 @@ namespace Protocol.Dto
             this.Text = text;
             this.ChatType = chatType;
             this.TargetUserId = targetUserId;
-            this.Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            // 使用本地时区时间戳
+            this.Timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds();
         }
     }
 

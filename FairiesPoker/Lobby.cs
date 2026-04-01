@@ -30,6 +30,7 @@ namespace FairiesPoker
         private int privateChatTargetUserId = 0;
         private string privateChatTargetUserName = "";
         private List<UserDto> onlineUsersList = new List<UserDto>();
+        private List<UserDto> privateHistoryUsersList = new List<UserDto>();
 
         // 历史消息相关
         private long worldEarliestTimestamp = 0;
@@ -65,6 +66,7 @@ namespace FairiesPoker
             Models.OnChatMessage += OnChatMessageReceived;
             Models.OnChatHistory += OnChatHistoryReceived;
             Models.OnOnlineUsers += OnOnlineUsersReceived;
+            Models.OnPrivateUsers += OnPrivateUsersReceived;
             Models.OnRoomUpdate += OnRoomUpdateReceived;
             Models.OnRoomListUpdate += OnRoomListUpdateReceived;
             Models.OnMatchUpdate += OnMatchUpdateReceived;
@@ -104,6 +106,9 @@ namespace FairiesPoker
 
             // 请求房间列表
             RequestRoomList();
+
+            // 请求今日聊天消息（解决登录时推送消息可能丢失的时序问题）
+            RequestTodayMessages();
 
             // 开始网络更新
             timerNetwork.Start();
@@ -481,6 +486,19 @@ namespace FairiesPoker
             netManager.Execute(0, msg);
         }
 
+        /// <summary>
+        /// 请求今日聊天消息
+        /// </summary>
+        private void RequestTodayMessages()
+        {
+            if (!netManager.IsConnected) return;
+
+            // 请求今日全服消息（使用0作为beforeTimestamp表示获取最新消息）
+            var requestDto = new HistoryRequestDto(ChatTypes.WORLD, 0, 0, 100);
+            var msg = new SocketMsg(OpCode.CHAT, ChatCode.GET_HISTORY_CREQ, requestDto);
+            netManager.Execute(0, msg);
+        }
+
         private void btnSendChat_Click(object sender, EventArgs e)
         {
             SendChatMessage();
@@ -555,6 +573,39 @@ namespace FairiesPoker
                 case ChatTypes.PRIVATE:
                     // 只显示与当前私聊对象相关的消息
                     var myId = Models.GameModel.UserDto?.Id ?? 0;
+
+                    // 收到私聊消息时，自动设置私聊对象以便快速回复
+                    if (chatDto.UserId != myId && chatDto.UserId != privateChatTargetUserId)
+                    {
+                        // 收到新用户的私聊消息，自动切换到该用户
+                        privateChatTargetUserId = chatDto.UserId;
+                        privateChatTargetUserName = chatDto.UserName ?? $"玩家{chatDto.UserId}";
+                        // 更新私聊按钮显示
+                        btnChannelPrivate.Text = $"私聊({privateChatTargetUserName})";
+                        // 添加到私聊历史用户列表（如果不存在）
+                        if (!privateHistoryUsersList.Any(u => u.Id == chatDto.UserId))
+                        {
+                            privateHistoryUsersList.Add(new UserDto(chatDto.UserId, chatDto.UserName ?? $"玩家{chatDto.UserId}", 0, 0, 0, 0, 1, 0));
+                        }
+                    }
+                    else if (chatDto.TargetUserId != myId && chatDto.TargetUserId != privateChatTargetUserId && chatDto.TargetUserId > 0)
+                    {
+                        // 自己发送的消息，确保目标用户在历史列表中
+                        if (!privateHistoryUsersList.Any(u => u.Id == chatDto.TargetUserId))
+                        {
+                            // 从在线列表查找用户信息
+                            var targetUser = onlineUsersList.FirstOrDefault(u => u.Id == chatDto.TargetUserId);
+                            if (targetUser != null)
+                            {
+                                privateHistoryUsersList.Add(targetUser);
+                            }
+                            else
+                            {
+                                privateHistoryUsersList.Add(new UserDto(chatDto.TargetUserId, privateChatTargetUserName, 0, 0, 0, 0, 1, 0));
+                            }
+                        }
+                    }
+
                     if (chatDto.UserId == privateChatTargetUserId || chatDto.TargetUserId == privateChatTargetUserId ||
                         (privateChatTargetUserId == 0 && (chatDto.UserId == myId || chatDto.TargetUserId == myId)))
                     {
@@ -607,37 +658,37 @@ namespace FairiesPoker
 
             if (isAppend)
             {
-                // 追加到顶部（历史加载）
+                // 追加到顶部（历史加载）- 只处理当前频道的历史
                 PrependChatMessages(chatMessages);
             }
             else
             {
-                // 替换（今日消息推送）
-                switch (currentChatChannel)
+                // 今日消息推送 - 根据消息的ChatType分发到对应列表
+                foreach (var msg in chatMessages)
                 {
-                    case ChatTypes.WORLD:
-                        // 合并今日消息
-                        foreach (var msg in chatMessages)
-                        {
+                    switch (msg.ChatType)
+                    {
+                        case ChatTypes.WORLD:
                             if (!worldMessages.Any(m => m.Timestamp == msg.Timestamp && m.UserId == msg.UserId))
                             {
                                 worldMessages.Add(msg);
                             }
-                        }
-                        worldMessages.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
-                        break;
-                    case ChatTypes.PRIVATE:
-                        // 合并私聊消息
-                        foreach (var msg in chatMessages)
-                        {
+                            break;
+                        case ChatTypes.PRIVATE:
                             if (!privateMessages.Any(m => m.Timestamp == msg.Timestamp && m.UserId == msg.UserId))
                             {
                                 privateMessages.Add(msg);
                             }
-                        }
-                        privateMessages.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
-                        break;
+                            break;
+                    }
                 }
+                // 排序
+                worldMessages.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
+                privateMessages.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
+                // 限制消息数量
+                while (worldMessages.Count > 200) worldMessages.RemoveAt(0);
+                while (privateMessages.Count > 100) privateMessages.RemoveAt(0);
+                // 刷新显示
                 RefreshChatMessages();
             }
         }
@@ -654,11 +705,29 @@ namespace FairiesPoker
             }
 
             onlineUsersList = users;
+            // 同时请求私聊历史用户列表
+            var msg = new SocketMsg(OpCode.CHAT, ChatCode.GET_PRIVATE_USERS_CREQ, null);
+            netManager.Execute(0, msg);
+        }
+
+        /// <summary>
+        /// 收到私聊历史用户列表
+        /// </summary>
+        private void OnPrivateUsersReceived(List<UserDto> users)
+        {
+            if (this.InvokeRequired)
+            {
+                this.Invoke(new Action<List<UserDto>>(OnPrivateUsersReceived), users);
+                return;
+            }
+
+            privateHistoryUsersList = users;
+            // 收到两个列表后显示选择对话框
             ShowOnlineUsersDialog();
         }
 
         /// <summary>
-        /// 显示在线用户选择对话框
+        /// 显示在线用户选择对话框（合并在线用户和私聊历史用户）
         /// </summary>
         private void ShowOnlineUsersDialog()
         {
@@ -668,8 +737,8 @@ namespace FairiesPoker
                 return;
             }
 
-            // 请求在线用户列表
-            if (onlineUsersList.Count == 0)
+            // 请求在线用户列表和私聊历史用户列表
+            if (onlineUsersList.Count == 0 && privateHistoryUsersList.Count == 0)
             {
                 var msg = new SocketMsg(OpCode.USER, UserCode.GET_ONLINE_USERS_CREQ, null);
                 netManager.Execute(0, msg);
@@ -680,7 +749,7 @@ namespace FairiesPoker
             onlineUsersDialog = new Form
             {
                 Text = "选择私聊对象",
-                Size = new Size(300, 400),
+                Size = new Size(300, 450),
                 FormBorderStyle = FormBorderStyle.FixedDialog,
                 StartPosition = FormStartPosition.CenterParent,
                 MaximizeBox = false,
@@ -698,19 +767,39 @@ namespace FairiesPoker
             };
 
             var myId = Models.GameModel.UserDto?.Id ?? 0;
+            var combinedUsers = new List<UserDto>();
+            var addedUserIds = new HashSet<int>();
+
+            // 先添加在线用户（标记为在线）
             foreach (var user in onlineUsersList)
             {
-                if (user.Id != myId)
+                if (user.Id != myId && !addedUserIds.Contains(user.Id))
                 {
-                    lstUsers.Items.Add($"Lv.{user.Lv} {user.Name}");
-                    lstUsers.Tag = lstUsers.Tag ?? new List<UserDto>();
-                    (lstUsers.Tag as List<UserDto>).Add(user);
+                    combinedUsers.Add(user);
+                    addedUserIds.Add(user.Id);
+                    lstUsers.Items.Add($"[在线] Lv.{user.Lv} {user.Name}");
                 }
             }
 
+            // 再添加私聊历史用户（去重，标记是否在线）
+            foreach (var user in privateHistoryUsersList)
+            {
+                if (user.Id != myId && !addedUserIds.Contains(user.Id))
+                {
+                    combinedUsers.Add(user);
+                    addedUserIds.Add(user.Id);
+                    // 检查是否在线
+                    bool isOnline = onlineUsersList.Any(u => u.Id == user.Id);
+                    var statusTag = isOnline ? "[在线]" : "[离线]";
+                    lstUsers.Items.Add($"{statusTag} Lv.{user.Lv} {user.Name}");
+                }
+            }
+
+            lstUsers.Tag = combinedUsers;
+
             if (lstUsers.Items.Count == 0)
             {
-                lstUsers.Items.Add("暂无其他在线用户");
+                lstUsers.Items.Add("暂无其他用户");
             }
 
             lstUsers.DoubleClick += (s, e) =>
@@ -1208,6 +1297,7 @@ namespace FairiesPoker
                 Models.OnChatMessage -= OnChatMessageReceived;
                 Models.OnChatHistory -= OnChatHistoryReceived;
                 Models.OnOnlineUsers -= OnOnlineUsersReceived;
+                Models.OnPrivateUsers -= OnPrivateUsersReceived;
                 Models.OnRoomUpdate -= OnRoomUpdateReceived;
                 Models.OnRoomListUpdate -= OnRoomListUpdateReceived;
                 Models.OnMatchUpdate -= OnMatchUpdateReceived;
@@ -1291,6 +1381,7 @@ namespace FairiesPoker
             Models.OnChatMessage -= OnChatMessageReceived;
             Models.OnChatHistory -= OnChatHistoryReceived;
             Models.OnOnlineUsers -= OnOnlineUsersReceived;
+            Models.OnPrivateUsers -= OnPrivateUsersReceived;
             Models.OnRoomUpdate -= OnRoomUpdateReceived;
             Models.OnRoomListUpdate -= OnRoomListUpdateReceived;
             Models.OnMatchUpdate -= OnMatchUpdateReceived;

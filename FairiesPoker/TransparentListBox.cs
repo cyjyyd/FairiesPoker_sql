@@ -12,6 +12,7 @@ namespace FairiesPoker
     public class TransparentListBox : ListBox
     {
         private string _emptyText = "";
+        private Font _emojiFont;
 
         public TransparentListBox()
         {
@@ -24,6 +25,10 @@ namespace FairiesPoker
             this.ItemHeight = 25;
             this.BackColor = Color.Transparent;
             this.BorderStyle = BorderStyle.None;
+
+            // 使用支持emoji的字体
+            _emojiFont = new Font("Segoe UI Emoji", 9.75f, FontStyle.Regular);
+            this.Font = _emojiFont;
         }
 
         /// <summary>
@@ -87,15 +92,8 @@ namespace FairiesPoker
             // 如果内容为空，显示提示文字
             if (this.Items.Count == 0 && !string.IsNullOrEmpty(_emptyText))
             {
-                using (SolidBrush textBrush = new SolidBrush(Color.FromArgb(150, Color.Gray)))
-                {
-                    StringFormat sf = new StringFormat
-                    {
-                        Alignment = StringAlignment.Center,
-                        LineAlignment = StringAlignment.Center
-                    };
-                    e.Graphics.DrawString(_emptyText, this.Font, textBrush, this.ClientRectangle, sf);
-                }
+                TextRenderer.DrawText(e.Graphics, _emptyText, _emojiFont, this.ClientRectangle,
+                    Color.FromArgb(150, Color.Gray), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
                 return;
             }
 
@@ -121,16 +119,9 @@ namespace FairiesPoker
                     // 绘制项目文本
                     string text = this.GetItemText(this.Items[i]);
                     Color textColor = isSelected ? Color.White : Color.FromArgb(220, Color.White);
-                    using (SolidBrush textBrush = new SolidBrush(textColor))
-                    {
-                        StringFormat sf = new StringFormat
-                        {
-                            LineAlignment = StringAlignment.Center,
-                            FormatFlags = StringFormatFlags.NoWrap
-                        };
-                        Rectangle textRect = new Rectangle(itemRect.X + 5, itemRect.Y, itemRect.Width - 10, itemRect.Height);
-                        e.Graphics.DrawString(text, this.Font, textBrush, textRect, sf);
-                    }
+                    Rectangle textRect = new Rectangle(itemRect.X + 5, itemRect.Y, itemRect.Width - 10, itemRect.Height);
+                    TextRenderer.DrawText(e.Graphics, text, _emojiFont, textRect, textColor,
+                        TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
                 }
             }
 

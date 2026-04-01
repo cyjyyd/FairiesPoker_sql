@@ -40,5 +40,15 @@ namespace Protocol.Code
         /// 登录时推送今日消息
         /// </summary>
         public const int PUSH_TODAY_SRES = 5;
+
+        /// <summary>
+        /// 获取私聊历史用户列表请求
+        /// </summary>
+        public const int GET_PRIVATE_USERS_CREQ = 6;
+
+        /// <summary>
+        /// 获取私聊历史用户列表响应
+        /// </summary>
+        public const int GET_PRIVATE_USERS_SRES = 7;
     }
 }
