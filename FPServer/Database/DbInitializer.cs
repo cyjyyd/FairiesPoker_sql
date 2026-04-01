@@ -97,6 +97,25 @@ CREATE TABLE IF NOT EXISTS game_records (
                 await DbHelper.Instance.ExecuteNonQueryAsync(createGameRecordTable);
                 _logger.LogInformation("游戏记录表创建成功");
 
+                // 聊天消息表
+                var createChatMessageTable = @"
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    chat_type INT NOT NULL,
+    user_id INT NOT NULL,
+    user_name VARCHAR(50),
+    target_user_id INT DEFAULT 0,
+    text VARCHAR(500) NOT NULL,
+    timestamp BIGINT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_type_time (chat_type, timestamp),
+    INDEX idx_target (target_user_id),
+    INDEX idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+
+                await DbHelper.Instance.ExecuteNonQueryAsync(createChatMessageTable);
+                _logger.LogInformation("聊天消息表创建成功");
+
                 // 服务器启动时重置所有用户为离线状态
                 await DbHelper.Instance.ExecuteNonQueryAsync("UPDATE users SET is_online = 0");
                 _logger.LogInformation("已重置所有用户在线状态");

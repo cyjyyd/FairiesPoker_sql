@@ -105,5 +105,16 @@ namespace FPServer.Cache
                 return _userConnections.Count;
             }
         }
+
+        /// <summary>
+        /// 获取所有在线用户数据
+        /// </summary>
+        public List<Protocol.Dto.UserDto> GetAllOnlineUsers()
+        {
+            lock (_lock)
+            {
+                return _userDatas.Values.ToList();
+            }
+        }
     }
 }

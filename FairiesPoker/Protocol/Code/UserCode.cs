@@ -22,5 +22,9 @@ namespace Protocol.Code
         //角色上线
         public const int ONLINE_CREQ = 3;
         public const int ONLINE_SRES = 4;
+
+        //获取在线用户列表
+        public const int GET_ONLINE_USERS_CREQ = 5;
+        public const int GET_ONLINE_USERS_SRES = 6;
     }
 }

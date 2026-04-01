@@ -24,6 +24,9 @@ public class UserHandler : HandlerBase
             case UserCode.ONLINE_SRES:
                 onlineResponse(value as UserDto);
                 break;
+            case UserCode.GET_ONLINE_USERS_SRES:
+                getOnlineUsersResponse(value as List<UserDto>);
+                break;
             default:
                 break;
         }
@@ -122,6 +125,17 @@ public class UserHandler : HandlerBase
             //隐藏创建面板
             //获取角色信息
             socketMsg = new SocketMsg(OpCode.USER, UserCode.GET_INFO_CREQ, null);
+        }
+    }
+
+    /// <summary>
+    /// 获取在线用户列表响应
+    /// </summary>
+    private void getOnlineUsersResponse(List<UserDto> users)
+    {
+        if (users != null)
+        {
+            Models.TriggerOnlineUsers(users);
         }
     }
 }

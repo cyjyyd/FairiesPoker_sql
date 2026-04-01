@@ -35,5 +35,10 @@ namespace Protocol.Code
         /// 获取历史消息响应
         /// </summary>
         public const int GET_HISTORY_SRES = 4;
+
+        /// <summary>
+        /// 登录时推送今日消息
+        /// </summary>
+        public const int PUSH_TODAY_SRES = 5;
     }
 }

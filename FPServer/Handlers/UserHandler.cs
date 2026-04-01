@@ -34,6 +34,9 @@ namespace FPServer.Handlers
                 case UserCode.ONLINE_CREQ:
                     HandleOnline(client);
                     break;
+                case UserCode.GET_ONLINE_USERS_CREQ:
+                    HandleGetOnlineUsers(client);
+                    break;
                 default:
                     _logger.LogWarning("未知用户操作码: {SubCode}", subCode);
                     break;
@@ -95,6 +98,23 @@ namespace FPServer.Handlers
             {
                 _logger.LogError(ex, "获取用户信息失败: {UserId}", client.UserId);
             }
+        }
+
+        /// <summary>
+        /// 获取在线用户列表
+        /// </summary>
+        private void HandleGetOnlineUsers(ClientConnection client)
+        {
+            if (client.UserId <= 0)
+            {
+                _logger.LogWarning("未登录用户请求在线用户列表");
+                return;
+            }
+
+            var onlineUsers = _userCache.GetAllOnlineUsers();
+            var msg = new SocketMsg(OpCode.USER, UserCode.GET_ONLINE_USERS_SRES, onlineUsers);
+            _messageHandler.Send(client, msg);
+            _logger.LogDebug("用户 {UserId} 请求在线用户列表: {Count}人", client.UserId, onlineUsers.Count);
         }
     }
 }

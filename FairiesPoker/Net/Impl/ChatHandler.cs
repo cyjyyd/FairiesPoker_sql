@@ -32,10 +32,17 @@ public class ChatHandler : HandlerBase
                     var messages = value as List<ChatDto>;
                     if (messages != null)
                     {
-                        foreach (var msg in messages)
-                        {
-                            Models.TriggerChatMessage(msg);
-                        }
+                        Models.TriggerChatHistory(messages, true);
+                    }
+                    break;
+                }
+            case ChatCode.PUSH_TODAY_SRES:
+                {
+                    // 登录时推送今日消息
+                    var messages = value as List<ChatDto>;
+                    if (messages != null)
+                    {
+                        Models.TriggerChatHistory(messages, false);
                     }
                     break;
                 }

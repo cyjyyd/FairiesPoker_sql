@@ -178,6 +178,14 @@ namespace FPServer.Network
         }
 
         /// <summary>
+        /// 获取聊天处理器（用于AccountHandler推送今日消息）
+        /// </summary>
+        public ChatHandler GetChatHandler()
+        {
+            return _chatHandler;
+        }
+
+        /// <summary>
         /// 获取在线客户端
         /// </summary>
         public ClientConnection GetClient(int userId)

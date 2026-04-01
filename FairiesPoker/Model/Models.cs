@@ -104,6 +104,19 @@ public delegate void MultipleChangeCallback(int multiple);
 /// </summary>
 public delegate void GameStartCallback();
 
+/// <summary>
+/// 聊天历史消息回调
+/// </summary>
+/// <param name="messages">消息列表</param>
+/// <param name="isAppend">是否追加到顶部（历史加载）</param>
+public delegate void ChatHistoryCallback(List<ChatDto> messages, bool isAppend);
+
+/// <summary>
+/// 在线用户列表回调
+/// </summary>
+/// <param name="users">在线用户列表</param>
+public delegate void OnlineUsersCallback(List<UserDto> users);
+
 static public class Models
 {
     /// <summary>
@@ -195,6 +208,16 @@ static public class Models
     /// 游戏开始回调
     /// </summary>
     public static event GameStartCallback OnGameStart;
+
+    /// <summary>
+    /// 聊天历史消息回调
+    /// </summary>
+    public static event ChatHistoryCallback OnChatHistory;
+
+    /// <summary>
+    /// 在线用户列表回调
+    /// </summary>
+    public static event OnlineUsersCallback OnOnlineUsers;
 
     static Models()
     {
@@ -335,5 +358,21 @@ static public class Models
     public static void TriggerGameStart()
     {
         OnGameStart?.Invoke();
+    }
+
+    /// <summary>
+    /// 触发聊天历史消息事件
+    /// </summary>
+    public static void TriggerChatHistory(List<ChatDto> messages, bool isAppend)
+    {
+        OnChatHistory?.Invoke(messages, isAppend);
+    }
+
+    /// <summary>
+    /// 触发在线用户列表事件
+    /// </summary>
+    public static void TriggerOnlineUsers(List<UserDto> users)
+    {
+        OnOnlineUsers?.Invoke(users);
     }
 }

@@ -16,12 +16,14 @@ namespace FPServer.Handlers
         private readonly MessageHandler _messageHandler;
         private readonly ILogger<AccountHandler> _logger;
         private readonly OnlineUserCache _userCache;
+        private readonly Func<ChatHandler> _getChatHandler;
 
         public AccountHandler(MessageHandler messageHandler, ILoggerFactory loggerFactory, OnlineUserCache userCache)
         {
             _messageHandler = messageHandler;
             _logger = loggerFactory.CreateLogger<AccountHandler>();
             _userCache = userCache;
+            _getChatHandler = () => messageHandler.GetChatHandler();
         }
 
         /// <summary>
@@ -179,11 +181,36 @@ namespace FPServer.Handlers
                 // 发送用户上线消息（客户端收到此消息后跳转到Lobby）
                 var userMsg = new SocketMsg(OpCode.USER, UserCode.ONLINE_SRES, userDto);
                 _messageHandler.Send(client, userMsg);
+
+                // 推送今日聊天消息
+                _ = PushTodayMessagesAsync(client, userId);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "登录失败: {Username}", username);
                 SendLoginErrorResponse(client, -3);
+            }
+        }
+
+        /// <summary>
+        /// 推送今日聊天消息
+        /// </summary>
+        private async Task PushTodayMessagesAsync(ClientConnection client, int userId)
+        {
+            try
+            {
+                var chatHandler = _getChatHandler();
+                var todayMessages = await chatHandler.GetTodayMessages(userId);
+                if (todayMessages != null && todayMessages.Count > 0)
+                {
+                    var msg = new SocketMsg(OpCode.CHAT, ChatCode.PUSH_TODAY_SRES, todayMessages);
+                    _messageHandler.Send(client, msg);
+                    _logger.LogDebug("推送今日消息 {Count} 条给用户 {UserId}", todayMessages.Count, userId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "推送今日消息失败");
             }
         }
 

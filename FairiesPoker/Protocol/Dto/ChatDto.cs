@@ -63,4 +63,49 @@ namespace Protocol.Dto
         public const int ROOM = 1;    // 房间频道
         public const int PRIVATE = 2; // 私聊
     }
+
+    /// <summary>
+    /// 历史消息请求DTO
+    /// </summary>
+    [ProtoContract]
+    [Serializable]
+    public class HistoryRequestDto
+    {
+        /// <summary>
+        /// 聊天类型（0=全服, 2=私聊）
+        /// </summary>
+        [ProtoMember(1)]
+        public int ChatType;
+
+        /// <summary>
+        /// 私聊时目标用户ID
+        /// </summary>
+        [ProtoMember(2)]
+        public int TargetUserId;
+
+        /// <summary>
+        /// 加载此时间之前的消息（用于分页）
+        /// </summary>
+        [ProtoMember(3)]
+        public long BeforeTimestamp;
+
+        /// <summary>
+        /// 每次加载条数（默认20）
+        /// </summary>
+        [ProtoMember(4)]
+        public int Limit;
+
+        public HistoryRequestDto()
+        {
+            Limit = 20;
+        }
+
+        public HistoryRequestDto(int chatType, int targetUserId = 0, long beforeTimestamp = 0, int limit = 20)
+        {
+            ChatType = chatType;
+            TargetUserId = targetUserId;
+            BeforeTimestamp = beforeTimestamp;
+            Limit = limit;
+        }
+    }
 }
