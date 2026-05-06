@@ -126,11 +126,12 @@ public static class CardLayoutManager
     }
 
     /// <summary>
-    /// 计算单机模式发牌起始动画位置(从右侧飞出)
+    /// 计算单机模式发牌起始动画位置(窗口居中)
     /// </summary>
     public static Vector2 GetDealStartPos()
     {
-        return new Vector2(1110, 220);
+        // 窗口中心位置 (1280x720 窗口)，牌居中显示
+        return new Vector2(WindowCenterX - CardRenderer.CardWidth / 2, 360 - CardRenderer.CardHeight / 2);
     }
 
     /// <summary>

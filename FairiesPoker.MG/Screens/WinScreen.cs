@@ -23,6 +23,11 @@ public class WinScreen : ScreenBase
     private readonly string[] _playerNames = new string[3];
     private readonly bool[] _results = new bool[3]; // true=胜利, false=失败
 
+    /// <summary>
+    /// 关闭时的回调函数（用于通知GameScreen重置状态）
+    /// </summary>
+    private readonly Action? _onCloseCallback;
+
     private Point _mousePos;
     private bool _isDragging;
 
@@ -30,11 +35,12 @@ public class WinScreen : ScreenBase
     private float _scaleAnim;
     private float _fadeTimer;
 
-    public WinScreen(Game1 game, ScreenManager screenManager, bool[] results, string[] names)
+    public WinScreen(Game1 game, ScreenManager screenManager, bool[] results, string[] names, Action? onCloseCallback = null)
         : base(game, screenManager)
     {
         Array.Copy(results, _results, 3);
         Array.Copy(names, _playerNames, 3);
+        _onCloseCallback = onCloseCallback;
     }
 
     public override void Initialize()
@@ -81,7 +87,11 @@ public class WinScreen : ScreenBase
         _closeBtn.Size = new Vector2(120, 50);
         _closeBtn.Text = "返回";
         _closeBtn.TextColor = Color.White;
-        _closeBtn.OnClick = () => ScreenManager.Pop();
+        _closeBtn.OnClick = () =>
+        {
+            ScreenManager.Pop();
+            _onCloseCallback?.Invoke();  // 触发回调
+        };
     }
 
     private string GetThemeSuffix()
@@ -163,7 +173,10 @@ public class WinScreen : ScreenBase
         _closeBtn.Update(input);
 
         if (input.KeyPressed(Keys.Escape) || input.KeyPressed(Keys.Enter))
+        {
             ScreenManager.Pop();
+            _onCloseCallback?.Invoke();  // 触发回调
+        }
     }
 
     private static Texture2D? _whitePixel;

@@ -106,11 +106,16 @@ public class GameScreen : ScreenBase
     // num=3 → juese2(玩家) → num=1
     private int _turnNum;
 
-    // === 发牌动画 ===
+    // === 发牌动画（旧系统，保留兼容）===
     private float _dealAccumulator;
     private const float DealInterval = 80f; // ms per card
     private int _dealtCount;
     private int _totalDealCards = 54;
+
+    // === 新动画系统 ===
+    private AnimationManager _animManager = new();
+    private bool _showDealingCards;  // 是否显示正在飞行的发牌动画
+    private bool _showPlayingCards;  // 是否显示正在飞行的出牌动画
 
     // === AI出牌计时 ===
     private float _aiAccumulator;
@@ -150,6 +155,11 @@ public class GameScreen : ScreenBase
         _chupai = new Chupai();
         _jiepai = new Jiepai();
         _computerChuPai = new ComputerChuPai();
+
+        // 初始化动画管理器
+        _animManager = new AnimationManager();
+        _showDealingCards = false;
+        _showPlayingCards = false;
 
         _selection = new CardSelectionHandler(0);
         _handPositions = Array.Empty<Vector2>();
@@ -362,21 +372,76 @@ public class GameScreen : ScreenBase
         _bl_isFirst = false;
         _bl_isDiZhu = false;
 
+        // === 新增：初始化发牌动画 ===
+        InitDealAnimations();
+
         // 进入发牌阶段
         _state = GameState.DEALING;
         _dealtCount = 0;
         _dealAccumulator = 0;
-        _totalDealCards = 54;
 
         // 隐藏所有按钮，显示状态标签
         ButtonSet(false, false, false, false, false);
         _lblStatus.Visible = true;
         _lblStatus.Text = "发牌中...";
-        _lblLeftRemain.Visible = true;
-        _lblRightRemain.Visible = true;
+        _lblLeftRemain.Visible = false;  // 发牌时不显示剩余牌数
+        _lblRightRemain.Visible = false;
         _lblLeftStatus.Visible = false;
         _lblRightStatus.Visible = false;
         _lblMyStatus.Visible = false;
+    }
+
+    /// <summary>
+    /// 初始化发牌动画队列
+    /// </summary>
+    private void InitDealAnimations()
+    {
+        _animManager.Clear();
+        _showDealingCards = true;
+
+        // 发牌起始位置（右上角牌堆位置，对应原项目 (1110, 220)）
+        Vector2 dealStartPos = CardLayoutManager.GetDealStartPos();
+
+        // 计算各玩家手牌目标位置
+        var selfPositions = CardLayoutManager.CalculateHandPositions(_juese2.ShengYuPai.Count);
+        var leftPositions = CardLayoutManager.CalculateLeftPlayerBackPositions(_juese1.ShengYuPai.Count);
+        var rightPositions = CardLayoutManager.CalculateRightPlayerBackPositions(_juese3.ShengYuPai.Count);
+        var tablePositions = CardLayoutManager.CalculateTableCardPositions();
+
+        // 按发牌顺序队列化动画（51张牌 + 3张底牌）
+        int selfIdx = 0, leftIdx = 0, rightIdx = 0;
+        for (int i = 0; i < 51; i++)
+        {
+            int paiIdx = _pai[i].Index;
+            string huase = _pai[i].Huase;
+            int size = _pai[i].Size;
+
+            if (i % 3 == 0)
+            {
+                // 左玩家（juese1）- 牌背
+                var anim = CardAnimation.CreateDealAnimation(paiIdx, dealStartPos, leftPositions[leftIdx++], huase, size, true);
+                _animManager.QueueDealAnimation(anim);
+            }
+            else if ((i + 2) % 3 == 0)
+            {
+                // 自己（juese2）- 正面
+                var anim = CardAnimation.CreateDealAnimation(paiIdx, dealStartPos, selfPositions[selfIdx++], huase, size, false);
+                _animManager.QueueDealAnimation(anim);
+            }
+            else
+            {
+                // 右玩家（juese3）- 牌背
+                var anim = CardAnimation.CreateDealAnimation(paiIdx, dealStartPos, rightPositions[rightIdx++], huase, size, true);
+                _animManager.QueueDealAnimation(anim);
+            }
+        }
+
+        // 底牌动画（51-53）- 使用牌背（发牌阶段不显示正面）
+        for (int i = 51; i < 54; i++)
+        {
+            var anim = CardAnimation.CreateDealAnimation(_pai[i].Index, dealStartPos, tablePositions[i - 51], _pai[i].Huase, _pai[i].Size, true);
+            _animManager.QueueDealAnimation(anim);
+        }
     }
 
     /// <summary>
@@ -693,16 +758,22 @@ public class GameScreen : ScreenBase
 
     private void UpdateDealing(float dt)
     {
-        _dealAccumulator += dt;
-        while (_dealAccumulator >= DealInterval && _dealtCount < _totalDealCards)
-        {
-            _dealAccumulator -= DealInterval;
-            _dealtCount++;
-        }
+        // 更新动画管理器
+        _animManager.Update(dt);
 
-        if (_dealtCount >= _totalDealCards)
+        // 检查是否所有动画完成
+        if (!_animManager.IsAnimating)
         {
-            // 发牌完成，开始叫地主（对应原fapai中的叫地主逻辑）
+            _showDealingCards = false;
+            _dealtCount = _totalDealCards;
+
+            // 发牌完成，显示剩余牌数标签
+            _lblLeftRemain.Visible = true;
+            _lblRightRemain.Visible = true;
+            _lblLeftRemain.Text = $"剩余牌：{_juese1.ShengYuPai.Count}";
+            _lblRightRemain.Text = $"剩余牌：{_juese3.ShengYuPai.Count}";
+
+            // 开始叫地主（对应原fapai中的叫地主逻辑）
             StartGrabbingPhase();
         }
     }
@@ -1018,6 +1089,19 @@ public class GameScreen : ScreenBase
 
     private void DrawOffline(SpriteBatch spriteBatch)
     {
+        // === 发牌动画时的特殊渲染 ===
+        if (_showDealingCards)
+        {
+            DrawDealingScene(spriteBatch);
+            return; // 发牌动画时使用专门的渲染方法
+        }
+
+        // === 出牌动画中的飞行牌 ===
+        if (_showPlayingCards)
+        {
+            DrawPlayingCards(spriteBatch);
+        }
+
         // 底牌
         var tablePositions = CardLayoutManager.CalculateTableCardPositions();
         for (int i = 0; i < 3 && i < _tableCards.Count; i++)
@@ -1085,6 +1169,147 @@ public class GameScreen : ScreenBase
 
         // 玩家名
         DrawPlayerNames(spriteBatch);
+    }
+
+    /// <summary>
+    /// 渲染发牌期间的完整场景（牌堆 + 已落地牌 + 飞行中牌）
+    /// </summary>
+    private void DrawDealingScene(SpriteBatch spriteBatch)
+    {
+        Vector2 dealStartPos = CardLayoutManager.GetDealStartPos(); // (1110, 220)
+
+        // 计算已发出和未发出的牌数
+        int totalCards = 54;
+        int activeAnimCount = _animManager.ActiveCount;
+        int pendingAnimCount = _animManager.PendingCount;
+        int completedCards = totalCards - activeAnimCount - pendingAnimCount;
+
+        // === 1. 渲染牌堆（剩余未发出的牌背）===
+        int remainingInDeck = pendingAnimCount;
+        if (remainingInDeck > 0 && _cardBackTexture != null)
+        {
+            // 牌堆显示为堆叠的牌背（最多显示5张作为视觉效果）
+            int deckShowCount = Math.Min(remainingInDeck, 5);
+            for (int i = 0; i < deckShowCount; i++)
+            {
+                spriteBatch.Draw(_cardBackTexture,
+                    new Rectangle((int)dealStartPos.X - i * 2, (int)dealStartPos.Y - i * 3, CardRenderer.CardWidth, CardRenderer.CardHeight),
+                    Color.White);
+            }
+        }
+
+        // === 2. 计算各玩家已收到的牌数（基于动画完成情况）===
+        int leftReceived = 0, selfReceived = 0, rightReceived = 0, tableReceived = 0;
+        int selfTotal = 17, leftTotal = 17, rightTotal = 17, tableTotal = 3;
+
+        // 计算已发出的牌数量分配
+        // 发牌顺序：i % 3 == 0 → 左, (i+2) % 3 == 0 → 自己, else → 右, 51-53 → 底牌
+        for (int i = 0; i < completedCards && i < 51; i++)
+        {
+            if (i % 3 == 0) leftReceived++;
+            else if ((i + 2) % 3 == 0) selfReceived++;
+            else rightReceived++;
+        }
+        if (completedCards > 51)
+        {
+            tableReceived = completedCards - 51;
+        }
+
+        // === 3. 渲染已"落地"的左玩家牌背 ===
+        if (leftReceived > 0 && _cardBackTexture != null)
+        {
+            var leftPositions = CardLayoutManager.CalculateLeftPlayerBackPositions(leftTotal);
+            for (int i = 0; i < leftReceived && i < leftPositions.Length; i++)
+            {
+                spriteBatch.Draw(_cardBackTexture,
+                    new Rectangle((int)leftPositions[i].X, (int)leftPositions[i].Y, CardRenderer.CardWidth, CardRenderer.CardHeight),
+                    Color.White);
+            }
+        }
+
+        // === 4. 渲染已"落地"的右玩家牌背 ===
+        if (rightReceived > 0 && _cardBackTexture != null)
+        {
+            var rightPositions = CardLayoutManager.CalculateRightPlayerBackPositions(rightTotal);
+            for (int i = 0; i < rightReceived && i < rightPositions.Length; i++)
+            {
+                spriteBatch.Draw(_cardBackTexture,
+                    new Rectangle((int)rightPositions[i].X, (int)rightPositions[i].Y, CardRenderer.CardWidth, CardRenderer.CardHeight),
+                    Color.White);
+            }
+        }
+
+        // === 5. 渲染已"落地"的自己手牌（正面）===
+        if (selfReceived > 0)
+        {
+            var selfPositions = CardLayoutManager.CalculateHandPositions(selfTotal);
+            // 按排序后的顺序显示已发出的牌（ImagePaiSub已排序）
+            for (int i = 0; i < selfReceived && i < _juese2.ImagePaiSub.Count; i++)
+            {
+                int index = (int)_juese2.ImagePaiSub[i];
+                string huase = _pai[index].Huase;
+                int size = _pai[index].Size;
+                CardRenderer.DrawCard(spriteBatch, selfPositions[i], huase, size);
+            }
+        }
+
+        // === 6. 渲染已"落地"的底牌（牌背，发牌阶段不显示正面）===
+        if (tableReceived > 0 && _cardBackTexture != null)
+        {
+            var tablePositions = CardLayoutManager.CalculateTableCardPositions();
+            for (int i = 0; i < tableReceived && i < 3; i++)
+            {
+                spriteBatch.Draw(_cardBackTexture,
+                    new Rectangle((int)tablePositions[i].X, (int)tablePositions[i].Y, CardRenderer.CardWidth, CardRenderer.CardHeight),
+                    Color.White);
+            }
+        }
+
+        // === 7. 渲染飞行中的牌 ===
+        DrawDealingCards(spriteBatch);
+
+        // === 8. 渲染玩家名 ===
+        DrawPlayerNames(spriteBatch);
+    }
+
+    /// <summary>
+    /// 渲染正在飞行中的发牌动画
+    /// </summary>
+    private void DrawDealingCards(SpriteBatch spriteBatch)
+    {
+        var animations = _animManager.GetActiveAnimations();
+        foreach (var anim in animations)
+        {
+            if (anim.IsComplete) continue;
+
+            if (anim.IsBack && _cardBackTexture != null)
+            {
+                // 牌背 - 使用 GameScreen 的牌背纹理
+                spriteBatch.Draw(_cardBackTexture,
+                    new Rectangle((int)anim.CurrentPosition.X, (int)anim.CurrentPosition.Y, CardRenderer.CardWidth, CardRenderer.CardHeight),
+                    Color.White);
+            }
+            else if (!anim.IsBack)
+            {
+                // 正面（玩家的牌）
+                CardRenderer.DrawCard(spriteBatch, anim.CurrentPosition, anim.Huase, anim.Size);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 渲染正在飞行中的出牌动画
+    /// </summary>
+    private void DrawPlayingCards(SpriteBatch spriteBatch)
+    {
+        var animations = _animManager.GetActiveAnimations();
+        foreach (var anim in animations)
+        {
+            if (anim.IsComplete) continue;
+
+            // 出牌动画都是正面显示
+            CardRenderer.DrawCard(spriteBatch, anim.CurrentPosition, anim.Huase, anim.Size);
+        }
     }
 
     private void DrawHand(SpriteBatch spriteBatch)
@@ -1955,7 +2180,92 @@ public class GameScreen : ScreenBase
         }
 
         _lblStatus.Text = results[1] ? "胜利!" : "失败!";
-        ScreenManager.Push(new WinScreen(Game, ScreenManager, results, names));
+        // 传入回调，WinScreen关闭后调用
+        ScreenManager.Push(new WinScreen(Game, ScreenManager, results, names, OnWinScreenClosed));
+    }
+
+    /// <summary>
+    /// WinScreen关闭后的回调（对应原chongZhi函数）
+    /// </summary>
+    private void OnWinScreenClosed()
+    {
+        ResetForNewGame();
+    }
+
+    /// <summary>
+    /// 重置游戏状态到等待状态（对应原chongZhi函数）
+    /// </summary>
+    private void ResetForNewGame()
+    {
+        _state = GameState.WAITING;
+
+        // 清空显示列表
+        _myPlayedCards.Clear();
+        _leftPlayedCards.Clear();
+        _rightPlayedCards.Clear();
+        _tableCards.Clear();
+        _tableCardsRevealed = false;
+
+        // 清空动画
+        _animManager.Clear();
+        _showDealingCards = false;
+        _showPlayingCards = false;
+
+        // 重置状态变量
+        _bl_isFirst = false;
+        _bl_isDiZhu = false;
+        _buChuPai = 0;
+        _chuPaiWeiZhi = 0;
+        _tishi = 0;
+        _noDiZhu = false;
+        _bl_chuPaiOver = false;
+        _dealtCount = 0;
+        _dealAccumulator = 0;
+        _aiAccumulator = 0;
+
+        // 重置角色数据
+        if (_juese1 != null)
+        {
+            _juese1.ShengYuPai.Clear();
+            _juese1.ImagePaiSub.Clear();
+            _juese1.YiChuPai.Clear();
+            _juese1.ShangShouPai.Clear();
+            _juese1.Dizhu = false;
+        }
+        if (_juese2 != null)
+        {
+            _juese2.ShengYuPai.Clear();
+            _juese2.ImagePaiSub.Clear();
+            _juese2.YiChuPai.Clear();
+            _juese2.ShangShouPai.Clear();
+            _juese2.Dizhu = false;
+        }
+        if (_juese3 != null)
+        {
+            _juese3.ShengYuPai.Clear();
+            _juese3.ImagePaiSub.Clear();
+            _juese3.YiChuPai.Clear();
+            _juese3.ShangShouPai.Clear();
+            _juese3.Dizhu = false;
+        }
+
+        // 重置显示
+        _leftCardCount = 0;
+        _rightCardCount = 0;
+        _handPositions = Array.Empty<Vector2>();
+        _handSelected = Array.Empty<bool>();
+        _selection = new CardSelectionHandler(0);
+
+        // 隐藏所有状态标签
+        _lblLeftStatus.Visible = false;
+        _lblRightStatus.Visible = false;
+        _lblMyStatus.Visible = false;
+        _lblLeftRemain.Visible = false;
+        _lblRightRemain.Visible = false;
+        _lblStatus.Visible = false;
+
+        // === 关键：显示开始按钮 ===
+        ButtonSet(true, false, false, false, false); // start=true, 其他=false
     }
 
     #endregion
