@@ -117,7 +117,7 @@ public class LobbyScreen : ScreenBase
     public override void Initialize()
     {
         base.Initialize();
-        _netManager = new NetManager();
+        _netManager = NetManager.Instance ?? new NetManager();
         Opacity = 0f;
         _fadeAlpha = 0f;
 
@@ -582,7 +582,7 @@ public class LobbyScreen : ScreenBase
     private void OnGameStartReceived()
     {
         // 游戏开始，进入游戏屏幕
-        ScreenManager.Replace(new GameScreen(Game, ScreenManager));
+        ScreenManager.Replace(new GameScreen(Game, ScreenManager, true));
     }
 
     private void OnPrivateUsersReceived(List<UserDto> users)
