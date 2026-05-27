@@ -69,14 +69,8 @@ public class UserHandler : HandlerBase
             // 检查是否有待上传的临时头像
             UploadPendingAvatar();
 
-            // 跳转到游戏大厅 (TODO: MonoGame屏幕导航)
-            // Lobby lobby = new Lobby(NetManager.Instance);
-            // lobby.Show();
-            // if (Application.OpenForms["Login"] is Login loginForm)
-            // {
-            //     loginForm.MarkLoginSuccess();
-            //     loginForm.Close();
-            // }
+            // 用户资料已就绪，登录界面可以进入大厅。
+            Models.TriggerLoginResult(0);
         }
     }
 

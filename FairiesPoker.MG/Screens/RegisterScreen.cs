@@ -47,6 +47,7 @@ public class RegisterScreen : ScreenBase
     // 按钮悬停状态
     private bool _registerHovered;
     private bool _uploadHovered;
+    private float _closeAfterSuccessTimer = -1f;
 
     public RegisterScreen(Game1 game, ScreenManager screenManager, NetManager netManager)
         : base(game, screenManager)
@@ -84,6 +85,16 @@ public class RegisterScreen : ScreenBase
     {
         FadeIn(0.05);
         _netManager.Update();
+
+        if (_closeAfterSuccessTimer >= 0f)
+        {
+            _closeAfterSuccessTimer -= (float)gameTime.ElapsedGameTime.TotalSeconds;
+            if (_closeAfterSuccessTimer <= 0f)
+            {
+                _closeAfterSuccessTimer = -1f;
+                ScreenManager.Pop();
+            }
+        }
 
         // 光标闪烁
         _cursorBlinkTimer += (float)gameTime.ElapsedGameTime.TotalSeconds;
@@ -338,6 +349,13 @@ public class RegisterScreen : ScreenBase
 
     private void OnRegister()
     {
+        if (!_netManager.IsConnected)
+        {
+            _statusText = "服务器未连接";
+            _statusColor = Color.Red;
+            return;
+        }
+
         // 验证用户名
         if (_username.Length < 4 || _username.Length > 16)
         {
@@ -365,8 +383,8 @@ public class RegisterScreen : ScreenBase
             return;
         }
 
-        // MD5加密
-        string md5Pwd = MD5Hash(_password);
+        // MD5加密：与原WinForms客户端保持一致
+        string md5Pwd = CreateLegacyPasswordHash(_password);
 
         var dto = new AccountDto(_username, md5Pwd);
         var msg = new SocketMsg(OpCode.ACCOUNT, AccountCode.REGIST_CREQ, dto);
@@ -383,11 +401,8 @@ public class RegisterScreen : ScreenBase
             _statusText = "注册成功!";
             _statusColor = Color.Green;
 
-            // 延迟关闭
-            System.Threading.Tasks.Task.Delay(500).ContinueWith(_ =>
-            {
-                ScreenManager.Pop();
-            });
+            // 延迟关闭，在主更新线程执行屏幕切换。
+            _closeAfterSuccessTimer = 0.5f;
         }
         else
         {
@@ -396,12 +411,12 @@ public class RegisterScreen : ScreenBase
         }
     }
 
-    private static string MD5Hash(string input)
+    private static string CreateLegacyPasswordHash(string input)
     {
         using var md5 = MD5.Create();
-        byte[] bytes = md5.ComputeHash(Encoding.UTF8.GetBytes(input));
+        byte[] bytes = md5.ComputeHash(Encoding.Default.GetBytes(input));
         var sb = new StringBuilder();
-        foreach (var b in bytes) sb.Append(b.ToString("x2"));
+        foreach (var b in bytes) sb.Append(b.ToString("X"));
         return sb.ToString();
     }
 }

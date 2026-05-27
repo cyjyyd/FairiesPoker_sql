@@ -112,6 +112,7 @@ public class ClientPeer
     private bool isProcessReceive = false;
 
     public Queue<SocketMsg> socketMsgQueue = new Queue<SocketMsg>();
+    private readonly object socketMsgQueueLock = new object();
 
     /// <summary>
     /// 开始异步接收数据
@@ -202,10 +203,28 @@ public class ClientPeer
         SocketMsg msg = EncodeTool.DecodeMsg(data);
 
         //存储消息 等待处理
-        socketMsgQueue.Enqueue(msg);
+        lock (socketMsgQueueLock)
+        {
+            socketMsgQueue.Enqueue(msg);
+        }
 
         //尾递归
         processReceive();
+    }
+
+    public bool TryDequeueSocketMsg(out SocketMsg msg)
+    {
+        lock (socketMsgQueueLock)
+        {
+            if (socketMsgQueue.Count > 0)
+            {
+                msg = socketMsgQueue.Dequeue();
+                return true;
+            }
+        }
+
+        msg = null;
+        return false;
     }
 
     #endregion
@@ -221,6 +240,11 @@ public class ClientPeer
 
     public void Send(SocketMsg msg)
     {
+        if (msg == null)
+        {
+            return;
+        }
+
         if (socket == null || !socket.Connected)
         {
             Debug.WriteLine("未连接，无法发送数据");

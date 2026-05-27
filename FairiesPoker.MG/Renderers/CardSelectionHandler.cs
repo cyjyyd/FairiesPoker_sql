@@ -15,12 +15,28 @@ public class CardSelectionHandler
     private int _slideStartIndex = -1;  // 滑动起始牌索引(在sorted数组中的位置)
     private int _slideEndIndex = -1;    // 滑动终点牌索引
     private bool _slideSelectMode;      // true=选中(上移), false=取消选中(下移)
-    private readonly int _cardCount;
-    private readonly bool[] _selected;
+    private int _cardCount;
+    private bool[] _selected;
     private bool _hasSlided; // 是否真正滑动到了不同的牌
+    private bool _hadLayoutOnMouseDown;
 
     /// <summary>选中状态数组</summary>
     public bool[] Selected => _selected;
+
+    /// <summary>当前选中的牌索引</summary>
+    public List<int> SelectedIndices
+    {
+        get
+        {
+            var indices = new List<int>();
+            for (int i = 0; i < _selected.Length; i++)
+            {
+                if (_selected[i])
+                    indices.Add(i);
+            }
+            return indices;
+        }
+    }
 
     /// <summary>是否有滑动操作(用于区分点击和滑动)</summary>
     public bool HasSlided => _hasSlided;
@@ -34,6 +50,19 @@ public class CardSelectionHandler
     /// <summary>
     /// 鼠标按下 - 记录起始牌
     /// </summary>
+    public void OnMouseDown(Point mousePos)
+    {
+        _isSelecting = true;
+        _lastMousePos = mousePos;
+        _hasSlided = false;
+        _slideStartIndex = -1;
+        _slideEndIndex = -1;
+        _hadLayoutOnMouseDown = false;
+    }
+
+    /// <summary>
+    /// 鼠标按下 - 记录起始牌
+    /// </summary>
     /// <param name="mousePos">鼠标位置</param>
     /// <param name="cardPositions">卡牌位置数组</param>
     /// <param name="selectedStates">当前选中状态(用于调整hitbox)</param>
@@ -42,6 +71,7 @@ public class CardSelectionHandler
         _isSelecting = true;
         _lastMousePos = mousePos;
         _hasSlided = false;
+        _hadLayoutOnMouseDown = true;
 
         // 找到按下的牌
         _slideStartIndex = FindCardIndexAtPosition(mousePos, cardPositions, selectedStates);
@@ -57,15 +87,48 @@ public class CardSelectionHandler
     /// <summary>
     /// 鼠标移动 - 更新滑动终点
     /// </summary>
+    public void OnMouseMove(Point mousePos, Vector2[] cardPositions)
+    {
+        OnMouseMove(mousePos, cardPositions, _selected);
+    }
+
+    /// <summary>
+    /// 鼠标移动 - 更新滑动终点
+    /// </summary>
     public void OnMouseMove(Point mousePos, Vector2[] cardPositions, bool[] selectedStates)
     {
         if (!_isSelecting) return;
-        if (_slideStartIndex < 0) return;
 
         int currentIndex = FindCardIndexAtPosition(mousePos, cardPositions, selectedStates);
 
-        if (currentIndex >= 0 && currentIndex != _slideEndIndex)
+        if (_slideStartIndex < 0)
         {
+            _slideStartIndex = currentIndex;
+            _slideEndIndex = currentIndex;
+            if (_slideStartIndex >= 0)
+            {
+                _slideSelectMode = !_selected[_slideStartIndex];
+                if (!_hadLayoutOnMouseDown)
+                {
+                    _selected[_slideStartIndex] = _slideSelectMode;
+                }
+            }
+            _lastMousePos = mousePos;
+            return;
+        }
+
+        if (currentIndex >= 0)
+        {
+            if (currentIndex == _slideEndIndex)
+            {
+                if (!_hadLayoutOnMouseDown)
+                {
+                    _selected[currentIndex] = _slideSelectMode;
+                }
+                _lastMousePos = mousePos;
+                return;
+            }
+
             _slideEndIndex = currentIndex;
             _hasSlided = true;
             // 实时更新预览
@@ -73,6 +136,14 @@ public class CardSelectionHandler
         }
 
         _lastMousePos = mousePos;
+    }
+
+    /// <summary>
+    /// 鼠标松开 - 应用滑动结果或切换单张
+    /// </summary>
+    public void OnMouseUp(Point mousePos, Vector2[] cardPositions)
+    {
+        OnMouseUp(mousePos, cardPositions, _selected);
     }
 
     /// <summary>
@@ -142,8 +213,8 @@ public class CardSelectionHandler
     /// </summary>
     private static int FindCardIndexAtPosition(Point pos, Vector2[] cardPositions, bool[] selectedStates)
     {
-        // 从索引0开始检测(最右边/最上层的牌优先)
-        for (int i = 0; i < cardPositions.Length; i++)
+        // 重叠牌优先命中后绘制、视觉上位于上层的牌。
+        for (int i = cardPositions.Length - 1; i >= 0; i--)
         {
             int yOffset = 0;
             if (selectedStates != null && i < selectedStates.Length && selectedStates[i])
@@ -170,6 +241,20 @@ public class CardSelectionHandler
     {
         for (int i = 0; i < _cardCount; i++)
             _selected[i] = false;
+    }
+
+    /// <summary>
+    /// 重置选择器并按新的牌数调整状态数组。
+    /// </summary>
+    public void Reset(int cardCount)
+    {
+        _cardCount = Math.Max(0, cardCount);
+        _selected = new bool[_cardCount];
+        _isSelecting = false;
+        _slideStartIndex = -1;
+        _slideEndIndex = -1;
+        _hasSlided = false;
+        _hadLayoutOnMouseDown = false;
     }
 
     /// <summary>

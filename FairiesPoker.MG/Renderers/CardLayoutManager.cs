@@ -130,8 +130,7 @@ public static class CardLayoutManager
     /// </summary>
     public static Vector2 GetDealStartPos()
     {
-        // 窗口中心位置 (1280x720 窗口)，牌居中显示
-        return new Vector2(WindowCenterX - CardRenderer.CardWidth / 2, 360 - CardRenderer.CardHeight / 2);
+        return new Vector2(RightPlayerCardX, RightPlayerCardStartY);
     }
 
     /// <summary>

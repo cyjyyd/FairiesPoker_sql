@@ -43,6 +43,9 @@ public class LoginScreen : ScreenBase
     private bool _loginSuccess;
     private bool _loginBtnPressed;
     private bool _offlineBtnPressed;
+    private string _pendingUsername = "";
+    private string _pendingPassword = "";
+    private bool _triedPaddedHashFallback;
 
     // 窗口尺寸 (原Login.cs: 860x656)
     private const int WindowWidth = 860;
@@ -65,7 +68,6 @@ public class LoginScreen : ScreenBase
         // 初始化网络管理器
         _netManager = new NetManager();
         _netManager.OnConnectionStateChanged += OnConnectionStateChanged;
-        _netManager.Start();
 
         // 加载资源
         LoadResources();
@@ -143,6 +145,8 @@ public class LoginScreen : ScreenBase
 
         // 订阅网络事件
         Models.OnLoginResult += OnLoginResult;
+
+        _netManager.Start();
     }
 
     private void LoadResources()
@@ -538,15 +542,21 @@ public class LoginScreen : ScreenBase
             return;
         }
 
-        // MD5加密
-        string md5Pwd = MD5Hash(password);
+        _pendingUsername = username;
+        _pendingPassword = password;
+        _triedPaddedHashFallback = false;
 
-        var loginDto = new AccountDto(username, md5Pwd);
-        var msg = new SocketMsg(OpCode.ACCOUNT, AccountCode.LOGIN, loginDto);
-        _netManager?.Execute(0, msg);
+        SendLoginRequest(CreateLegacyPasswordHash(password));
 
         _connStatus.Text = "登录中...";
         _connStatus.TextColor = Color.Yellow;
+    }
+
+    private void SendLoginRequest(string passwordHash)
+    {
+        var loginDto = new AccountDto(_pendingUsername, passwordHash);
+        var msg = new SocketMsg(OpCode.ACCOUNT, AccountCode.LOGIN, loginDto);
+        _netManager?.Execute(0, msg);
     }
 
     private void OnOffline()
@@ -575,6 +585,7 @@ public class LoginScreen : ScreenBase
         if (result == 0)
         {
             _loginSuccess = true;
+            ClearPendingLogin();
             _connStatus.Text = "登录成功!";
             _connStatus.TextColor = Color.Green;
 
@@ -583,12 +594,44 @@ public class LoginScreen : ScreenBase
         }
         else
         {
-            _connStatus.Text = result == -1 ? "用户名或密码错误" : "登录失败";
+            if (result == -3 && !_triedPaddedHashFallback && !string.IsNullOrEmpty(_pendingPassword))
+            {
+                _triedPaddedHashFallback = true;
+                SendLoginRequest(CreatePaddedPasswordHash(_pendingPassword));
+                _connStatus.Text = "登录中...";
+                _connStatus.TextColor = Color.Yellow;
+                return;
+            }
+
+            ClearPendingLogin();
+            _connStatus.Text = result switch
+            {
+                -1 => "账号不存在",
+                -2 => "账号已登录",
+                -3 => "用户名或密码错误",
+                _ => "登录失败"
+            };
             _connStatus.TextColor = Color.Red;
         }
     }
 
-    private static string MD5Hash(string input)
+    private void ClearPendingLogin()
+    {
+        _pendingUsername = "";
+        _pendingPassword = "";
+        _triedPaddedHashFallback = false;
+    }
+
+    private static string CreateLegacyPasswordHash(string input)
+    {
+        using var md5 = MD5.Create();
+        byte[] bytes = md5.ComputeHash(Encoding.Default.GetBytes(input));
+        var sb = new StringBuilder();
+        foreach (var b in bytes) sb.Append(b.ToString("X"));
+        return sb.ToString();
+    }
+
+    private static string CreatePaddedPasswordHash(string input)
     {
         using var md5 = MD5.Create();
         byte[] bytes = md5.ComputeHash(Encoding.UTF8.GetBytes(input));

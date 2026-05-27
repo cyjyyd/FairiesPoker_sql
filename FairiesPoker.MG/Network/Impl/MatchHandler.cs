@@ -8,6 +8,15 @@ namespace FairiesPoker.MG.Network.Impl
 
 public class MatchHandler : HandlerBase
 {
+    private static void ResetForCurrentUser(MatchRoomDto matchRoom)
+    {
+        int userId = Models.GameModel?.UserDto?.Id ?? 0;
+        if (userId > 0)
+        {
+            matchRoom.ResetPosition(userId);
+        }
+    }
+
     public override void OnReceive(int subCode, object value)
     {
         switch (subCode)
@@ -57,7 +66,7 @@ public class MatchHandler : HandlerBase
         {
             Models.GameModel.MatchRoomDto = matchRoom;
             // 服务端已经设置了正确的左右玩家，但客户端可能需要重新验证
-            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+            ResetForCurrentUser(matchRoom);
         }
 
         // 触发游戏开始事件，让Lobby启动游戏界面
@@ -72,7 +81,7 @@ public class MatchHandler : HandlerBase
         if (matchRoom != null)
         {
             Models.GameModel.MatchRoomDto = matchRoom;
-            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+            ResetForCurrentUser(matchRoom);
             Models.TriggerMatchUpdate(matchRoom);
         }
     }
@@ -85,7 +94,7 @@ public class MatchHandler : HandlerBase
         if (matchRoom != null)
         {
             Models.GameModel.MatchRoomDto = matchRoom;
-            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+            ResetForCurrentUser(matchRoom);
             Models.TriggerMatchUpdate(matchRoom);
         }
     }
@@ -98,7 +107,7 @@ public class MatchHandler : HandlerBase
         Models.GameModel.MatchRoomDto = matchRoom;
         if (matchRoom != null)
         {
-            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+            ResetForCurrentUser(matchRoom);
         }
         // 触发更新事件
         Models.TriggerMatchUpdate(matchRoom);
@@ -112,7 +121,7 @@ public class MatchHandler : HandlerBase
         if (matchRoom != null)
         {
             Models.GameModel.MatchRoomDto = matchRoom;
-            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+            ResetForCurrentUser(matchRoom);
             Models.TriggerMatchUpdate(matchRoom);
         }
     }
@@ -135,7 +144,7 @@ public class MatchHandler : HandlerBase
         if (matchRoom != null)
         {
             Models.GameModel.MatchRoomDto = matchRoom;
-            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+            ResetForCurrentUser(matchRoom);
             Models.TriggerMatchUpdate(matchRoom);
         }
     }
@@ -148,7 +157,7 @@ public class MatchHandler : HandlerBase
         if (matchRoom != null)
         {
             Models.GameModel.MatchRoomDto = matchRoom;
-            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+            ResetForCurrentUser(matchRoom);
             Models.TriggerMatchUpdate(matchRoom);
         }
     }
@@ -161,7 +170,7 @@ public class MatchHandler : HandlerBase
         if (matchRoom != null)
         {
             Models.GameModel.MatchRoomDto = matchRoom;
-            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+            ResetForCurrentUser(matchRoom);
             Models.TriggerMatchUpdate(matchRoom);
         }
     }
@@ -174,7 +183,7 @@ public class MatchHandler : HandlerBase
         if (matchRoom != null)
         {
             Models.GameModel.MatchRoomDto = matchRoom;
-            matchRoom.ResetPosition(Models.GameModel.UserDto.Id);
+            ResetForCurrentUser(matchRoom);
             Models.TriggerMatchUpdate(matchRoom);
         }
         else

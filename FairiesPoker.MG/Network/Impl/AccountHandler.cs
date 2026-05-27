@@ -35,9 +35,12 @@ public class AccountHandler : HandlerBase
     /// </summary>
     private void loginResponse(int result)
     {
-        // 登录结果由UserHandler的onlineResponse处理
+        // 成功登录还需要等待 USER/ONLINE_SRES 携带用户资料。
         // 0=成功, -1=不存在, -2=已登录, -3=密码错误
-        Models.TriggerLoginResult(result);
+        if (result != 0)
+        {
+            Models.TriggerLoginResult(result);
+        }
     }
 
     /// <summary>

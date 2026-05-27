@@ -71,9 +71,8 @@ public class NetManager
         if (client == null)
             return;
 
-        while (client.socketMsgQueue.Count > 0)
+        while (client.TryDequeueSocketMsg(out SocketMsg msg))
         {
-            SocketMsg msg = client.socketMsgQueue.Dequeue();
             //处理消息
             processSocketMsg(msg);
         }
@@ -127,7 +126,10 @@ public class NetManager
         switch (eventCode)
         {
             case 0:
-                client.Send(message as SocketMsg);
+                if (message is SocketMsg socketMsg)
+                {
+                    client?.Send(socketMsg);
+                }
                 break;
             default:
                 break;

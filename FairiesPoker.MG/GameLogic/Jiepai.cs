@@ -17,8 +17,10 @@ namespace FairiesPoker
             chupai.PaiType = 0;
             if (chupai.isRight(nextPai))
             {
-                if (paiType != (int)Guize.炸弹 && (chupai.PaiType == (int)Guize.炸弹
-                   || chupai.PaiType == (int)Guize.天炸)) return true;
+                if (chupai.PaiType == (int)Guize.天炸 && paiType != (int)Guize.天炸) return true;
+                if (chupai.PaiType == (int)Guize.炸弹 &&
+                    paiType != (int)Guize.炸弹 &&
+                    paiType != (int)Guize.天炸) return true;
                 if (sameType(paiType, chupai.PaiType, upPai, nextPai)) return true;
             }
             return false;

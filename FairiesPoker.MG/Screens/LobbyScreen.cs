@@ -521,7 +521,15 @@ public class LobbyScreen : ScreenBase
 
     private void OnMatchUpdateReceived(MatchRoomDto matchRoom)
     {
-        if (matchRoom == null) return;
+        if (matchRoom == null)
+        {
+            _isInRoom = false;
+            _isReady = false;
+            _isHost = false;
+            _roomPanel.Visible = false;
+            _matchStatus.Text = "";
+            return;
+        }
 
         Models.GameModel.MatchRoomDto = matchRoom;
         _isInRoom = true;
@@ -661,7 +669,7 @@ public class LobbyScreen : ScreenBase
     private void RequestTodayMessages()
     {
         var requestDto = new HistoryRequestDto(ChatTypes.WORLD, limit: 50);
-        var msg = new SocketMsg(OpCode.CHAT, ChatCode.PUSH_TODAY_SRES, requestDto);
+        var msg = new SocketMsg(OpCode.CHAT, ChatCode.GET_HISTORY_CREQ, requestDto);
         _netManager.Execute(0, msg);
     }
 
