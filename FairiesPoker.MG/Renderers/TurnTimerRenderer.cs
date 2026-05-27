@@ -24,10 +24,10 @@ public class TurnTimerRenderer
                        RemainingSeconds > 5 ? Color.Yellow : Color.Red;
 
         string text = RemainingSeconds.ToString();
-        var size = font.MeasureString(text);
+        var size = FontManager.MeasureString(text, font);
         var origin = size / 2;
 
-        sb.DrawString(font, text, Position + new Vector2(1, 1), Color.Black * 0.5f, 0, origin, 1f, SpriteEffects.None, 0);
-        sb.DrawString(font, text, Position, color, 0, origin, 1f, SpriteEffects.None, 0);
+        FontManager.DrawString(sb, font, text, Position + new Vector2(1, 1), Color.Black * 0.5f, 0, origin, 1f, SpriteEffects.None, 0);
+        FontManager.DrawString(sb, font, text, Position, color, 0, origin, 1f, SpriteEffects.None, 0);
     }
 }

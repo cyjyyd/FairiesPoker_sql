@@ -14,6 +14,13 @@ public class ScreenManager
     private readonly SpriteBatch _spriteBatch;
     private readonly List<ScreenBase> _screens = new();
     private readonly List<Action> _pendingActions = new();
+    private static readonly BlendState AlphaBlendState = new()
+    {
+        AlphaSourceBlend = Blend.SourceAlpha,
+        ColorSourceBlend = Blend.One,
+        AlphaDestinationBlend = Blend.InverseSourceAlpha,
+        ColorDestinationBlend = Blend.InverseSourceAlpha
+    };
 
     public ScreenManager(Game1 game, SpriteBatch spriteBatch)
     {
@@ -107,7 +114,12 @@ public class ScreenManager
             if (screen.Opacity <= 0) continue;
 
             _spriteBatch.Begin(SpriteSortMode.Deferred,
-                new BlendState { AlphaSourceBlend = Blend.SourceAlpha, ColorSourceBlend = Blend.One, AlphaDestinationBlend = Blend.InverseSourceAlpha, ColorDestinationBlend = Blend.InverseSourceAlpha });
+                AlphaBlendState,
+                SamplerState.LinearClamp,
+                null,
+                null,
+                null,
+                DisplayManager.TransformMatrix);
             screen.Draw(gameTime, _spriteBatch);
             _spriteBatch.End();
         }

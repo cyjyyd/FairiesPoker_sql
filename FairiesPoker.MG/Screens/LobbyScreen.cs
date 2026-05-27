@@ -880,7 +880,7 @@ public class LobbyScreen : ScreenBase
         // 提示文字
         if (!_isInRoom && _roomList.Items.Count == 0)
         {
-            spriteBatch.DrawString(FontManager.Default, "暂无房间，请创建或快速匹配",
+            FontManager.DrawString(spriteBatch, FontManager.Default, "暂无房间，请创建或快速匹配",
                 new Vector2(CenterX + 150, 350), Color.Gray * color);
         }
     }
@@ -914,7 +914,7 @@ public class LobbyScreen : ScreenBase
             if (hover)
                 sb.Draw(CreateWhitePixel(), emojiRect, new Color(60, 65, 75, 200));
 
-            sb.DrawString(FontManager.Default ?? CreateFallbackFont(),
+            FontManager.DrawString(sb, FontManager.Default ?? CreateFallbackFont(),
                 Emojis[i], new Vector2(x + 3, y + 3), Color.White * color);
         }
     }

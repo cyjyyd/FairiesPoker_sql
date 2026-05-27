@@ -14,7 +14,10 @@ public class InputManager
     private KeyboardState _currKeyboard;
 
     /// <summary>当前鼠标位置</summary>
-    public Vector2 MousePosition => _currMouse.Position.ToVector2();
+    public Vector2 MousePosition => DisplayManager.ToVirtual(RawMousePosition);
+
+    /// <summary>当前鼠标物理窗口位置</summary>
+    public Vector2 RawMousePosition => _currMouse.Position.ToVector2();
 
     /// <summary>鼠标左键是否按下(本帧新按下)</summary>
     public bool LeftMouseClicked => _currMouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;

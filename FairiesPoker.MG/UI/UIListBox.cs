@@ -99,7 +99,7 @@ public class UIListBox : UIControl
                 sb.Draw(WhitePixel, itemRect, new Color(50, 100, 180, 80));
             }
 
-            sb.DrawString(font, Items[index], new Vector2(itemRect.X, itemRect.Y),
+            FontManager.DrawString(sb, font, Items[index], new Vector2(itemRect.X, itemRect.Y),
                 index == SelectedIndex ? SelectedTextColor : TextColor);
         }
 

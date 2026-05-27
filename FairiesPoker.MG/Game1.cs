@@ -2,8 +2,7 @@ using FairiesPoker.MG.Core;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using SpriteFontPlus;
-using System.IO;
+using System;
 
 namespace FairiesPoker.MG;
 
@@ -22,19 +21,21 @@ public class Game1 : Game
     {
         Instance = this;
         _graphics = new GraphicsDeviceManager(this);
+        _graphics.GraphicsProfile = GraphicsProfile.HiDef;
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
 
         // 加载配置
         ConfigManager.Load();
-        _graphics.PreferredBackBufferWidth = ConfigManager.WindowWidth;
-        _graphics.PreferredBackBufferHeight = ConfigManager.WindowHeight;
-        _graphics.IsFullScreen = ConfigManager.FullScreen;
+        ConfigureBackBuffer();
     }
 
     protected override void Initialize()
     {
+        DisplayManager.Update(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
         TextureManager.Initialize(GraphicsDevice);
+        UIResourceManager.Initialize(GraphicsDevice, ConfigManager.UITheme);
+        UIResourceManager.LoadThemeResources();
         InputManager = new InputManager();
         AudioManager = new AudioManager
         {
@@ -54,8 +55,8 @@ public class Game1 : Game
         whitePixel.SetData(new[] { Color.White });
         TextureManager.LoadInternal("_white", whitePixel);
 
-        // 创建默认字体 (使用系统字体位图)
-        CreateDefaultFont();
+        // 创建默认字体 (使用系统字体位图，随显示缩放重新烘焙)
+        FontManager.Initialize(GraphicsDevice);
 
         ScreenManager = new ScreenManager(this, _spriteBatch);
 
@@ -63,53 +64,13 @@ public class Game1 : Game
         ScreenManager.Push(new Screens.MainMenuScreen(this, ScreenManager));
     }
 
-    private void CreateDefaultFont()
-    {
-        // 从系统TTF运行时烘焙字体(支持中文)
-        string[] fontFiles = {
-            "C:\\WINDOWS\\Fonts\\msyh.ttc",       // 微软雅黑
-            "C:\\WINDOWS\\Fonts\\STKAITI.TTF",    // 华文楷体
-            "C:\\WINDOWS\\Fonts\\simhei.ttf",     // 黑体
-            "C:\\WINDOWS\\Fonts\\STXIHEI.TTF",    // 华文细黑
-            "C:\\WINDOWS\\Fonts\\SIMYOU.TTF",     // 幼圆
-        };
-
-        foreach (var ttfPath in fontFiles)
-        {
-            if (!File.Exists(ttfPath)) continue;
-
-            try
-            {
-                var result = TtfFontBaker.Bake(
-                    File.ReadAllBytes(ttfPath),
-                    16f, 2048, 2048,
-                    new[] {
-                        new CharacterRange((char)0x20, (char)0x7E),    // ASCII
-                        new CharacterRange((char)0x2000, (char)0x206F), // 通用标点
-                        new CharacterRange((char)0x3000, (char)0x303F), // CJK标点
-                        new CharacterRange((char)0x3400, (char)0x4DB5), // CJK扩展A
-                        new CharacterRange((char)0x4E00, (char)0x9FEF), // CJK统一汉字
-                        new CharacterRange((char)0xFF00, (char)0xFFEF), // 全角
-                    }
-                );
-                var sf = result.CreateSpriteFont(GraphicsDevice);
-                // 检查中文字符是否能正确测量(非问号)
-                var testWidth = sf.MeasureString("测试");
-                if (testWidth.X > 10) // 中文字符应该有实际宽度,不是默认问号
-                {
-                    FontManager.Load("default", sf);
-                    return;
-                }
-            }
-            catch { }
-        }
-    }
-
     protected override void Update(GameTime gameTime)
     {
         if (Keyboard.GetState().IsKeyDown(Keys.Escape))
             Exit();
 
+        DisplayManager.Update(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
+        FontManager.UpdateForDisplayScale(DisplayManager.Scale);
         InputManager.Update();
         ScreenManager.Update(gameTime, InputManager);
 
@@ -118,8 +79,29 @@ public class Game1 : Game
 
     protected override void Draw(GameTime gameTime)
     {
+        DisplayManager.Update(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
+        FontManager.UpdateForDisplayScale(DisplayManager.Scale);
         GraphicsDevice.Clear(Color.Black);
         ScreenManager.Draw(gameTime);
+    }
+
+    public void ApplyDisplaySettings()
+    {
+        ConfigManager.NormalizeWindowSize();
+        ConfigureBackBuffer();
+        _graphics.ApplyChanges();
+        DisplayManager.Update(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
+        FontManager.UpdateForDisplayScale(DisplayManager.Scale);
+    }
+
+    private void ConfigureBackBuffer()
+    {
+        ConfigManager.NormalizeWindowSize();
+        _graphics.PreferredBackBufferWidth = Math.Max(640, ConfigManager.WindowWidth);
+        _graphics.PreferredBackBufferHeight = Math.Max(360, ConfigManager.WindowHeight);
+        _graphics.IsFullScreen = ConfigManager.FullScreen;
+        _graphics.HardwareModeSwitch = true;
+        Window.IsBorderless = !ConfigManager.FullScreen && ConfigManager.BorderlessWindow;
     }
 
     protected override void EndRun()

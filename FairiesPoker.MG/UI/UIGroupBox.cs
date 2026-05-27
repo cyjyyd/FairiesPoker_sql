@@ -33,8 +33,8 @@ public class UIGroupBox : UIPanel
         // 标题
         if (!string.IsNullOrEmpty(Title))
         {
-            var titleSize = font.MeasureString(Title);
-            sb.DrawString(font, Title, new Vector2(Position.X + 8, Position.Y - titleSize.Y / 2), TitleColor);
+            var titleSize = FontManager.MeasureString(Title, font);
+            FontManager.DrawString(sb, font, Title, new Vector2(Position.X + 8, Position.Y - titleSize.Y / 2), TitleColor);
         }
 
         // 子控件

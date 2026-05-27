@@ -13,6 +13,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace FairiesPoker.MG.Screens;
 
@@ -1057,9 +1058,47 @@ public class GameScreen : ScreenBase
         }
     }
 
+    /// <summary>
+    /// 在线模式更新
+    /// </summary>
     private void UpdateOnline(float dt)
     {
+        // 1. 更新网络
         _netManager?.Update();
+
+        // 2. 更新动画管理器
+        _animManager.Update(dt);
+
+        // 3. 处理动画完成回调
+        if (!_animManager.IsAnimating && _animationCompleteCallbacks.Count > 0)
+        {
+            var callback = _animationCompleteCallbacks.Dequeue();
+            callback?.Invoke();
+        }
+
+        // 4. 处理发牌动画完成
+        if (_state == GameState.DEALING && !_animManager.IsAnimating && _onlineDealAnimating)
+        {
+            FinishOnlineDealing();
+        }
+
+        // 5. 处理"不出"状态显示计时
+        if (_passStatusDisplayTime > 0)
+        {
+            _passStatusDisplayTime -= dt;
+            if (_passStatusDisplayTime <= 0)
+            {
+                _lblLeftStatus.Visible = false;
+                _lblRightStatus.Visible = false;
+                _lblMyStatus.Visible = false;
+            }
+        }
+
+        // 6. 更新剩余牌数显示
+        if (_lblLeftRemain.Visible)
+            _lblLeftRemain.Text = $"剩余牌：{_leftCardBackCount}";
+        if (_lblRightRemain.Visible)
+            _lblRightRemain.Text = $"剩余牌：{_rightCardBackCount}";
     }
 
     public override void Draw(GameTime gameTime, SpriteBatch spriteBatch)
@@ -1333,15 +1372,226 @@ public class GameScreen : ScreenBase
         var font = FontManager.Default;
         if (font == null) return;
 
-        spriteBatch.DrawString(font, _leftName, new Vector2(20, 450), Color.White);
-        spriteBatch.DrawString(font, _selfName, new Vector2(1005, 630), Color.White);
-        spriteBatch.DrawString(font, _rightName, new Vector2(1110, 130), Color.White);
+        FontManager.DrawString(spriteBatch, font, _leftName, new Vector2(20, 450), Color.White);
+        FontManager.DrawString(spriteBatch, font, _selfName, new Vector2(1005, 630), Color.White);
+        FontManager.DrawString(spriteBatch, font, _rightName, new Vector2(1110, 130), Color.White);
     }
 
     private void DrawOnline(SpriteBatch spriteBatch)
     {
-        // 联机模式绘制（暂不实现）
-        DrawOffline(spriteBatch);
+        // 1. 发牌动画时的特殊渲染
+        if (_showDealingCards)
+        {
+            DrawOnlineDealingScene(spriteBatch);
+            return;
+        }
+
+        // 2. 出牌动画中的飞行牌
+        if (_showPlayingCards)
+        {
+            DrawPlayingCards(spriteBatch);
+        }
+
+        // 3. 底牌
+        var tablePositions = CardLayoutManager.CalculateTableCardPositions();
+        for (int i = 0; i < 3 && i < _tableCards.Count; i++)
+        {
+            var tc = _tableCards[i];
+            if (_tableCardsRevealed)
+                CardRenderer.DrawCard(spriteBatch, tablePositions[i], tc.huase, tc.size);
+            else if (_cardBackTexture != null)
+                spriteBatch.Draw(_cardBackTexture,
+                    new Rectangle((int)tablePositions[i].X, (int)tablePositions[i].Y, CardRenderer.CardWidth, CardRenderer.CardHeight),
+                    Color.White);
+        }
+
+        // 4. 左侧玩家牌背
+        if (_leftCardBackCount > 0 && _cardBackTexture != null)
+        {
+            spriteBatch.Draw(_cardBackTexture,
+                new Rectangle(20, 220, CardRenderer.CardWidth, CardRenderer.CardHeight),
+                Color.White);
+        }
+
+        // 5. 右侧玩家牌背
+        if (_rightCardBackCount > 0 && _cardBackTexture != null)
+        {
+            spriteBatch.Draw(_cardBackTexture,
+                new Rectangle(1110, 220, CardRenderer.CardWidth, CardRenderer.CardHeight),
+                Color.White);
+        }
+
+        // 6. 各玩家已出牌
+        DrawOnlinePlayedCards(spriteBatch);
+
+        // 7. 自己手牌
+        if (_state != GameState.WAITING && _myOnlineHandCards != null)
+        {
+            DrawOnlineHand(spriteBatch);
+        }
+
+        // 8. 玩家名
+        DrawOnlinePlayerNames(spriteBatch);
+    }
+
+    /// <summary>
+    /// 在线模式发牌场景渲染
+    /// </summary>
+    private void DrawOnlineDealingScene(SpriteBatch spriteBatch)
+    {
+        Vector2 dealStartPos = CardLayoutManager.GetDealStartPos();
+
+        // 渲染牌堆（未发出的牌背）
+        int pendingAnimCount = _animManager.PendingCount;
+        if (pendingAnimCount > 0 && _cardBackTexture != null)
+        {
+            int deckShowCount = Math.Min(pendingAnimCount, 5);
+            for (int i = 0; i < deckShowCount; i++)
+            {
+                spriteBatch.Draw(_cardBackTexture,
+                    new Rectangle((int)dealStartPos.X - i * 2, (int)dealStartPos.Y - i * 3,
+                        CardRenderer.CardWidth, CardRenderer.CardHeight),
+                    Color.White);
+            }
+        }
+
+        // 渲染飞行中的牌
+        DrawDealingCards(spriteBatch);
+
+        // 渲染已落地的牌
+        DrawLandedOnlineCards(spriteBatch);
+
+        // 渲染玩家名
+        DrawOnlinePlayerNames(spriteBatch);
+    }
+
+    /// <summary>
+    /// 渲染已落地的在线模式牌
+    /// </summary>
+    private void DrawLandedOnlineCards(SpriteBatch spriteBatch)
+    {
+        int totalCards = 54;
+        int activeAnimCount = _animManager.ActiveCount;
+        int pendingAnimCount = _animManager.PendingCount;
+        int completedCards = totalCards - activeAnimCount - pendingAnimCount;
+
+        int selfReceived = 0, leftReceived = 0, rightReceived = 0;
+
+        for (int i = 0; i < completedCards && i < 51; i++)
+        {
+            if (i % 3 == 0) selfReceived++;
+            else if (i % 3 == 1) leftReceived++;
+            else rightReceived++;
+        }
+
+        // 渲染已落地的自己手牌（正面）
+        if (selfReceived > 0 && _myOnlineHandCards != null)
+        {
+            var selfPositions = CardLayoutManager.CalculateHandPositions(17);
+            for (int i = 0; i < selfReceived && i < _myOnlineHandCards.Count; i++)
+            {
+                var card = _myOnlineHandCards[i];
+                CardRenderer.DrawCard(spriteBatch, selfPositions[i], card.huase, card.size);
+            }
+        }
+
+        // 渲染已落地的左玩家牌背
+        if (leftReceived > 0 && _cardBackTexture != null)
+        {
+            spriteBatch.Draw(_cardBackTexture,
+                new Rectangle(20, 220, CardRenderer.CardWidth, CardRenderer.CardHeight),
+                Color.White);
+        }
+
+        // 渲染已落地的右玩家牌背
+        if (rightReceived > 0 && _cardBackTexture != null)
+        {
+            spriteBatch.Draw(_cardBackTexture,
+                new Rectangle(1110, 220, CardRenderer.CardWidth, CardRenderer.CardHeight),
+                Color.White);
+        }
+    }
+
+    /// <summary>
+    /// 渲染在线模式已出的牌
+    /// </summary>
+    private void DrawOnlinePlayedCards(SpriteBatch spriteBatch)
+    {
+        // 左侧玩家已出牌
+        if (_leftPlayedCards.Count > 0)
+        {
+            var lp = CardLayoutManager.CalculatePlayedCardPositions(_leftPlayedCards.Count);
+            for (int i = 0; i < _leftPlayedCards.Count; i++)
+            {
+                CardRenderer.DrawCard(spriteBatch, lp[i] - new Vector2(200, 0),
+                    _leftPlayedCards[i].huase, _leftPlayedCards[i].size);
+            }
+        }
+
+        // 右侧玩家已出牌
+        if (_rightPlayedCards.Count > 0)
+        {
+            var rp = CardLayoutManager.CalculatePlayedCardPositions(_rightPlayedCards.Count);
+            for (int i = 0; i < _rightPlayedCards.Count; i++)
+            {
+                CardRenderer.DrawCard(spriteBatch, rp[i] + new Vector2(200, 0),
+                    _rightPlayedCards[i].huase, _rightPlayedCards[i].size);
+            }
+        }
+
+        // 自己已出牌
+        if (_myPlayedCards.Count > 0)
+        {
+            var cp = CardLayoutManager.CalculatePlayedCardPositions(_myPlayedCards.Count);
+            for (int i = 0; i < _myPlayedCards.Count; i++)
+            {
+                CardRenderer.DrawCard(spriteBatch, cp[i],
+                    _myPlayedCards[i].huase, _myPlayedCards[i].size);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 渲染在线模式自己的手牌
+    /// </summary>
+    private void DrawOnlineHand(SpriteBatch spriteBatch)
+    {
+        int cardCount = _myOnlineHandCards?.Count ?? 0;
+        if (cardCount == 0) return;
+
+        var positions = CardLayoutManager.CalculateHandPositions(cardCount, _handSelected);
+
+        for (int i = cardCount - 1; i >= 0; i--)
+        {
+            var card = _myOnlineHandCards[i];
+            CardRenderer.DrawCard(spriteBatch, positions[i], card.huase, card.size, _handSelected[i]);
+        }
+    }
+
+    /// <summary>
+    /// 渲染在线模式玩家名
+    /// </summary>
+    private void DrawOnlinePlayerNames(SpriteBatch spriteBatch)
+    {
+        var font = FontManager.Default;
+        if (font == null) return;
+
+        // 获取各玩家名称
+        string leftName = Models.GameModel.GetUserDto(Models.GameModel.GetLeftUserId())?.Name ?? "左玩家";
+        string selfName = Models.GameModel.UserDto?.Name ?? "玩家";
+        string rightName = Models.GameModel.GetUserDto(Models.GameModel.GetRightUserId())?.Name ?? "右玩家";
+
+        // 显示地主标识
+        if (_landlordId == Models.GameModel.GetLeftUserId())
+            leftName += "(地主)";
+        else if (IsMyTurn(_landlordId))
+            selfName += "(地主)";
+        else if (_landlordId == Models.GameModel.GetRightUserId())
+            rightName += "(地主)";
+
+        FontManager.DrawString(spriteBatch, font, leftName, new Vector2(20, 450), Color.White);
+        FontManager.DrawString(spriteBatch, font, selfName, new Vector2(1005, 630), Color.White);
+        FontManager.DrawString(spriteBatch, font, rightName, new Vector2(1110, 130), Color.White);
     }
 
     private void DrawUI(SpriteBatch spriteBatch)
@@ -2270,20 +2520,660 @@ public class GameScreen : ScreenBase
 
     #endregion
 
-    #region 联机模式（暂时保留原实现）
+    #region 联机模式动画实现
 
-    private void OnOnlineAction() { }
-    private void OnOnlinePass() { }
-    private void OnGetCardsReceived(List<CardDto> cardList) { }
-    private void OnTurnGrabReceived(int userId) { }
-    private void OnGrabLandlordReceived(GrabDto grabDto) { }
-    private void OnTurnDealReceived(int userId) { }
-    private void OnDealBroadcastReceived(DealDto dealDto) { }
-    private void OnDealResponseReceived(int result) { }
-    private void OnPassResponseReceived(int result) { }
-    private void OnGameOverReceived(OverDto overDto) { }
-    private void OnMultipleChangeReceived(int multiple) { }
-    private void OnGameStartReceived() { }
+    // === 在线模式动画相关字段 ===
+    // 发牌动画状态
+    private bool _onlineDealAnimating;
+    private List<(string huase, int size)> _myOnlineHandCards;
+
+    // 叫地主状态
+    private bool _waitingGrabResponse;
+    private int _currentGrabUserId;
+    private bool _grabAnimationPlaying;
+
+    // 出牌动画状态
+    private bool _dealAnimationPlaying;
+    private DealDto _pendingDealDto;
+
+    // 不出动画状态
+    private float _passStatusDisplayTime;
+
+    // 动画完成回调队列
+    private Queue<Action> _animationCompleteCallbacks = new();
+
+    // 花色转换：CardColor常量 → huase字符串
+    private string ConvertColorToHuase(int color)
+    {
+        return color switch
+        {
+            1 => "meihua",    // CLUB 梅花
+            2 => "hongtao",   // HEART 红桃
+            3 => "heitao",    // SPADE 黑桃
+            4 => "fangkuai",  // SQUARE 方片
+            _ => ""           // 大小王无花色
+        };
+    }
+
+    // 获取玩家位置名称
+    private string GetPlayerPositionName(int userId)
+    {
+        if (userId == Models.GameModel.GetLeftUserId())
+            return "左玩家";
+        else if (userId == Models.GameModel.GetRightUserId())
+            return "右玩家";
+        return "玩家";
+    }
+
+    // 获取自己的用户ID
+    private int GetMyUserId() => Models.GameModel.Id;
+
+    // 判断是否是自己的回合
+    private bool IsMyTurn(int userId) => userId == GetMyUserId();
+
+    /// <summary>
+    /// 在线模式"主操作"按钮点击（叫地主/出牌）
+    /// </summary>
+    private void OnOnlineAction()
+    {
+        if (_state == GameState.GRABBING && _waitingGrabResponse)
+        {
+            // 叫地主
+            SendGrabRequest(true);
+            ButtonSet(false, false, false, false, false);
+            _lblMyStatus.Text = "叫地主";
+            _lblMyStatus.Visible = true;
+            _waitingGrabResponse = false;
+        }
+        else if (_state == GameState.MY_TURN && _btnAction.Text == "出牌")
+        {
+            // 出牌
+            PlayOnlineSelectedCards();
+        }
+    }
+
+    /// <summary>
+    /// 在线模式"取消"按钮点击（不叫/不出）
+    /// </summary>
+    private void OnOnlinePass()
+    {
+        if (_state == GameState.GRABBING && _waitingGrabResponse)
+        {
+            // 不叫地主
+            SendGrabRequest(false);
+            ButtonSet(false, false, false, false, false);
+            _lblMyStatus.Text = "不叫";
+            _lblMyStatus.Visible = true;
+            _waitingGrabResponse = false;
+        }
+        else if (_state == GameState.MY_TURN && _btnPass.Text == "不出")
+        {
+            // 不出
+            SendPassRequest();
+            ButtonSet(false, false, false, false, false);
+            _lblMyStatus.Text = "不出";
+            _lblMyStatus.Visible = true;
+        }
+    }
+
+    /// <summary>
+    /// 发送抢地主请求
+    /// </summary>
+    private void SendGrabRequest(bool grab)
+    {
+        if (_netManager != null && _netManager.IsConnected)
+        {
+            var msg = new SocketMsg(OpCode.FIGHT, FightCode.GRAB_LANDLORD_CREQ, grab);
+            _netManager.Execute(0, msg);
+        }
+    }
+
+    /// <summary>
+    /// 发送不出请求
+    /// </summary>
+    private void SendPassRequest()
+    {
+        if (_netManager != null && _netManager.IsConnected)
+        {
+            var msg = new SocketMsg(OpCode.FIGHT, FightCode.PASS_CREQ, null);
+            _netManager.Execute(0, msg);
+        }
+    }
+
+    /// <summary>
+    /// 在线模式出牌
+    /// </summary>
+    private void PlayOnlineSelectedCards()
+    {
+        var selectedIndices = GetSelectedCardIndices();
+        if (selectedIndices.Count == 0)
+        {
+            _lblStatus.Text = "请选择要出的牌";
+            return;
+        }
+
+        // 构建选中的牌数据
+        var selectedCards = new List<CardDto>();
+        foreach (int idx in selectedIndices)
+        {
+            if (idx < _myOnlineHandCards.Count)
+            {
+                var card = _myOnlineHandCards[idx];
+                // 根据花色字符串反推Color值
+                int color = ConvertHuaseToColor(card.huase);
+                selectedCards.Add(new CardDto("", color, card.size));
+            }
+        }
+
+        // 发送出牌请求
+        SendDealRequest(selectedCards);
+    }
+
+    /// <summary>
+    /// 发送出牌请求
+    /// </summary>
+    private void SendDealRequest(List<CardDto> cards)
+    {
+        if (_netManager != null && _netManager.IsConnected)
+        {
+            var dealDto = new DealDto(cards, GetMyUserId());
+            var msg = new SocketMsg(OpCode.FIGHT, FightCode.DEAL_CREQ, dealDto);
+            _netManager.Execute(0, msg);
+            // 隐藏按钮等待响应
+            ButtonSet(false, false, false, false, false);
+        }
+    }
+
+    /// <summary>
+    /// 花色字符串转Color常量
+    /// </summary>
+    private int ConvertHuaseToColor(string huase)
+    {
+        return huase switch
+        {
+            "meihua" => 1,    // CLUB 梅花
+            "hongtao" => 2,   // HEART 红桃
+            "heitao" => 3,    // SPADE 黑桃
+            "fangkuai" => 4,  // SQUARE 方片
+            _ => 0            // 大小王无花色
+        };
+    }
+
+    /// <summary>
+    /// 接收到手牌 - 开始发牌动画
+    /// </summary>
+    private void OnGetCardsReceived(List<CardDto> cardList)
+    {
+        // 存储手牌数据（按权重降序排序）
+        _onlineCards = cardList;
+        _myOnlineHandCards = cardList
+            .OrderByDescending(c => c.Weight)
+            .Select(c => (ConvertColorToHuase(c.Color), c.Weight))
+            .ToList();
+
+        // 初始化手牌UI结构
+        int handCount = _myOnlineHandCards.Count;
+        _handPositions = CardLayoutManager.CalculateHandPositions(handCount);
+        _handSelected = new bool[handCount];
+        _selection = new CardSelectionHandler(handCount);
+
+        // 清空显示列表
+        _myPlayedCards.Clear();
+        _leftPlayedCards.Clear();
+        _rightPlayedCards.Clear();
+        _tableCards.Clear();
+        _tableCardsRevealed = false;
+
+        // 设置剩余牌数
+        _leftCardBackCount = 17;
+        _rightCardBackCount = 17;
+
+        // 初始化发牌动画
+        InitOnlineDealAnimations();
+
+        // 设置状态
+        _onlineDealAnimating = true;
+        _showDealingCards = true;
+        _state = GameState.DEALING;
+
+        // 隐藏按钮，显示状态
+        ButtonSet(false, false, false, false, false);
+        _lblStatus.Visible = true;
+        _lblStatus.Text = "发牌中...";
+        _lblLeftRemain.Visible = false;
+        _lblRightRemain.Visible = false;
+        _lblLeftStatus.Visible = false;
+        _lblRightStatus.Visible = false;
+        _lblMyStatus.Visible = false;
+    }
+
+    /// <summary>
+    /// 初始化在线模式发牌动画队列
+    /// </summary>
+    private void InitOnlineDealAnimations()
+    {
+        _animManager.Clear();
+        _showDealingCards = true;
+
+        Vector2 dealStartPos = CardLayoutManager.GetDealStartPos();
+
+        // 计算各玩家手牌目标位置
+        var selfPositions = CardLayoutManager.CalculateHandPositions(17);
+        var leftPositions = CardLayoutManager.CalculateLeftPlayerBackPositions(17);
+        var rightPositions = CardLayoutManager.CalculateRightPlayerBackPositions(17);
+        var tablePositions = CardLayoutManager.CalculateTableCardPositions();
+
+        // 发牌顺序：自己(0)、左玩家(1)、右玩家(2)交替
+        int selfIdx = 0, leftIdx = 0, rightIdx = 0;
+
+        for (int i = 0; i < 51; i++)
+        {
+            if (i % 3 == 0) // 自己的牌 - 正面
+            {
+                var card = _myOnlineHandCards[selfIdx];
+                var anim = CardAnimation.CreateDealAnimation(
+                    selfIdx, dealStartPos, selfPositions[selfIdx], card.huase, card.size, false);
+                _animManager.QueueDealAnimation(anim);
+                selfIdx++;
+            }
+            else if (i % 3 == 1) // 左玩家 - 牌背
+            {
+                var anim = CardAnimation.CreateDealAnimation(
+                    leftIdx, dealStartPos, leftPositions[leftIdx], "", 0, true);
+                _animManager.QueueDealAnimation(anim);
+                leftIdx++;
+            }
+            else // 右玩家 - 牌背
+            {
+                var anim = CardAnimation.CreateDealAnimation(
+                    rightIdx, dealStartPos, rightPositions[rightIdx], "", 0, true);
+                _animManager.QueueDealAnimation(anim);
+                rightIdx++;
+            }
+        }
+
+        // 底牌（牌背）
+        for (int i = 0; i < 3; i++)
+        {
+            var anim = CardAnimation.CreateDealAnimation(
+                i, dealStartPos, tablePositions[i], "", 0, true);
+            _animManager.QueueDealAnimation(anim);
+        }
+    }
+
+    /// <summary>
+    /// 发牌动画完成后的处理
+    /// </summary>
+    private void FinishOnlineDealing()
+    {
+        if (!_onlineDealAnimating) return;
+
+        _onlineDealAnimating = false;
+        _showDealingCards = false;
+
+        // 发牌完成，进入叫地主阶段
+        _state = GameState.GRABBING;
+        _lblStatus.Text = "等待叫地主...";
+
+        // 显示剩余牌数标签
+        _lblLeftRemain.Visible = true;
+        _lblRightRemain.Visible = true;
+        _lblLeftRemain.Text = $"剩余牌：{_leftCardBackCount}";
+        _lblRightRemain.Text = $"剩余牌：{_rightCardBackCount}";
+    }
+
+    /// <summary>
+    /// 叫地主轮转
+    /// </summary>
+    private void OnTurnGrabReceived(int userId)
+    {
+        _currentGrabUserId = userId;
+
+        if (IsMyTurn(userId))
+        {
+            // 轮到自己叫地主
+            ButtonSet(1, true); // 显示叫地主/不叫按钮
+            _lblMyStatus.Text = "";
+            _lblMyStatus.Visible = true;
+            _waitingGrabResponse = true;
+        }
+        else
+        {
+            // 其他玩家叫地主（显示等待状态）
+            string playerPos = GetPlayerPositionName(userId);
+            _lblStatus.Text = $"{playerPos} 正在选择...";
+            _waitingGrabResponse = false;
+
+            // 在对应位置显示思考状态
+            if (userId == Models.GameModel.GetLeftUserId())
+            {
+                _lblLeftStatus.Text = "思考中...";
+                _lblLeftStatus.Visible = true;
+            }
+            else if (userId == Models.GameModel.GetRightUserId())
+            {
+                _lblRightStatus.Text = "思考中...";
+                _lblRightStatus.Visible = true;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 抢地主结果
+    /// </summary>
+    private void OnGrabLandlordReceived(GrabDto grabDto)
+    {
+        _landlordId = grabDto.UserId;
+        _grabAnimationPlaying = true;
+
+        // 显示抢地主结果
+        string landlordPos = GetPlayerPositionName(grabDto.UserId);
+        _lblStatus.Text = $"{landlordPos} 成为地主!";
+
+        // 清空思考状态标签
+        _lblLeftStatus.Visible = false;
+        _lblRightStatus.Visible = false;
+        _lblMyStatus.Visible = false;
+
+        // 存储底牌数据
+        _tableCards = grabDto.TableCardList
+            .Select(c => (ConvertColorToHuase(c.Color), c.Weight))
+            .ToList();
+        _tableCardsRevealed = true;
+
+        // 如果自己是地主，添加底牌到手牌
+        if (IsMyTurn(grabDto.UserId))
+        {
+            _bl_isDiZhu = true;
+
+            // 合并底牌到现有手牌
+            var allCards = _myOnlineHandCards
+                .Concat(grabDto.PlayerCardList.Select(c => (ConvertColorToHuase(c.Color), c.Weight)))
+                .OrderByDescending(c => c.Item2)
+                .ToList();
+            _myOnlineHandCards = allCards;
+
+            // 更新手牌位置
+            int newCount = _myOnlineHandCards.Count;
+            _handPositions = CardLayoutManager.CalculateHandPositions(newCount);
+            _handSelected = new bool[newCount];
+            _selection = new CardSelectionHandler(newCount);
+        }
+
+        // 进入出牌阶段（地主先出）
+        _state = GameState.MY_TURN; // 假设先等待网络通知具体轮转
+        ButtonSet(false, false, false, false, false);
+        _grabAnimationPlaying = false;
+    }
+
+    /// <summary>
+    /// 出牌轮转
+    /// </summary>
+    private void OnTurnDealReceived(int userId)
+    {
+        _currentTurnUserId = userId;
+        _isMyTurnOnline = IsMyTurn(userId);
+
+        // 清空思考状态标签
+        _lblLeftStatus.Visible = false;
+        _lblRightStatus.Visible = false;
+        _lblMyStatus.Visible = false;
+
+        if (_isMyTurnOnline)
+        {
+            // 轮到自己出牌
+            if (_lastDealDto == null || _lastDealDto.UserId == userId)
+            {
+                // 首出
+                ButtonSet(4, true);
+                _lblStatus.Text = "请出牌";
+            }
+            else
+            {
+                // 接牌
+                ButtonSet(2, true);
+                _lblStatus.Text = "请出牌";
+            }
+            _state = GameState.MY_TURN;
+        }
+        else
+        {
+            // 其他玩家出牌
+            _state = GameState.AI_TURN; // 用AI_TURN表示等待其他玩家
+            string playerPos = GetPlayerPositionName(userId);
+            _lblStatus.Text = $"{playerPos} 正在出牌...";
+
+            // 在对应位置显示思考状态
+            if (userId == Models.GameModel.GetLeftUserId())
+            {
+                _lblLeftStatus.Text = "思考中...";
+                _lblLeftStatus.Visible = true;
+            }
+            else if (userId == Models.GameModel.GetRightUserId())
+            {
+                _lblRightStatus.Text = "思考中...";
+                _lblRightStatus.Visible = true;
+            }
+
+            ButtonSet(false, false, false, false, false);
+        }
+    }
+
+    /// <summary>
+    /// 出牌广播 - 开始出牌动画
+    /// </summary>
+    private void OnDealBroadcastReceived(DealDto dealDto)
+    {
+        _lastDealDto = dealDto;
+        _lastPaiType = dealDto.Type;
+
+        // 清空之前桌面上的牌
+        YiChu();
+
+        // 清空思考状态标签
+        _lblLeftStatus.Visible = false;
+        _lblRightStatus.Visible = false;
+        _lblMyStatus.Visible = false;
+
+        // 开始出牌动画
+        StartOnlineDealAnimation(dealDto);
+    }
+
+    /// <summary>
+    /// 启动在线模式出牌动画
+    /// </summary>
+    private void StartOnlineDealAnimation(DealDto dealDto)
+    {
+        _dealAnimationPlaying = true;
+        _showPlayingCards = true;
+        _animManager.Clear();
+
+        Vector2 dealStartPos = CardLayoutManager.GetDealStartPos();
+
+        // 计算目标位置（中央出牌区）
+        var targetPositions = CardLayoutManager.CalculatePlayedCardPositions(dealDto.SelectCardList.Count);
+
+        // 根据玩家位置偏移目标位置
+        if (dealDto.UserId == Models.GameModel.GetLeftUserId())
+        {
+            for (int i = 0; i < targetPositions.Length; i++)
+                targetPositions[i] -= new Vector2(200, 0);
+        }
+        else if (dealDto.UserId == Models.GameModel.GetRightUserId())
+        {
+            for (int i = 0; i < targetPositions.Length; i++)
+                targetPositions[i] += new Vector2(200, 0);
+        }
+
+        // 创建出牌动画
+        for (int i = 0; i < dealDto.SelectCardList.Count; i++)
+        {
+            var card = dealDto.SelectCardList[i];
+            string huase = ConvertColorToHuase(card.Color);
+            int size = card.Weight;
+
+            // 从牌堆位置飞向目标位置
+            var anim = CardAnimation.CreatePlayAnimation(
+                i, dealStartPos, targetPositions[i], huase, size);
+            _animManager.StartPlayAnimation(anim);
+        }
+
+        // 缓存已出的牌用于渲染
+        var playedCards = dealDto.SelectCardList
+            .Select(c => (ConvertColorToHuase(c.Color), c.Weight))
+            .ToList();
+
+        if (IsMyTurn(dealDto.UserId))
+            _myPlayedCards = playedCards;
+        else if (dealDto.UserId == Models.GameModel.GetLeftUserId())
+            _leftPlayedCards = playedCards;
+        else
+            _rightPlayedCards = playedCards;
+
+        // 设置动画完成回调
+        _animationCompleteCallbacks.Enqueue(() => FinishOnlineDealAnimation(dealDto));
+    }
+
+    /// <summary>
+    /// 出牌动画完成后的处理
+    /// </summary>
+    private void FinishOnlineDealAnimation(DealDto dealDto)
+    {
+        _dealAnimationPlaying = false;
+        _showPlayingCards = false;
+
+        // 如果是自己出牌，更新手牌
+        if (IsMyTurn(dealDto.UserId) && dealDto.RemainCardList != null)
+        {
+            _myOnlineHandCards = dealDto.RemainCardList
+                .OrderByDescending(c => c.Weight)
+                .Select(c => (ConvertColorToHuase(c.Color), c.Weight))
+                .ToList();
+
+            int newCount = _myOnlineHandCards.Count;
+            _handPositions = CardLayoutManager.CalculateHandPositions(newCount);
+            _handSelected = new bool[newCount];
+            _selection = new CardSelectionHandler(newCount);
+        }
+        else if (dealDto.UserId == Models.GameModel.GetLeftUserId())
+        {
+            _leftCardBackCount = dealDto.RemainCardList?.Count ?? _leftCardBackCount - dealDto.SelectCardList.Count;
+            _lblLeftRemain.Text = $"剩余牌：{_leftCardBackCount}";
+        }
+        else if (dealDto.UserId == Models.GameModel.GetRightUserId())
+        {
+            _rightCardBackCount = dealDto.RemainCardList?.Count ?? _rightCardBackCount - dealDto.SelectCardList.Count;
+            _lblRightRemain.Text = $"剩余牌：{_rightCardBackCount}";
+        }
+    }
+
+    /// <summary>
+    /// 出牌响应
+    /// </summary>
+    private void OnDealResponseReceived(int result)
+    {
+        if (result == -1)
+        {
+            // 出牌失败
+            _lblStatus.Text = "出牌不合法!";
+            // 重新显示按钮
+            if (_lastDealDto == null || _lastDealDto.UserId == GetMyUserId())
+                ButtonSet(4, true);
+            else
+                ButtonSet(2, true);
+        }
+        else
+        {
+            // 出牌成功
+            ButtonSet(false, false, false, false, false);
+            _lblStatus.Text = "";
+        }
+    }
+
+    /// <summary>
+    /// 不出响应
+    /// </summary>
+    private void OnPassResponseReceived(int result)
+    {
+        if (result == -1)
+        {
+            // 不能不出
+            _lblStatus.Text = "必须出牌!";
+        }
+        else
+        {
+            // 不出成功
+            ButtonSet(false, false, false, false, false);
+
+            // 显示"不出"状态
+            if (IsMyTurn(_currentTurnUserId))
+            {
+                _lblMyStatus.Text = "不出";
+                _lblMyStatus.Visible = true;
+            }
+            else if (_currentTurnUserId == Models.GameModel.GetLeftUserId())
+            {
+                _lblLeftStatus.Text = "不出";
+                _lblLeftStatus.Visible = true;
+            }
+            else if (_currentTurnUserId == Models.GameModel.GetRightUserId())
+            {
+                _lblRightStatus.Text = "不出";
+                _lblRightStatus.Visible = true;
+            }
+
+            // 设置显示时长
+            _passStatusDisplayTime = 1500f;
+        }
+    }
+
+    /// <summary>
+    /// 游戏结束
+    /// </summary>
+    private void OnGameOverReceived(OverDto overDto)
+    {
+        _state = GameState.FINISHED;
+        ButtonSet(false, false, false, false, false);
+        _animManager.Clear();
+
+        // 计算胜负
+        int myId = GetMyUserId();
+        bool iWon = overDto.WinUIdList.Contains(myId);
+
+        _lblStatus.Text = iWon ? "胜利!" : "失败!";
+
+        // 构建结果数组
+        bool[] results = new bool[3];
+        string[] names = new string[3];
+
+        // 设置玩家名和结果
+        names[0] = Models.GameModel.GetUserDto(Models.GameModel.GetLeftUserId())?.Name ?? "左玩家";
+        names[1] = Models.GameModel.UserDto?.Name ?? "自己";
+        names[2] = Models.GameModel.GetUserDto(Models.GameModel.GetRightUserId())?.Name ?? "右玩家";
+
+        results[0] = overDto.WinUIdList.Contains(Models.GameModel.GetLeftUserId());
+        results[1] = iWon;
+        results[2] = overDto.WinUIdList.Contains(Models.GameModel.GetRightUserId());
+
+        ScreenManager.Push(new WinScreen(Game, ScreenManager, results, names, OnWinScreenClosed));
+    }
+
+    /// <summary>
+    /// 倍数变化
+    /// </summary>
+    private void OnMultipleChangeReceived(int multiple)
+    {
+        // 可用于显示倍数变化动画（暂不实现）
+    }
+
+    /// <summary>
+    /// 游戏开始
+    /// </summary>
+    private void OnGameStartReceived()
+    {
+        // 游戏开始通知，准备接收手牌
+        _lblStatus.Text = "游戏即将开始...";
+    }
 
     private int _leftCardBackCount = 17;
     private int _rightCardBackCount = 17;

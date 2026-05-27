@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Protocol.Code;
 using Protocol.Dto;
+using System;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -14,15 +15,23 @@ namespace FairiesPoker.MG.Screens;
 /// <summary>
 /// 登录屏幕 - 替代Login.cs
 /// 用户名/密码输入 + 网络登录 + 服务器连接
+/// 对齐原项目UI：使用UILI2.png背景、btn1.png按钮、捕获.PNG头像
 /// </summary>
 public class LoginScreen : ScreenBase
 {
+    // 背景纹理
     private Texture2D? _bgTexture;
+    // 头像纹理
+    private Texture2D? _avatarTexture;
+    // 按钮纹理
+    private Texture2D? _btnNormalTexture;
+    private Texture2D? _btnPressedTexture;
 
+    // UI控件
     private readonly UITextBox _usernameBox = new();
     private readonly UITextBox _passwordBox = new();
-    private readonly UILabel _usernameLabel = new();
-    private readonly UILabel _passwordLabel = new();
+    private readonly UILabel _usernameLabel = new();  // 占位提示"用户名"
+    private readonly UILabel _passwordLabel = new();  // 占位提示"密码"
     private readonly UILabel _connStatus = new();
     private readonly UIButton _loginBtn = new();
     private readonly UIButton _offlineBtn = new();
@@ -32,9 +41,16 @@ public class LoginScreen : ScreenBase
     private NetManager? _netManager;
     private bool _isConnected;
     private bool _loginSuccess;
-    private Point _mousePos;
-    private bool _isDragging;
-    private Vector2 _dragOffset;
+    private bool _loginBtnPressed;
+    private bool _offlineBtnPressed;
+
+    // 窗口尺寸 (原Login.cs: 860x656)
+    private const int WindowWidth = 860;
+    private const int WindowHeight = 656;
+    private static readonly Rectangle UsernameBoxRect = new(165, 288, 541, 65);
+    private static readonly Rectangle PasswordBoxRect = new(165, 383, 541, 65);
+    private static readonly Rectangle RegisterLinkRect = new(738, 318, 100, 30);
+    private static readonly Rectangle ChangePwdLinkRect = new(738, 403, 100, 30);
 
     public LoginScreen(Game1 game, ScreenManager screenManager)
         : base(game, screenManager)
@@ -51,53 +67,95 @@ public class LoginScreen : ScreenBase
         _netManager.OnConnectionStateChanged += OnConnectionStateChanged;
         _netManager.Start();
 
-        // 初始化UI控件 (位置对应原Login.cs)
+        // 加载资源
+        LoadResources();
+
+        // 初始化UI控件 (位置对应原Login.Designer.cs)
+        // 头像pictureBox1: 位置(359,84), 尺寸(141,122)
+        // 登录按钮button1: 位置(165,556), 尺寸(246,67)
+        // 取消按钮button2: 位置(460,556), 尺寸(246,67)
+        // 用户名textBox1: 位置(165,288), 尺寸(541,65)
+        // 密码textBox2: 位置(165,383), 尺寸(541,65)
+        // 用户名提示label1: 位置(174,294)
+        // 密码提示label2: 位置(174,388)
+        // 注册链接linkLabel1: 位置(738,318)
+        // 修改密码链接linkLabel2: 位置(738,403)
+        // 连接状态lblConnectionStatus: 位置(20,620)
+
         _usernameBox.Position = new Vector2(165, 288);
         _usernameBox.Size = new Vector2(541, 65);
-        _usernameBox.Placeholder = "请输入用户名";
+        _usernameBox.Placeholder = "";
+        _usernameBox.BackgroundColor = Color.White;
 
         _passwordBox.Position = new Vector2(165, 383);
         _passwordBox.Size = new Vector2(541, 65);
-        _passwordBox.Placeholder = "请输入密码";
+        _passwordBox.Placeholder = "";
+        _passwordBox.BackgroundColor = Color.White;
+        _passwordBox.IsPassword = true;
 
+        // 占位提示标签 (当输入框为空时显示)
         _usernameLabel.Position = new Vector2(174, 294);
         _usernameLabel.Text = "用户名";
         _usernameLabel.TextColor = Color.LightGray;
+        _usernameLabel.BackgroundColor = Color.White;
+        _usernameLabel.Scale = 1.4f;
 
         _passwordLabel.Position = new Vector2(174, 388);
         _passwordLabel.Text = "密码";
         _passwordLabel.TextColor = Color.LightGray;
+        _passwordLabel.BackgroundColor = Color.White;
+        _passwordLabel.Scale = 1.4f;
 
+        // 登录按钮
         _loginBtn.Position = new Vector2(165, 556);
         _loginBtn.Size = new Vector2(246, 67);
         _loginBtn.Text = "登录";
-        _loginBtn.TextColor = Color.White;
+        _loginBtn.TextColor = Color.Snow;
+        _loginBtn.NormalTexture = _btnNormalTexture;
+        _loginBtn.PressedTexture = _btnPressedTexture;
+        _loginBtn.HoverTexture = _btnNormalTexture;
         _loginBtn.OnClick = OnLogin;
 
+        // 离线模式按钮
         _offlineBtn.Position = new Vector2(460, 556);
         _offlineBtn.Size = new Vector2(246, 67);
         _offlineBtn.Text = "离线模式";
-        _offlineBtn.TextColor = Color.White;
+        _offlineBtn.TextColor = Color.Snow;
+        _offlineBtn.NormalTexture = _btnNormalTexture;
+        _offlineBtn.PressedTexture = _btnPressedTexture;
+        _offlineBtn.HoverTexture = _btnNormalTexture;
         _offlineBtn.OnClick = OnOffline;
 
+        // 连接状态
         _connStatus.Position = new Vector2(20, 620);
         _connStatus.Text = "连接中...";
-        _connStatus.TextColor = Color.Yellow;
-        _connStatus.Size = new Vector2(200, 30);
+        _connStatus.TextColor = Color.Gray;
 
+        // 注册链接
         _registerLink.Position = new Vector2(738, 318);
         _registerLink.Text = "注册账号";
         _registerLink.TextColor = Color.LightBlue;
-        _registerLink.Size = new Vector2(100, 30);
 
+        // 修改密码链接
         _changePwdLink.Position = new Vector2(738, 403);
         _changePwdLink.Text = "修改密码";
         _changePwdLink.TextColor = Color.LightBlue;
-        _changePwdLink.Size = new Vector2(100, 30);
 
         // 订阅网络事件
         Models.OnLoginResult += OnLoginResult;
-        _netManager.OnConnectionStateChanged += OnConnectionStateChanged;
+    }
+
+    private void LoadResources()
+    {
+        // 加载背景图片 (UILI2.png)
+        _bgTexture = UIResourceManager.LoadResource("UILI2.png");
+
+        // 加载头像图片 (捕获.PNG)
+        _avatarTexture = UIResourceManager.LoadResource("捕获.PNG");
+
+        // 加载按钮纹理
+        _btnNormalTexture = UIResourceManager.ButtonNormal;
+        _btnPressedTexture = UIResourceManager.ButtonPressed;
     }
 
     public override void UnloadContent()
@@ -119,63 +177,346 @@ public class LoginScreen : ScreenBase
 
         // 更新网络消息处理
         _netManager?.Update();
+
+        // 更新占位标签可见性
+        _usernameLabel.Visible = string.IsNullOrEmpty(_usernameBox.Text);
+        _passwordLabel.Visible = string.IsNullOrEmpty(_passwordBox.Text);
     }
 
     public override void Draw(GameTime gameTime, SpriteBatch spriteBatch)
     {
         var color = Color.White * Opacity;
+        var layout = GetWindowLayout();
 
-        // 背景
+        // 绘制背景
         if (_bgTexture != null)
         {
-            spriteBatch.Draw(_bgTexture, new Rectangle(0, 0, 860, 656), color);
+            spriteBatch.Draw(_bgTexture,
+                layout.Bounds,
+                color);
+        }
+        else
+        {
+            // 无图片时绘制半透明背景
+            spriteBatch.Draw(UIResourceManager.WhitePixel,
+                layout.Bounds,
+                new Color(60, 60, 80, 200) * Opacity);
         }
 
-        // UI控件
-        _usernameBox.Draw(spriteBatch);
-        _passwordBox.Draw(spriteBatch);
-        _loginBtn.Draw(spriteBatch);
-        _offlineBtn.Draw(spriteBatch);
-        _connStatus.Draw(spriteBatch);
-        _registerLink.Draw(spriteBatch);
-        _changePwdLink.Draw(spriteBatch);
+        // 绘制头像 (位置359,84, 尺寸141x122)
+        if (_avatarTexture != null)
+        {
+            spriteBatch.Draw(_avatarTexture,
+                layout.ToScreenRectangle(359, 84, 141, 122),
+                color);
+        }
 
-        // 输入框有内容时隐藏占位标签
-        if (!string.IsNullOrEmpty(_usernameBox.Text))
-            _usernameLabel.Visible = false;
-        if (!string.IsNullOrEmpty(_passwordBox.Text))
-            _passwordLabel.Visible = false;
+        // 绘制输入框背景(白色)
+        spriteBatch.Draw(UIResourceManager.WhitePixel,
+            layout.ToScreenRectangle(UsernameBoxRect),
+            Color.White * Opacity);
+        spriteBatch.Draw(UIResourceManager.WhitePixel,
+            layout.ToScreenRectangle(PasswordBoxRect),
+            Color.White * Opacity);
+
+        // 绘制输入框文本
+        var font = FontManager.Default;
+        if (font != null)
+        {
+            float inputTextScale = 1.4f * layout.Scale;
+
+            // 用户名文本
+            string usernameDisplay = _usernameBox.Text;
+            if (string.IsNullOrEmpty(usernameDisplay) && !_usernameBox.IsFocused)
+            {
+                // 显示占位提示
+                FontManager.DrawString(spriteBatch, font, _usernameLabel.Text,
+                    layout.ToScreen(new Vector2(174, 294)),
+                    Color.LightGray * Opacity, inputTextScale);
+            }
+            else
+            {
+                FontManager.DrawString(spriteBatch, font, usernameDisplay,
+                    layout.ToScreen(new Vector2(174, 294)),
+                    Color.Black * Opacity, inputTextScale);
+            }
+
+            // 密码文本(显示为星号)
+            string passwordDisplay = _passwordBox.IsPassword && !string.IsNullOrEmpty(_passwordBox.Text)
+                ? new string('*', _passwordBox.Text.Length)
+                : _passwordBox.Text;
+            if (string.IsNullOrEmpty(_passwordBox.Text) && !_passwordBox.IsFocused)
+            {
+                FontManager.DrawString(spriteBatch, font, _passwordLabel.Text,
+                    layout.ToScreen(new Vector2(174, 388)),
+                    Color.LightGray * Opacity, inputTextScale);
+            }
+            else
+            {
+                FontManager.DrawString(spriteBatch, font, passwordDisplay,
+                    layout.ToScreen(new Vector2(174, 388)),
+                    Color.Black * Opacity, inputTextScale);
+            }
+        }
+
+        // 绘制按钮
+        DrawButton(spriteBatch, _loginBtn, layout, _loginBtnPressed);
+        DrawButton(spriteBatch, _offlineBtn, layout, _offlineBtnPressed);
+
+        // 绘制连接状态
+        if (font != null)
+        {
+            FontManager.DrawString(spriteBatch, font, _connStatus.Text,
+                layout.ToScreen(new Vector2(20, 620)),
+                _connStatus.TextColor * Opacity, layout.Scale);
+        }
+
+        // 绘制链接
+        if (font != null)
+        {
+            FontManager.DrawString(spriteBatch, font, _registerLink.Text,
+                layout.ToScreen(new Vector2(738, 318)),
+                _registerLink.TextColor * Opacity, layout.Scale);
+            FontManager.DrawString(spriteBatch, font, _changePwdLink.Text,
+                layout.ToScreen(new Vector2(738, 403)),
+                _changePwdLink.TextColor * Opacity, layout.Scale);
+        }
+    }
+
+    private void DrawButton(SpriteBatch sb, UIButton btn, WindowLayout layout, bool pressed)
+    {
+        var texture = pressed
+            ? btn.PressedTexture ?? btn.NormalTexture
+            : btn.NormalTexture;
+        var rect = layout.ToScreenRectangle(btn.Position, btn.Size);
+
+        if (texture != null)
+        {
+            sb.Draw(texture, rect, Color.White * Opacity);
+        }
+        else
+        {
+            sb.Draw(UIResourceManager.WhitePixel, rect,
+                (pressed ? btn.PressedBackgroundColor : btn.BackgroundColor) * Opacity);
+        }
+
+        // 绘制按钮文字
+        var font = FontManager.Default;
+        if (font != null && !string.IsNullOrEmpty(btn.Text))
+        {
+            float textScale = layout.Scale;
+            var textSize = FontManager.MeasureString(btn.Text, font, textScale);
+            var textPos = new Vector2(
+                rect.X + (rect.Width - textSize.X) / 2f,
+                rect.Y + (rect.Height - textSize.Y) / 2f);
+            FontManager.DrawString(sb, font, btn.Text, textPos, btn.TextColor * Opacity, textScale);
+        }
     }
 
     public override void HandleInput(InputManager input)
     {
-        _mousePos = new Point((int)input.MousePosition.X, (int)input.MousePosition.Y);
+        var layout = GetWindowLayout();
 
-        // 窗口拖拽
-        if (input.LeftMouseClicked && _mousePos.Y < 200)
+        // 转换为相对于窗口的坐标
+        var localMousePos = layout.ToLocal(input.MousePosition);
+
+        // 更新按钮状态
+        bool loginHovered = _loginBtn.Bounds.Contains(localMousePos);
+        bool offlineHovered = _offlineBtn.Bounds.Contains(localMousePos);
+
+        if (input.LeftMouseClicked)
         {
-            _isDragging = true;
-            _dragOffset = input.MousePosition;
-        }
-        if (input.LeftMouseReleased) _isDragging = false;
-
-        // 更新UI控件输入
-        _usernameBox.Update(input);
-        _passwordBox.Update(input);
-        _loginBtn.Update(input);
-        _offlineBtn.Update(input);
-
-        // 注册链接点击
-        if (input.LeftMouseReleased && _registerLink.Bounds.Contains(_mousePos))
-        {
-            ScreenManager.Push(new RegisterScreen(Game, ScreenManager, _netManager!));
+            _loginBtnPressed = loginHovered;
+            _offlineBtnPressed = offlineHovered;
         }
 
-        // 修改密码链接点击
-        if (input.LeftMouseReleased && _changePwdLink.Bounds.Contains(_mousePos))
+        // 点击处理
+        if (input.LeftMouseReleased)
         {
-            // TODO: 打开修改密码屏幕
+            bool loginClicked = _loginBtnPressed && loginHovered;
+            bool offlineClicked = _offlineBtnPressed && offlineHovered;
+            _loginBtnPressed = false;
+            _offlineBtnPressed = false;
+
+            if (loginClicked) OnLogin();
+            else if (offlineClicked) OnOffline();
+            else if (UsernameBoxRect.Contains(localMousePos))
+            {
+                _usernameBox.IsFocused = true;
+                _passwordBox.IsFocused = false;
+            }
+            else if (PasswordBoxRect.Contains(localMousePos))
+            {
+                _usernameBox.IsFocused = false;
+                _passwordBox.IsFocused = true;
+            }
+            else if (RegisterLinkRect.Contains(localMousePos))
+            {
+                // 打开注册
+                ScreenManager.Push(new RegisterScreen(Game, ScreenManager, _netManager!));
+            }
+            else if (ChangePwdLinkRect.Contains(localMousePos))
+            {
+                // TODO: 打开修改密码屏幕
+            }
         }
+        else if (!input.LeftMouseHeld)
+        {
+            _loginBtnPressed = false;
+            _offlineBtnPressed = false;
+        }
+
+        // 键盘输入处理
+        if (_usernameBox.IsFocused || _passwordBox.IsFocused)
+        {
+            HandleTextInput(input);
+        }
+
+        // ESC返回
+        if (input.KeyPressed(Keys.Escape))
+        {
+            OnOffline();
+        }
+    }
+
+    private WindowLayout GetWindowLayout()
+    {
+        return WindowLayout.Create(DisplayManager.DesignWidth, DisplayManager.DesignHeight, WindowWidth, WindowHeight);
+    }
+
+    private readonly struct WindowLayout
+    {
+        public Rectangle Bounds { get; }
+        public float Scale { get; }
+
+        private WindowLayout(Rectangle bounds, float scale)
+        {
+            Bounds = bounds;
+            Scale = scale;
+        }
+
+        public static WindowLayout Create(int viewportWidth, int viewportHeight, int windowWidth, int windowHeight)
+        {
+            float scale = Math.Min(1f, Math.Min(
+                viewportWidth / (float)windowWidth,
+                viewportHeight / (float)windowHeight));
+
+            if (scale <= 0f || float.IsNaN(scale) || float.IsInfinity(scale))
+            {
+                scale = 1f;
+            }
+
+            int width = (int)Math.Round(windowWidth * scale);
+            int height = (int)Math.Round(windowHeight * scale);
+            int x = (viewportWidth - width) / 2;
+            int y = (viewportHeight - height) / 2;
+
+            return new WindowLayout(new Rectangle(x, y, width, height), scale);
+        }
+
+        public Vector2 ToScreen(Vector2 localPosition)
+        {
+            return new Vector2(
+                Bounds.X + localPosition.X * Scale,
+                Bounds.Y + localPosition.Y * Scale);
+        }
+
+        public Point ToLocal(Vector2 screenPosition)
+        {
+            return new Point(
+                (int)((screenPosition.X - Bounds.X) / Scale),
+                (int)((screenPosition.Y - Bounds.Y) / Scale));
+        }
+
+        public Rectangle ToScreenRectangle(float x, float y, float width, float height)
+        {
+            return ToScreenRectangle(new Vector2(x, y), new Vector2(width, height));
+        }
+
+        public Rectangle ToScreenRectangle(Rectangle localRectangle)
+        {
+            return ToScreenRectangle(
+                new Vector2(localRectangle.X, localRectangle.Y),
+                new Vector2(localRectangle.Width, localRectangle.Height));
+        }
+
+        public Rectangle ToScreenRectangle(Vector2 localPosition, Vector2 localSize)
+        {
+            return new Rectangle(
+                (int)Math.Round(Bounds.X + localPosition.X * Scale),
+                (int)Math.Round(Bounds.Y + localPosition.Y * Scale),
+                (int)Math.Round(localSize.X * Scale),
+                (int)Math.Round(localSize.Y * Scale));
+        }
+    }
+
+    private void HandleTextInput(InputManager input)
+    {
+        UITextBox activeBox = _usernameBox.IsFocused ? _usernameBox : _passwordBox;
+
+        // 处退格
+        if (input.KeyPressed(Keys.Back) && activeBox.Text.Length > 0)
+        {
+            activeBox.Text = activeBox.Text.Substring(0, activeBox.Text.Length - 1);
+        }
+
+        // Enter提交
+        if (input.KeyPressed(Keys.Enter))
+        {
+            if (_usernameBox.IsFocused)
+            {
+                _usernameBox.IsFocused = false;
+                _passwordBox.IsFocused = true;
+            }
+            else
+            {
+                OnLogin();
+            }
+        }
+
+        // Tab切换
+        if (input.KeyPressed(Keys.Tab))
+        {
+            _usernameBox.IsFocused = !_usernameBox.IsFocused;
+            _passwordBox.IsFocused = !_passwordBox.IsFocused;
+        }
+
+        // 字符输入
+        foreach (Keys key in Enum.GetValues(typeof(Keys)))
+        {
+            if (input.KeyPressed(key))
+            {
+                char c = KeyToChar(key, input.KeyHeld(Keys.LeftShift) || input.KeyHeld(Keys.RightShift));
+                if (c != '\0')
+                {
+                    activeBox.Text += c;
+                }
+            }
+        }
+    }
+
+    private static char KeyToChar(Keys key, bool shift)
+    {
+        if (key >= Keys.A && key <= Keys.Z)
+        {
+            char c = (char)('a' + (key - Keys.A));
+            return shift ? char.ToUpper(c) : c;
+        }
+        if (key >= Keys.D0 && key <= Keys.D9)
+        {
+            return shift ? (key - Keys.D0) switch
+            {
+                1 => '!', 2 => '@', 3 => '#', 4 => '$', 5 => '%',
+                6 => '^', 7 => '&', 8 => '*', 9 => '(', 0 => ')',
+                _ => '0'
+            } : (char)('0' + (key - Keys.D0));
+        }
+        if (key == Keys.Space) return ' ';
+        if (key == Keys.OemPeriod) return shift ? '>' : '.';
+        if (key == Keys.OemComma) return shift ? '<' : ',';
+        if (key == Keys.OemMinus) return shift ? '_' : '-';
+        if (key == Keys.OemPlus) return shift ? '+' : '=';
+        return '\0';
     }
 
     private void OnLogin()

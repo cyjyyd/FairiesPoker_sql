@@ -59,7 +59,7 @@ public class UILabel : UIControl
             sb.Draw(WhitePixel, new Rectangle((int)Position.X + (int)Size.X - 1, (int)Position.Y, 1, (int)Size.Y), BorderColor);
         }
 
-        var textSize = font.MeasureString(Text) * Scale;
+        var textSize = FontManager.MeasureString(Text, font, Scale);
         float x = TextAlignment switch
         {
             AlignmentType.Center => Position.X + (Size.X - textSize.X) / 2,
@@ -67,6 +67,6 @@ public class UILabel : UIControl
             _ => Position.X
         };
 
-        sb.DrawString(font, Text, new Vector2(x, Position.Y), TextColor, 0, Vector2.Zero, Scale, SpriteEffects.None, 0);
+        FontManager.DrawString(sb, font, Text, new Vector2(x, Position.Y), TextColor, Scale);
     }
 }

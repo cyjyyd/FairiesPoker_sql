@@ -82,7 +82,11 @@ public class UIButton : UIControl
     {
         if (!Visible) return;
 
-        Texture2D? texture = IsPressed ? PressedTexture : (IsHovered ? HoverTexture : NormalTexture);
+        Texture2D? texture = IsPressed
+            ? PressedTexture ?? UIResourceManager.ButtonPressed ?? NormalTexture ?? UIResourceManager.ButtonNormal
+            : IsHovered
+                ? HoverTexture ?? NormalTexture ?? UIResourceManager.ButtonNormal
+                : NormalTexture ?? UIResourceManager.ButtonNormal;
 
         if (texture != null)
         {
@@ -106,9 +110,9 @@ public class UIButton : UIControl
             var font = FontManager.Default;
             if (font != null)
             {
-                var textSize = font.MeasureString(Text);
+                var textSize = FontManager.MeasureString(Text, font);
                 var textPos = Position + (Size - textSize) / 2;
-                sb.DrawString(font, Text, textPos, TextColor);
+                FontManager.DrawString(sb, font, Text, textPos, TextColor);
             }
         }
     }

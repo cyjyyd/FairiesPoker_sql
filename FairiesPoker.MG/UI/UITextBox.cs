@@ -15,9 +15,11 @@ public class UITextBox : UIControl
     public string Placeholder { get; set; } = "";
     public Color TextColor { get; set; } = Color.White;
     public Color PlaceholderColor { get; set; } = Color.Gray;
+    public Color BackgroundColor { get; set; } = Color.Transparent;
     public SpriteFont? Font { get; set; }
+    public bool IsPassword { get; set; } = false;
 
-    public bool IsFocused { get; private set; }
+    public bool IsFocused { get; set; }
     public Action<string>? OnTextChanged;
     public Action? OnEnterPressed;
 
@@ -87,12 +89,12 @@ public class UITextBox : UIControl
         string displayText = string.IsNullOrEmpty(Text) ? Placeholder : Text;
         Color color = string.IsNullOrEmpty(Text) ? PlaceholderColor : TextColor;
 
-        sb.DrawString(font, displayText, Position + new Vector2(4, 2), color);
+        FontManager.DrawString(sb, font, displayText, Position + new Vector2(4, 2), color);
 
         // 绘制光标
         if (IsFocused && _cursorVisible)
         {
-            var textWidth = font.MeasureString(Text).X;
+            var textWidth = FontManager.MeasureString(Text, font).X;
             var cursorRect = new Rectangle((int)(Position.X + textWidth + 4), (int)Position.Y, 1, (int)Size.Y);
             sb.Draw(TextureManager.Get("_white") ?? CreateWhitePixel(), cursorRect, TextColor);
         }

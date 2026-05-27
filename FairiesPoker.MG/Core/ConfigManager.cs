@@ -9,6 +9,16 @@ namespace FairiesPoker.MG.Core;
 /// </summary>
 public static class ConfigManager
 {
+    public const int DefaultWindowWidth = 1280;
+    public const int DefaultWindowHeight = 720;
+
+    public static readonly (int Width, int Height)[] ResolutionPresets =
+    {
+        (1280, 720),
+        (1920, 1080),
+        (2560, 1440)
+    };
+
     // 音效开关
     public static bool SoundFX { get; set; } = true;
     public static bool BackMusic { get; set; } = true;
@@ -17,8 +27,9 @@ public static class ConfigManager
     public static int UITheme { get; set; } = 5;
 
     // 窗口设置
-    public static int WindowWidth { get; set; } = 1280;
-    public static int WindowHeight { get; set; } = 720;
+    public static int WindowWidth { get; set; } = DefaultWindowWidth;
+    public static int WindowHeight { get; set; } = DefaultWindowHeight;
+    public static bool BorderlessWindow { get; set; } = false;
     public static bool FullScreen { get; set; } = false;
 
     // 网络设置
@@ -45,6 +56,7 @@ public static class ConfigManager
             UITheme = int.Parse(ReadIniData("Settings", "UI", "5", path));
             WindowWidth = int.Parse(ReadIniData("Settings", "Width", "1280", path));
             WindowHeight = int.Parse(ReadIniData("Settings", "Height", "720", path));
+            BorderlessWindow = ReadIniData("Settings", "Borderless", "0", path) == "1";
             FullScreen = ReadIniData("Settings", "FullScreen", "0", path) == "1";
             ServerIP = ReadIniData("Network", "IP", "127.0.0.1", path);
             string portStr = ReadIniData("Network", "Port", "40960", path);
@@ -54,6 +66,8 @@ public static class ConfigManager
         {
             // 使用默认值
         }
+
+        NormalizeWindowSize();
     }
 
     // 保存配置
@@ -67,6 +81,7 @@ public static class ConfigManager
             WriteIniData("Settings", "UI", UITheme.ToString(), path);
             WriteIniData("Settings", "Width", WindowWidth.ToString(), path);
             WriteIniData("Settings", "Height", WindowHeight.ToString(), path);
+            WriteIniData("Settings", "Borderless", BorderlessWindow ? "1" : "0", path);
             WriteIniData("Settings", "FullScreen", FullScreen ? "1" : "0", path);
             WriteIniData("Network", "IP", ServerIP, path);
             WriteIniData("Network", "Port", ServerPort.ToString(), path);
@@ -95,6 +110,13 @@ public static class ConfigManager
     private static void WriteIniData(string section, string key, string val, string path)
     {
         WritePrivateProfileString(section, key, val, path);
+    }
+
+    public static void NormalizeWindowSize()
+    {
+        if (WindowWidth <= 0) WindowWidth = DefaultWindowWidth;
+        if (WindowHeight <= 0) WindowHeight = DefaultWindowHeight;
+        if (FullScreen) BorderlessWindow = false;
     }
 
     private static string GetThemeSuffix(int theme)
