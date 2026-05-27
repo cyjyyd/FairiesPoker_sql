@@ -3187,27 +3187,6 @@ public class GameScreen : ScreenBase
         _lblStatus.Text = "游戏即将开始...";
     }
 
-    private void SendPassRequest()
-    {
-        if (_netManager?.IsConnected == true)
-            _netManager.Execute(0, new SocketMsg(OpCode.FIGHT, FightCode.PASS_CREQ, null));
-    }
-
-    private void SendDealRequest(List<CardDto> cards)
-    {
-        if (_netManager?.IsConnected == true && Models.GameModel?.UserDto != null)
-        {
-            var dealDto = new DealDto(cards, Models.GameModel.UserDto.Id);
-            _netManager.Execute(0, new SocketMsg(OpCode.FIGHT, FightCode.DEAL_CREQ, dealDto));
-        }
-    }
-
-    private void SendGrabRequest(bool grab)
-    {
-        if (_netManager?.IsConnected == true)
-            _netManager.Execute(0, new SocketMsg(OpCode.FIGHT, FightCode.GRAB_LANDLORD_CREQ, grab));
-    }
-
     private List<CardDto> GetSelectedOnlineCards()
     {
         var selectedCards = new List<CardDto>();
