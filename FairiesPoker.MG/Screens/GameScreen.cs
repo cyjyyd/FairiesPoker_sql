@@ -481,7 +481,7 @@ public class GameScreen : ScreenBase
 
     private void InitOnline()
     {
-        _netManager = new NetManager();
+        _netManager = NetManager.Instance ?? new NetManager();
         _onlineCards = new List<CardDto>();
         _tableCards = new List<(string, int)>();
         _myPlayedCards = new List<(string, int)>();
@@ -490,6 +490,18 @@ public class GameScreen : ScreenBase
         _handPositions = Array.Empty<Vector2>();
         _handSelected = Array.Empty<bool>();
         _selection = new CardSelectionHandler(0);
+        NewPlayer();
+
+        var matchRoom = Models.GameModel?.MatchRoomDto;
+        if (matchRoom != null)
+        {
+            if (matchRoom.LeftId > 0 && matchRoom.UIdUserDict.TryGetValue(matchRoom.LeftId, out var leftUser))
+                _leftName = leftUser.Name;
+            if (Models.GameModel?.UserDto != null)
+                _selfName = Models.GameModel.UserDto.Name;
+            if (matchRoom.RightId > 0 && matchRoom.UIdUserDict.TryGetValue(matchRoom.RightId, out var rightUser))
+                _rightName = rightUser.Name;
+        }
 
         _state = GameState.WAITING;
         _lblStatus.Text = "等待游戏开始...";
@@ -3174,6 +3186,176 @@ public class GameScreen : ScreenBase
         // 游戏开始通知，准备接收手牌
         _lblStatus.Text = "游戏即将开始...";
     }
+
+    private void SendPassRequest()
+    {
+        if (_netManager?.IsConnected == true)
+            _netManager.Execute(0, new SocketMsg(OpCode.FIGHT, FightCode.PASS_CREQ, null));
+    }
+
+    private void SendDealRequest(List<CardDto> cards)
+    {
+        if (_netManager?.IsConnected == true && Models.GameModel?.UserDto != null)
+        {
+            var dealDto = new DealDto(cards, Models.GameModel.UserDto.Id);
+            _netManager.Execute(0, new SocketMsg(OpCode.FIGHT, FightCode.DEAL_CREQ, dealDto));
+        }
+    }
+
+    private void SendGrabRequest(bool grab)
+    {
+        if (_netManager?.IsConnected == true)
+            _netManager.Execute(0, new SocketMsg(OpCode.FIGHT, FightCode.GRAB_LANDLORD_CREQ, grab));
+    }
+
+    private List<CardDto> GetSelectedOnlineCards()
+    {
+        var selectedCards = new List<CardDto>();
+        if (_onlineCards == null) return selectedCards;
+
+        foreach (int idx in GetSelectedCardIndices())
+        {
+            if (idx >= 0 && idx < _onlineCards.Count)
+                selectedCards.Add(_onlineCards[idx]);
+        }
+
+        return selectedCards;
+    }
+
+    private void RebuildOnlineHand()
+    {
+        EnsurePlayersForOnline();
+        if (_onlineCards == null) _onlineCards = new List<CardDto>();
+
+        _pai = new Pai[Math.Max(54, _onlineCards.Count + 3)];
+        _juese2.ShengYuPai.Clear();
+        _juese2.ImagePaiSub.Clear();
+
+        for (int i = 0; i < _onlineCards.Count; i++)
+        {
+            var renderCard = ToRenderCard(_onlineCards[i]);
+            _pai[i] = new Pai(renderCard.huase, renderCard.size) { Index = i };
+            _juese2.ImagePaiSub.Add(i);
+            _juese2.ShengYuPai.Add(renderCard.size);
+        }
+
+        _handSelected = new bool[_onlineCards.Count];
+        _handPositions = CardLayoutManager.CalculateHandPositions(_onlineCards.Count);
+        _selection = new CardSelectionHandler(_onlineCards.Count);
+    }
+
+    private void EnsurePlayersForOnline()
+    {
+        if (_juese1 == null || _juese2 == null || _juese3 == null)
+            NewPlayer();
+    }
+
+    private void RemoveOnlineCards(List<CardDto>? cardList)
+    {
+        if (_onlineCards == null || cardList == null) return;
+
+        foreach (var card in cardList)
+        {
+            int index = _onlineCards.FindIndex(c => c.Weight == card.Weight && c.Color == card.Color);
+            if (index >= 0)
+                _onlineCards.RemoveAt(index);
+        }
+
+        RebuildOnlineHand();
+        ClearOnlineSelection();
+    }
+
+    private void ClearOnlineSelection()
+    {
+        _selection.ClearSelection();
+        for (int i = 0; i < _handSelected.Length; i++)
+            _handSelected[i] = false;
+    }
+
+    private void ClearOnlinePlayedCards()
+    {
+        _myPlayedCards.Clear();
+        _leftPlayedCards.Clear();
+        _rightPlayedCards.Clear();
+    }
+
+    private List<(string huase, int size)> GetPlayedCardList(int userId)
+    {
+        if (IsSelf(userId)) return _myPlayedCards;
+        if (IsLeftPlayer(userId)) return _leftPlayedCards;
+        return _rightPlayedCards;
+    }
+
+    private void UpdateOnlineOtherRemain(int userId, int count)
+    {
+        if (IsLeftPlayer(userId))
+        {
+            _leftCardCount = count;
+            _lblLeftRemain.Text = $"剩余牌：{count}";
+            _lblLeftRemain.Visible = true;
+        }
+        else if (IsRightPlayer(userId))
+        {
+            _rightCardCount = count;
+            _lblRightRemain.Text = $"剩余牌：{count}";
+            _lblRightRemain.Visible = true;
+        }
+    }
+
+    private void HideOnlineActionButtons()
+    {
+        ButtonSet(false, false, false, false, false);
+    }
+
+    private void SetPlayerStatus(int userId, string status)
+    {
+        UILabel label = IsLeftPlayer(userId) ? _lblLeftStatus : _lblRightStatus;
+        label.Text = status;
+        label.Visible = !string.IsNullOrEmpty(status);
+    }
+
+    private void MarkOnlineLandlord(int userId)
+    {
+        var matchRoom = Models.GameModel?.MatchRoomDto;
+        if (matchRoom == null) return;
+
+        if (matchRoom.UIdUserDict.TryGetValue(matchRoom.LeftId, out var leftUser))
+            _leftName = (userId == matchRoom.LeftId ? "【地主】" : "") + leftUser.Name;
+        if (Models.GameModel?.UserDto != null)
+            _selfName = (userId == Models.GameModel.UserDto.Id ? "【地主】" : "") + Models.GameModel.UserDto.Name;
+        if (matchRoom.UIdUserDict.TryGetValue(matchRoom.RightId, out var rightUser))
+            _rightName = (userId == matchRoom.RightId ? "【地主】" : "") + rightUser.Name;
+
+        _juese1.Dizhu = userId == matchRoom.LeftId;
+        _juese2.Dizhu = IsSelf(userId);
+        _juese3.Dizhu = userId == matchRoom.RightId;
+    }
+
+    private bool IsSelf(int userId) => Models.GameModel?.UserDto != null && userId == Models.GameModel.UserDto.Id;
+
+    private bool IsLeftPlayer(int userId) => Models.GameModel?.MatchRoomDto != null && userId == Models.GameModel.MatchRoomDto.LeftId;
+
+    private bool IsRightPlayer(int userId) => Models.GameModel?.MatchRoomDto != null && userId == Models.GameModel.MatchRoomDto.RightId;
+
+    private (string huase, int size) ToRenderCard(CardDto card)
+    {
+        if (card.Weight == 16 || card.Weight == 17)
+            return ("", card.Weight);
+
+        string huase = card.Color switch
+        {
+            0 => "hongtao",
+            1 => "fangkuai",
+            2 => "meihua",
+            3 => "heitao",
+            _ => ""
+        };
+        return (huase, card.Weight);
+    }
+
+    #endregion
+
+    #region 工具
 
     private int _leftCardBackCount = 17;
     private int _rightCardBackCount = 17;

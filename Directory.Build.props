@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
+    <!-- Allow Linux/macOS CI containers to restore and build projects targeting net*-windows. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+</Project>
