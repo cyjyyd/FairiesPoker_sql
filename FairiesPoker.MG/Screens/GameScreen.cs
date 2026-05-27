@@ -2554,15 +2554,15 @@ public class GameScreen : ScreenBase
     // 动画完成回调队列
     private Queue<Action> _animationCompleteCallbacks = new();
 
-    // 花色转换：CardColor常量 → huase字符串
+    // 花色转换：FPServer发牌使用 0=红桃, 1=方片, 2=梅花, 3=黑桃
     private string ConvertColorToHuase(int color)
     {
         return color switch
         {
-            1 => "meihua",    // CLUB 梅花
-            2 => "hongtao",   // HEART 红桃
-            3 => "heitao",    // SPADE 黑桃
-            4 => "fangkuai",  // SQUARE 方片
+            0 => "hongtao",
+            1 => "fangkuai",
+            2 => "meihua",
+            3 => "heitao",
             _ => ""           // 大小王无花色
         };
     }
@@ -2657,24 +2657,11 @@ public class GameScreen : ScreenBase
     /// </summary>
     private void PlayOnlineSelectedCards()
     {
-        var selectedIndices = GetSelectedCardIndices();
-        if (selectedIndices.Count == 0)
+        var selectedCards = GetSelectedOnlineCards();
+        if (selectedCards.Count == 0)
         {
             _lblStatus.Text = "请选择要出的牌";
             return;
-        }
-
-        // 构建选中的牌数据
-        var selectedCards = new List<CardDto>();
-        foreach (int idx in selectedIndices)
-        {
-            if (idx < _myOnlineHandCards.Count)
-            {
-                var card = _myOnlineHandCards[idx];
-                // 根据花色字符串反推Color值
-                int color = ConvertHuaseToColor(card.huase);
-                selectedCards.Add(new CardDto("", color, card.size));
-            }
         }
 
         // 发送出牌请求
@@ -2686,9 +2673,13 @@ public class GameScreen : ScreenBase
     /// </summary>
     private void SendDealRequest(List<CardDto> cards)
     {
-        if (_netManager != null && _netManager.IsConnected)
+        if (_netManager != null && _netManager.IsConnected && cards.Count > 0)
         {
-            var dealDto = new DealDto(cards, GetMyUserId());
+            var normalizedCards = cards
+                .OrderBy(c => c.Weight)
+                .ThenBy(c => c.Color)
+                .ToList();
+            var dealDto = new DealDto(normalizedCards, GetMyUserId());
             var msg = new SocketMsg(OpCode.FIGHT, FightCode.DEAL_CREQ, dealDto);
             _netManager.Execute(0, msg);
             // 隐藏按钮等待响应
@@ -2703,10 +2694,10 @@ public class GameScreen : ScreenBase
     {
         return huase switch
         {
-            "meihua" => 1,    // CLUB 梅花
-            "hongtao" => 2,   // HEART 红桃
-            "heitao" => 3,    // SPADE 黑桃
-            "fangkuai" => 4,  // SQUARE 方片
+            "hongtao" => 0,
+            "fangkuai" => 1,
+            "meihua" => 2,
+            "heitao" => 3,
             _ => 0            // 大小王无花色
         };
     }
@@ -2717,11 +2708,7 @@ public class GameScreen : ScreenBase
     private void OnGetCardsReceived(List<CardDto> cardList)
     {
         // 存储手牌数据（按权重降序排序）
-        _onlineCards = cardList;
-        _myOnlineHandCards = cardList
-            .OrderByDescending(c => c.Weight)
-            .Select(c => (ConvertColorToHuase(c.Color), c.Weight))
-            .ToList();
+        SyncOnlineHandFromServerCards(cardList);
 
         // 初始化手牌UI结构
         int handCount = _myOnlineHandCards.Count;
@@ -2898,12 +2885,8 @@ public class GameScreen : ScreenBase
         {
             _bl_isDiZhu = true;
 
-            // 合并底牌到现有手牌
-            var allCards = _myOnlineHandCards
-                .Concat(grabDto.PlayerCardList.Select(c => (ConvertColorToHuase(c.Color), c.Weight)))
-                .OrderByDescending(c => c.Item2)
-                .ToList();
-            _myOnlineHandCards = allCards;
+            // 服务端广播的 PlayerCardList 已经是地主完整手牌，直接同步，避免重复合并底牌。
+            SyncOnlineHandFromServerCards(grabDto.PlayerCardList);
 
             // 更新手牌位置
             int newCount = _myOnlineHandCards.Count;
@@ -3057,10 +3040,7 @@ public class GameScreen : ScreenBase
         // 如果是自己出牌，更新手牌
         if (IsMyTurn(dealDto.UserId) && dealDto.RemainCardList != null)
         {
-            _myOnlineHandCards = dealDto.RemainCardList
-                .OrderByDescending(c => c.Weight)
-                .Select(c => (ConvertColorToHuase(c.Color), c.Weight))
-                .ToList();
+            SyncOnlineHandFromServerCards(dealDto.RemainCardList);
 
             int newCount = _myOnlineHandCards.Count;
             _handPositions = CardLayoutManager.CalculateHandPositions(newCount);
@@ -3201,6 +3181,22 @@ public class GameScreen : ScreenBase
         return selectedCards;
     }
 
+    private void SyncOnlineHandFromServerCards(IEnumerable<CardDto> cards)
+    {
+        _onlineCards = SortOnlineCards(cards);
+        _myOnlineHandCards = _onlineCards
+            .Select(c => (ConvertColorToHuase(c.Color), c.Weight))
+            .ToList();
+    }
+
+    private static List<CardDto> SortOnlineCards(IEnumerable<CardDto> cards)
+    {
+        return (cards ?? Enumerable.Empty<CardDto>())
+            .OrderByDescending(c => c.Weight)
+            .ThenBy(c => c.Color)
+            .ToList();
+    }
+
     private void RebuildOnlineHand()
     {
         EnsurePlayersForOnline();
@@ -3321,15 +3317,7 @@ public class GameScreen : ScreenBase
         if (card.Weight == 16 || card.Weight == 17)
             return ("", card.Weight);
 
-        string huase = card.Color switch
-        {
-            0 => "hongtao",
-            1 => "fangkuai",
-            2 => "meihua",
-            3 => "heitao",
-            _ => ""
-        };
-        return (huase, card.Weight);
+        return (ConvertColorToHuase(card.Color), card.Weight);
     }
 
     #endregion
