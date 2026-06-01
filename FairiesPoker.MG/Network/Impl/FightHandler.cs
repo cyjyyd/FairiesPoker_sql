@@ -144,11 +144,6 @@ public class FightHandler : HandlerBase
     }
 
     /// <summary>
-    /// 是否是第一个玩家抢地主 而不是 因为别的玩家不叫地主而转换的
-    /// </summary>
-    private bool isFirst = true;
-
-    /// <summary>
     /// 转换抢地主
     /// </summary>
     /// <param name="userId"></param>

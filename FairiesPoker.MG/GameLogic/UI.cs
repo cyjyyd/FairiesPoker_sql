@@ -11,20 +11,18 @@ namespace FairiesPoker
 {
     public enum Path
     {
-        [Description("第一部")]
+        [Description("奇妙仙子")]
         UI_TB=1,
-        [Description("第二部")]
+        [Description("失落的宝藏")]
         UI_LT=2,
-        [Description("第三部")]
+        [Description("拯救精灵大作战")]
         UI_FR=3,
-        [Description("第四部")]
+        [Description("羽翼之谜")]
         UI_SW=4,
-        [Description("第五部")]
+        [Description("海盗仙子")]
         UI_PF=5,
-        [Description("第六部")]
-        UI_LN=6,
-        [Description("仙子杯")]
-        UI_PG=7
+        [Description("永无兽传奇")]
+        UI_LN=6
 
     }
     class UI
@@ -94,25 +92,40 @@ namespace FairiesPoker
                 case 6:
                     uipath = Path.UI_LN.ToString(); uiselect = Convert.ToInt32(Path.UI_LN);
                     break;
-                case 7:
-                    uipath = Path.UI_PG.ToString(); uiselect = Convert.ToInt32(Path.UI_PG);
-                    break;
                 default:
                     uipath = Path.UI_PF.ToString(); uiselect = Convert.ToInt32(Path.UI_PF);
                     break;
             }
             fpath = apppath + "\\" + uipath + "\\";
-            try
+            button = LoadThemeImage("btn1.png") ?? new Bitmap(1, 1);
+            buttonpress = LoadThemeImage("btn2.png") ?? new Bitmap(1, 1);
+            background = LoadThemeImage("main seq.jpg") ?? new Bitmap(1, 1);
+        }
+
+        private Image LoadThemeImage(string fileName)
+        {
+            string currentPath = System.IO.Path.Combine(fpath, fileName);
+            string defaultPath = System.IO.Path.Combine(apppath, Path.UI_PF.ToString(), fileName);
+
+            foreach (string path in new[] { currentPath, defaultPath })
             {
-                button = Image.FromFile(fpath + "btn1.png");
-                buttonpress = Image.FromFile(fpath + "btn2.png");
-                background = Image.FromFile(fpath + "main seq.jpg");
+                if (!System.IO.File.Exists(path))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    using var stream = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite);
+                    using var source = Image.FromStream(stream);
+                    return new Bitmap(source);
+                }
+                catch
+                {
+                }
             }
-            catch (Exception)
-            {
-                MessageBox.Show("Error while loading UI components,Please check if files exists!", "Error!", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                System.Environment.Exit(0);
-            }
+
+            return null;
         }
     }
 }

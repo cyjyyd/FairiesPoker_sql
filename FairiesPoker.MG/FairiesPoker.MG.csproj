@@ -23,6 +23,19 @@
     <ProjectReference Include="..\FairiesPoker\Protocol\Protocol.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="..\FairiesPoker\Resources\main seq.jpg" Link="Resources\main seq.jpg" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\FairiesPoker\Resources\ChatHall1.jpg" Link="Resources\ChatHall1.jpg" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\FairiesPoker\Resources\backIMG.png" Link="Resources\backIMG.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\FairiesPoker\Resources\Pla.jpg" Link="Resources\Pla.jpg" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\FairiesPoker\Resources\*.wav" Link="Resources\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\FairiesPoker\UI_TB\**\*.*" Link="UI_TB\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\FairiesPoker\UI_LT\**\*.*" Link="UI_LT\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\FairiesPoker\UI_FR\**\*.*" Link="UI_FR\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\FairiesPoker\UI_SW\**\*.*" Link="UI_SW\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\FairiesPoker\UI_PF\**\*.*" Link="UI_PF\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\FairiesPoker\UI_LN\**\*.*" Link="UI_LN\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Remove="FontTest\**" />
     <None Include="FontTest\**" />
   </ItemGroup>

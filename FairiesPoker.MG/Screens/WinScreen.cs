@@ -30,6 +30,8 @@ public class WinScreen : ScreenBase
     // 数据
     private readonly string[] _playerNames = new string[3];
     private readonly bool[] _results = new bool[3]; // true=胜利, false=失败
+    private readonly int[] _beanDeltas = new int[3];
+    private readonly bool _showBeanDeltas;
 
     /// <summary>
     /// 关闭时的回调函数（用于通知GameScreen重置状态）
@@ -44,12 +46,17 @@ public class WinScreen : ScreenBase
     private bool _btnPressed;
     private bool _isClosing;
 
-    public WinScreen(Game1 game, ScreenManager screenManager, bool[] results, string[] names, Action? onCloseCallback = null)
+    public WinScreen(Game1 game, ScreenManager screenManager, bool[] results, string[] names, Action? onCloseCallback = null, int[] beanDeltas = null)
         : base(game, screenManager)
     {
         Array.Copy(results, _results, 3);
         Array.Copy(names, _playerNames, 3);
         _onCloseCallback = onCloseCallback;
+        if (beanDeltas != null)
+        {
+            Array.Copy(beanDeltas, _beanDeltas, Math.Min(3, beanDeltas.Length));
+            _showBeanDeltas = true;
+        }
     }
 
     public override void Initialize()
@@ -94,11 +101,11 @@ public class WinScreen : ScreenBase
         {
             _resultLabels[i] = new UILabel
             {
-                Position = new Vector2(579, resultYPos[i]),
-                Text = _results[i] ? "胜利" : "失败",
+                Position = new Vector2(_showBeanDeltas ? 540 : 579, resultYPos[i]),
+                Text = BuildResultText(i),
                 TextColor = _results[i] ? new Color(50, 205, 50) : new Color(255, 69, 0), // 胜利绿色，失败橙红
                 Scale = 1.5f,
-                Size = new Vector2(100, 48)
+                Size = new Vector2(_showBeanDeltas ? 220 : 100, 48)
             };
         }
 
@@ -111,6 +118,17 @@ public class WinScreen : ScreenBase
         _closeBtn.PressedTexture = _btnPressedTexture;
         _closeBtn.HoverTexture = _btnNormalTexture; // 悬停时也用正常纹理
         _closeBtn.OnClick = OnClose;
+    }
+
+    private string BuildResultText(int index)
+    {
+        string resultText = _results[index] ? "胜利" : "失败";
+        if (!_showBeanDeltas)
+            return resultText;
+
+        int delta = _beanDeltas[index];
+        string sign = delta > 0 ? "+" : "";
+        return $"{resultText}  {sign}{delta}";
     }
 
     private void LoadResultBackground()

@@ -26,15 +26,17 @@ namespace FairiesPoker
         {
             this.huase = huase;
             this.size = size;
-            try
+            string ui = ReadIniData("Settings", "UI", "5", Application.StartupPath + "\\config.ini");
+            this.image = ThemeAssetResolver.LoadCardImage(ThemeAssetResolver.NormalizeTheme(ui), GetCardImageFileName(huase, size));
+            if (this.image == null)
             {
-                this.image = Image.FromFile(Application.StartupPath + @"\Pokers\" + ReadIniData("Settings","UI","5",Application.StartupPath+"\\config.ini") + "\\"+ huase + size + ".png");
+                this.image = Properties.Resources.牌背3;
             }
-            catch (Exception)
-            {
-                MessageBox.Show("错误！文件丢失！程序将关闭！","Error",MessageBoxButtons.OK,MessageBoxIcon.Error);
-                System.Environment.Exit(0);
-            }
+        }
+
+        private static string GetCardImageFileName(string huase, int size)
+        {
+            return huase + size + ".png";
         }
         public string Huase //牌的花色
         {

@@ -145,6 +145,10 @@ static public class Models
     /// 游戏数据
     /// </summary>
     public static GameModel GameModel;
+    private static List<CardDto> _pendingGetCards = new();
+    private static bool _hasPendingGetCards;
+    private static int _pendingTurnGrabUserId;
+    private static bool _hasPendingTurnGrab;
 
     public static event LoginResultCallback OnLoginResult;
 
@@ -335,6 +339,13 @@ static public class Models
     /// </summary>
     public static void TriggerGetCards(List<CardDto> cardList)
     {
+        if (OnGetCards == null)
+        {
+            _pendingGetCards = cardList != null ? new List<CardDto>(cardList) : new List<CardDto>();
+            _hasPendingGetCards = true;
+            return;
+        }
+
         OnGetCards?.Invoke(cardList);
     }
 
@@ -343,7 +354,42 @@ static public class Models
     /// </summary>
     public static void TriggerTurnGrab(int userId)
     {
+        if (OnTurnGrab == null)
+        {
+            _pendingTurnGrabUserId = userId;
+            _hasPendingTurnGrab = true;
+            return;
+        }
+
         OnTurnGrab?.Invoke(userId);
+    }
+
+    public static bool TryConsumePendingGetCards(out List<CardDto> cardList)
+    {
+        if (_hasPendingGetCards)
+        {
+            cardList = _pendingGetCards;
+            _pendingGetCards = new List<CardDto>();
+            _hasPendingGetCards = false;
+            return true;
+        }
+
+        cardList = new List<CardDto>();
+        return false;
+    }
+
+    public static bool TryConsumePendingTurnGrab(out int userId)
+    {
+        if (_hasPendingTurnGrab)
+        {
+            userId = _pendingTurnGrabUserId;
+            _pendingTurnGrabUserId = 0;
+            _hasPendingTurnGrab = false;
+            return true;
+        }
+
+        userId = 0;
+        return false;
     }
 
     /// <summary>

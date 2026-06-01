@@ -61,6 +61,12 @@ namespace Protocol.Dto
         [ProtoMember(9)]
         public bool IsQuickMatch;
 
+        /// <summary>
+        /// 对局中断线但仍由托管继续本局的玩家ID列表
+        /// </summary>
+        [ProtoMember(10)]
+        public List<int> DisconnectedUIdList;
+
         public MatchRoomDto()
         {
             this.UIdUserDict = new Dictionary<int, UserDto>();
@@ -69,6 +75,7 @@ namespace Protocol.Dto
             this.UIdList = new List<int>();
             this.HostId = -1;
             this.IsQuickMatch = false;
+            this.DisconnectedUIdList = new List<int>();
         }
 
         //CTRL K D 整理代码
@@ -84,6 +91,7 @@ namespace Protocol.Dto
             this.UIdUserDict.Remove(userId);
             this.UIdList.Remove(userId);
             this.ReadyUIdList.Remove(userId);
+            this.DisconnectedUIdList?.Remove(userId);
         }
 
         public void Ready(int userId)
@@ -99,6 +107,11 @@ namespace Protocol.Dto
         public bool IsReady(int userId)
         {
             return this.ReadyUIdList.Contains(userId);
+        }
+
+        public bool IsDisconnected(int userId)
+        {
+            return this.DisconnectedUIdList != null && this.DisconnectedUIdList.Contains(userId);
         }
 
         /// <summary>

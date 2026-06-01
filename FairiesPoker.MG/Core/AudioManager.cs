@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Microsoft.Xna.Framework.Audio;
 using NAudio.Wave;
 
@@ -8,11 +9,21 @@ namespace FairiesPoker.MG.Core;
 /// <summary>
 /// 音频管理器 - 替代原有的AudioPlayer.cs + SoundPlayer
 /// </summary>
+public enum SoundCue
+{
+    Click,
+    Deal,
+    Win,
+    Lose
+}
+
 public class AudioManager : IDisposable
 {
     private WaveOutEvent? _bgmOut;
     private AudioFileReader? _bgmReader;
     private bool _bgmLoop;
+    private float _bgmVolume = 0.5f;
+    private float _sfxVolume = 0.8f;
 
     // 音效缓存
     private readonly Dictionary<string, SoundEffect> _soundEffects = new();
@@ -20,8 +31,37 @@ public class AudioManager : IDisposable
     // 设置
     public bool BackMusicEnabled { get; set; } = true;
     public bool SoundFXEnabled { get; set; } = true;
-    public float BgmVolume { get; set; } = 0.5f;
-    public float SfxVolume { get; set; } = 0.8f;
+    public float BgmVolume
+    {
+        get => _bgmVolume;
+        set
+        {
+            _bgmVolume = Clamp01(value);
+            if (_bgmReader != null)
+                _bgmReader.Volume = _bgmVolume;
+        }
+    }
+    public float SfxVolume
+    {
+        get => _sfxVolume;
+        set => _sfxVolume = Clamp01(value);
+    }
+
+    public void ApplySettings(bool backMusicEnabled, bool soundFXEnabled, float bgmVolume, float sfxVolume)
+    {
+        BackMusicEnabled = backMusicEnabled;
+        SoundFXEnabled = soundFXEnabled;
+        BgmVolume = bgmVolume;
+        SfxVolume = sfxVolume;
+
+        if (!BackMusicEnabled)
+            StopBgm();
+    }
+
+    public void PlayThemeBgm(bool loop = true)
+    {
+        PlayBgm(ConfigManager.ThemeMusicPath, loop);
+    }
 
     /// <summary>
     /// 播放背景音乐(MP3,支持循环)
@@ -30,7 +70,7 @@ public class AudioManager : IDisposable
     {
         StopBgm();
 
-        if (!BackMusicEnabled || !System.IO.File.Exists(filePath)) return;
+        if (!BackMusicEnabled || !File.Exists(filePath)) return;
 
         try
         {
@@ -53,6 +93,7 @@ public class AudioManager : IDisposable
         catch
         {
             // 忽略音频错误
+            StopBgm();
         }
     }
 
@@ -63,6 +104,7 @@ public class AudioManager : IDisposable
     {
         try
         {
+            _bgmLoop = false;
             _bgmOut?.Stop();
             _bgmOut?.Dispose();
             _bgmReader?.Dispose();
@@ -75,9 +117,14 @@ public class AudioManager : IDisposable
     /// <summary>
     /// 播放音效(WAV)
     /// </summary>
+    public void PlaySfx(SoundCue cue)
+    {
+        PlaySfx(GetSoundPath(cue));
+    }
+
     public void PlaySfx(string filePath)
     {
-        if (!SoundFXEnabled || !System.IO.File.Exists(filePath)) return;
+        if (!SoundFXEnabled || !File.Exists(filePath)) return;
 
         try
         {
@@ -93,6 +140,27 @@ public class AudioManager : IDisposable
         {
             // 忽略音频错误
         }
+    }
+
+    private static string GetSoundPath(SoundCue cue)
+    {
+        string fileName = cue switch
+        {
+            SoundCue.Click => "click.wav",
+            SoundCue.Deal => "give.wav",
+            SoundCue.Win => "5553.wav",
+            SoundCue.Lose => "5538.wav",
+            _ => "click.wav"
+        };
+
+        return System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", fileName);
+    }
+
+    private static float Clamp01(float value)
+    {
+        if (value < 0f) return 0f;
+        if (value > 1f) return 1f;
+        return value;
     }
 
     public void Dispose()

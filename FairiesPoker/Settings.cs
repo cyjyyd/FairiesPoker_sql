@@ -13,6 +13,7 @@ namespace FairiesPoker
         config con = new config();
         bool clicked = false;
         bool changed = false;
+        public event EventHandler ThemeSaved;
         public Settings()
         {
             InitializeComponent();
@@ -53,7 +54,7 @@ namespace FairiesPoker
         }
         private void readpackage ()
         {
-            for (int i = 1;i <= 7;i++)
+            for (int i = 1;i <= comboBox1.Items.Count;i++)
             {
                 string temp = Enum.GetName(typeof(Path),i);
                 if (Filecheck(i)!=1)
@@ -75,13 +76,9 @@ namespace FairiesPoker
         }
         private int Dircheck (int i,string path)
         {
-            if (Directory.Exists(Application.StartupPath + @"\Pokers\" + i) && Directory.Exists(Application.StartupPath + @"\Results\" + i) && Directory.Exists(Application.StartupPath + "\\" + path))
+            if (Directory.Exists(Application.StartupPath + "\\" + path))
             {
                 return 1;
-            }
-            else if (Directory.Exists(Application.StartupPath + @"\Pokers\" + i) || Directory.Exists(Application.StartupPath + @"\Results\" + i) || Directory.Exists(Application.StartupPath + "\\" + path))
-            {
-                return 2;
             }
             else return 0;
         }
@@ -156,6 +153,12 @@ namespace FairiesPoker
         private void button3_Click(object sender, EventArgs e)
         {
             clicked = true;
+            if (!uidec())
+            {
+                refresh();
+                return;
+            }
+
             con.UI = comboBox1.SelectedIndex + 1;
             con.BackMusic = valuejudge(pictureBox1);
             con.SoundFX = valuejudge(pictureBox2);
@@ -163,7 +166,7 @@ namespace FairiesPoker
             con.FullScreen = valuejudge(pictureBox4);
             screenset();
             con.writeset();
-            if (scrdec()&&uidec())
+            if (scrdec())
             {
                 refresh();
             }
@@ -173,7 +176,9 @@ namespace FairiesPoker
                 screenset();
                 con.writeset();
                 refresh();
-            }       
+            }
+
+            ThemeSaved?.Invoke(this, EventArgs.Empty);
         }
         public static bool scrdec()
         {

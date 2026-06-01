@@ -144,6 +144,7 @@ namespace FairiesPoker
         private void readset ()
         {
             UI = Convert.ToInt32(ReadIniData("Settings", "UI", "5", iniFilePath));
+            if (UI < 1 || UI > 6) UI = 5;
             BackMusic = Convert.ToBoolean(ReadIniData("Settings", "BackMusic", "false", iniFilePath));
             SoundFX = Convert.ToBoolean(ReadIniData("Settings", "SoundFX", "false", iniFilePath));
             FilmMode = Convert.ToBoolean(ReadIniData("Settings", "FilmMode", "false", iniFilePath));
@@ -157,93 +158,30 @@ namespace FairiesPoker
         {
             string temp = Enum.GetName(typeof(Path), a);
             listadd();
-            for (int i = 0; i < 54; i++)
+            if (string.IsNullOrEmpty(temp)) return 0;
+
+            string themePath = System.IO.Path.Combine(apppath, temp);
+            string[] requiredFiles = { "btn1.png", "btn2.png", "main seq.jpg", "background.mp3" };
+            foreach (string file in requiredFiles)
             {
-                if (File.Exists(pokFilePath + Convert.ToString(a) + "\\" + filelst[i] + ".png"))
-                {
-                    ifexists.Add(true);
-                    WriteIniData(temp, Convert.ToString(filelst[i]), "true", lstFilePath);
-                }
-                else
-                {
-                    ifexists.Add(false);
-                    WriteIniData(temp, Convert.ToString(filelst[i]), "false", lstFilePath);
-                }
+                bool found = File.Exists(System.IO.Path.Combine(themePath, file));
+                ifexists.Add(found);
+                WriteIniData(temp, System.IO.Path.GetFileNameWithoutExtension(file), found ? "true" : "false", lstFilePath);
             }
-            for (int i = 54; i <= 57; i++)
-            {
-                if (File.Exists(resFilePath+Convert.ToString(a)+"\\"+filelst[i]+".png"))
-                {
-                    ifexists.Add(true);
-                    WriteIniData(temp, Convert.ToString(filelst[i]), "true", lstFilePath);
-                }
-                else
-                {
-                    ifexists.Add(false);
-                    WriteIniData(temp, Convert.ToString(filelst[i]), "false", lstFilePath);
-                }
-            }
-            for (int i = 58; i < 60; i++)
-            {
-                if (File.Exists(apppath+"\\"+temp+"\\"+filelst[i]+".png"))
-                {
-                    ifexists.Add(true);
-                    WriteIniData(temp, Convert.ToString(filelst[i]), "true", lstFilePath);
-                }
-                else
-                {
-                    ifexists.Add(false);
-                    WriteIniData(temp, Convert.ToString(filelst[i]), "false", lstFilePath);
-                }
-            }
-            if (File.Exists(apppath + "\\" + temp + "\\" + filelst[60] + ".jpg"))
-            {
-                ifexists.Add(true);
-                WriteIniData(temp, Convert.ToString(filelst[60]), "true", lstFilePath);
-            }
-            else
-            {
-                ifexists.Add(false);
-                WriteIniData(temp, Convert.ToString(filelst[60]), "false", lstFilePath);
-            }
-            if (File.Exists(apppath + "\\" + temp + "\\" + filelst[61] + ".mp3"))
-            {
-                ifexists.Add(true);
-                WriteIniData(temp, Convert.ToString(filelst[61]), "true", lstFilePath);
-            }
-            else
-            {
-                ifexists.Add(false);
-                WriteIniData(temp, Convert.ToString(filelst[61]), "false", lstFilePath);
-            }
+
             foreach (var item in ifexists)
             {
-                if (Convert.ToBoolean(item))
-                {
-                    exists++;
-                }
+                if (Convert.ToBoolean(item)) exists++;
             }
-            if (exists == 0)
-            {
-                ifexists.Clear();
-                exists = 0;
-                return 0;
-            }
-            else if (exists == 62)
-            {
-                ifexists.Clear();
-                exists = 0;
-                return 1;
-            }
-            else
-            {
-                ifexists.Clear();
-                exists = 0;
-                return 2;
-            }
+
+            int result = exists == 0 ? 0 : (exists == requiredFiles.Length ? 1 : 2);
+            ifexists.Clear();
+            exists = 0;
+            return result;
         }
         private void listadd ()
         {
+            filelst.Clear();
             for (int i = 3; i <= 15; i++)
             {
                 filelst.Add("meihua" + i);

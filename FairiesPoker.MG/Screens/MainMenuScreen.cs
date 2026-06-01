@@ -15,6 +15,7 @@ public class MainMenuScreen : ScreenBase
 {
     private Texture2D? _bgTexture;
     private Texture2D? _logoTexture;
+    private int _loadedTheme = -1;
 
     private readonly UILabel _singlePlayer = new();
     private readonly UILabel _multiPlayer = new();
@@ -32,9 +33,9 @@ public class MainMenuScreen : ScreenBase
 
     public override void LoadContent()
     {
-        // 背景图 (从主题文件夹加载)
-        string bgPath = System.IO.Path.Combine(ConfigManager.ThemePath, "main seq.jpg");
-        _bgTexture = TextureManager.Load("_main_bg", bgPath);
+        UIResourceManager.ThemeChanged -= OnThemeChanged;
+        UIResourceManager.ThemeChanged += OnThemeChanged;
+        LoadBackground(ConfigManager.UITheme);
 
         // Logo
         string logoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "FP.png");
@@ -70,6 +71,58 @@ public class MainMenuScreen : ScreenBase
         _quitLabel.Scale = 1.2f;
     }
 
+    public override void UnloadContent()
+    {
+        UIResourceManager.ThemeChanged -= OnThemeChanged;
+    }
+
+    private void OnThemeChanged(int theme)
+    {
+        LoadBackground(theme);
+    }
+
+    private void EnsureBackgroundCurrent()
+    {
+        if (_loadedTheme != ConfigManager.UITheme)
+        {
+            LoadBackground(ConfigManager.UITheme);
+        }
+    }
+
+    private void LoadBackground(int theme)
+    {
+        int normalizedTheme = theme >= 1 && theme <= ConfigManager.ThemeCount ? theme : 5;
+        string bgPath = System.IO.Path.Combine(GetThemePath(normalizedTheme), "main seq.jpg");
+        if (!System.IO.File.Exists(bgPath) && normalizedTheme != 5)
+        {
+            bgPath = System.IO.Path.Combine(GetThemePath(5), "main seq.jpg");
+        }
+
+        if (!System.IO.File.Exists(bgPath))
+        {
+            bgPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "main seq.jpg");
+        }
+
+        _bgTexture = TextureManager.Load("_main_bg_" + normalizedTheme, bgPath);
+        _loadedTheme = ConfigManager.UITheme;
+    }
+
+    private static string GetThemePath(int theme)
+    {
+        string suffix = theme switch
+        {
+            1 => "TB",
+            2 => "LT",
+            3 => "FR",
+            4 => "SW",
+            5 => "PF",
+            6 => "LN",
+            _ => "PF"
+        };
+
+        return System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UI_" + suffix);
+    }
+
     public override void Update(GameTime gameTime)
     {
         FadeIn(0.03);
@@ -77,6 +130,7 @@ public class MainMenuScreen : ScreenBase
 
     public override void Draw(GameTime gameTime, SpriteBatch spriteBatch)
     {
+        EnsureBackgroundCurrent();
         var color = Color.White * Opacity;
 
         // 背景
@@ -163,24 +217,27 @@ public class MainMenuScreen : ScreenBase
 
     private void OnSinglePlayer()
     {
-        Game.AudioManager?.StopBgm();
+        Game.AudioManager?.PlaySfx(SoundCue.Click);
         // 进入单机游戏
         ScreenManager.Push(new GameScreen(Game, ScreenManager, false));
     }
 
     private void OnMultiPlayer()
     {
+        Game.AudioManager?.PlaySfx(SoundCue.Click);
         // 进入登录界面
         ScreenManager.Push(new LoginScreen(Game, ScreenManager));
     }
 
     private void OnSettings()
     {
+        Game.AudioManager?.PlaySfx(SoundCue.Click);
         ScreenManager.Push(new SettingsScreen(Game, ScreenManager));
     }
 
     private void OnQuit()
     {
+        Game.AudioManager?.PlaySfx(SoundCue.Click);
         Game.Exit();
     }
 }

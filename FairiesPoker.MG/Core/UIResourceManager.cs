@@ -21,7 +21,9 @@ public static class UIResourceManager
     // 预加载的资源
     private static readonly Dictionary<string, Texture2D> _cachedTextures = new();
 
-    /// <summary>当前主题编号 (1-7)</summary>
+    public static event Action<int>? ThemeChanged;
+
+    /// <summary>当前主题编号 (1-6)</summary>
     public static int CurrentTheme => _currentTheme;
 
     /// <summary>主题文件夹名称</summary>
@@ -50,7 +52,7 @@ public static class UIResourceManager
     /// </summary>
     public static void SetTheme(int theme)
     {
-        if (theme < 1 || theme > 7) theme = 5;
+        if (theme < 1 || theme > ConfigManager.ThemeCount) theme = 5;
         if (_currentTheme == theme) return;
 
         _currentTheme = theme;
@@ -63,6 +65,7 @@ public static class UIResourceManager
 
         // 重新加载
         LoadThemeResources();
+        ThemeChanged?.Invoke(_currentTheme);
     }
 
     /// <summary>
@@ -138,6 +141,8 @@ public static class UIResourceManager
         if (_graphicsDevice == null) return null;
 
         string path = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Results", _currentTheme.ToString(), imageName);
+        if (!File.Exists(path) && _currentTheme != 5)
+            path = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Results", "5", imageName);
         if (!File.Exists(path)) return null;
 
         try
@@ -166,7 +171,6 @@ public static class UIResourceManager
             4 => "UI_SW",
             5 => "UI_PF",
             6 => "UI_LN",
-            7 => "UI_PG",
             _ => "UI_PF"
         };
     }

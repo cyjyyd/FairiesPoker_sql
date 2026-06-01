@@ -98,13 +98,13 @@ public class LoginScreen : ScreenBase
         // 占位提示标签 (当输入框为空时显示)
         _usernameLabel.Position = new Vector2(174, 294);
         _usernameLabel.Text = "用户名";
-        _usernameLabel.TextColor = Color.LightGray;
+        _usernameLabel.TextColor = new Color(95, 95, 95);
         _usernameLabel.BackgroundColor = Color.White;
         _usernameLabel.Scale = 1.4f;
 
         _passwordLabel.Position = new Vector2(174, 388);
         _passwordLabel.Text = "密码";
-        _passwordLabel.TextColor = Color.LightGray;
+        _passwordLabel.TextColor = new Color(95, 95, 95);
         _passwordLabel.BackgroundColor = Color.White;
         _passwordLabel.Scale = 1.4f;
 
@@ -236,7 +236,7 @@ public class LoginScreen : ScreenBase
                 // 显示占位提示
                 FontManager.DrawString(spriteBatch, font, _usernameLabel.Text,
                     layout.ToScreen(new Vector2(174, 294)),
-                    Color.LightGray * Opacity, inputTextScale);
+                    _usernameLabel.TextColor * Opacity, inputTextScale);
             }
             else
             {
@@ -253,7 +253,7 @@ public class LoginScreen : ScreenBase
             {
                 FontManager.DrawString(spriteBatch, font, _passwordLabel.Text,
                     layout.ToScreen(new Vector2(174, 388)),
-                    Color.LightGray * Opacity, inputTextScale);
+                    _passwordLabel.TextColor * Opacity, inputTextScale);
             }
             else
             {
@@ -461,7 +461,16 @@ public class LoginScreen : ScreenBase
         // 处退格
         if (input.KeyPressed(Keys.Back) && activeBox.Text.Length > 0)
         {
-            activeBox.Text = activeBox.Text.Substring(0, activeBox.Text.Length - 1);
+            activeBox.Text = UITextBox.RemoveLastTextElement(activeBox.Text);
+        }
+
+        if (input.HasTextInputCharacters)
+        {
+            foreach (char c in input.TextInputCharacters)
+            {
+                activeBox.Text += c;
+            }
+            return;
         }
 
         // Enter提交
@@ -485,42 +494,21 @@ public class LoginScreen : ScreenBase
             _passwordBox.IsFocused = !_passwordBox.IsFocused;
         }
 
-        // 字符输入
+        // 字符输入兜底：正常窗口中优先走系统TextInput/IME，避免中文拼音被当成英文逐键写入。
+        if (!input.ShouldUseKeyboardTextFallback)
+            return;
+
         foreach (Keys key in Enum.GetValues(typeof(Keys)))
         {
             if (input.KeyPressed(key))
             {
-                char c = KeyToChar(key, input.KeyHeld(Keys.LeftShift) || input.KeyHeld(Keys.RightShift));
+                char c = UITextBox.KeyToChar(key, input.KeyHeld(Keys.LeftShift) || input.KeyHeld(Keys.RightShift));
                 if (c != '\0')
                 {
                     activeBox.Text += c;
                 }
             }
         }
-    }
-
-    private static char KeyToChar(Keys key, bool shift)
-    {
-        if (key >= Keys.A && key <= Keys.Z)
-        {
-            char c = (char)('a' + (key - Keys.A));
-            return shift ? char.ToUpper(c) : c;
-        }
-        if (key >= Keys.D0 && key <= Keys.D9)
-        {
-            return shift ? (key - Keys.D0) switch
-            {
-                1 => '!', 2 => '@', 3 => '#', 4 => '$', 5 => '%',
-                6 => '^', 7 => '&', 8 => '*', 9 => '(', 0 => ')',
-                _ => '0'
-            } : (char)('0' + (key - Keys.D0));
-        }
-        if (key == Keys.Space) return ' ';
-        if (key == Keys.OemPeriod) return shift ? '>' : '.';
-        if (key == Keys.OemComma) return shift ? '<' : ',';
-        if (key == Keys.OemMinus) return shift ? '_' : '-';
-        if (key == Keys.OemPlus) return shift ? '+' : '=';
-        return '\0';
     }
 
     private void OnLogin()

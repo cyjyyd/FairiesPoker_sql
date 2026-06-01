@@ -2,7 +2,6 @@ using FairiesPoker.MG.Core;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System.IO;
-using System.IO;
 
 namespace FairiesPoker.MG.Renderers;
 
@@ -33,6 +32,9 @@ public class CardRenderer
     /// </summary>
     public static Texture2D GetCardTexture(string huase, int size)
     {
+        if (size == 16 || size == 17)
+            huase = "";
+
         string key = $"card_{huase}_{size}";
         if (TextureManager.Get(key) is Texture2D cached) return cached;
 
@@ -48,6 +50,8 @@ public class CardRenderer
         };
 
         string path = System.IO.Path.Combine(ConfigManager.CardImagePath, fileName + ".png");
+        if (!File.Exists(path))
+            path = System.IO.Path.Combine(ConfigManager.DefaultCardImagePath, fileName + ".png");
         return TextureManager.Load(key, path);
     }
 

@@ -1,5 +1,6 @@
 using FairiesPoker.MG.Core;
 using FairiesPoker.MG.Network;
+using FairiesPoker.MG.UI;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -290,7 +291,21 @@ public class RegisterScreen : ScreenBase
         // 退格
         if (input.KeyPressed(Keys.Back) && activeText.Length > 0)
         {
-            activeText = activeText.Substring(0, activeText.Length - 1);
+            activeText = UITextBox.RemoveLastTextElement(activeText);
+        }
+
+        if (input.HasTextInputCharacters)
+        {
+            foreach (char c in input.TextInputCharacters)
+            {
+                if (activeText.Length < 16)
+                    activeText += c;
+            }
+
+            if (_focusedField == 1) _username = activeText;
+            else if (_focusedField == 2) _password = activeText;
+            else _confirmPassword = activeText;
+            return;
         }
 
         // Tab切换
@@ -308,15 +323,18 @@ public class RegisterScreen : ScreenBase
                 OnRegister();
         }
 
-        // 字符输入
-        foreach (Keys key in Enum.GetValues(typeof(Keys)))
+        // 字符输入兜底：正常窗口中优先走系统TextInput/IME，避免中文拼音被当成英文逐键写入。
+        if (input.ShouldUseKeyboardTextFallback)
         {
-            if (input.KeyPressed(key))
+            foreach (Keys key in Enum.GetValues(typeof(Keys)))
             {
-                char c = KeyToChar(key, input.KeyHeld(Keys.LeftShift) || input.KeyHeld(Keys.RightShift));
-                if (c != '\0' && activeText.Length < 16)
+                if (input.KeyPressed(key))
                 {
-                    activeText += c;
+                    char c = KeyToChar(key, input.KeyHeld(Keys.LeftShift) || input.KeyHeld(Keys.RightShift));
+                    if (c != '\0' && activeText.Length < 16)
+                    {
+                        activeText += c;
+                    }
                 }
             }
         }

@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using FairiesPoker.MG.Core;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using System;
-using System.Collections.Generic;
 
 namespace FairiesPoker.MG.UI;
 
@@ -20,7 +18,8 @@ public class UIListBox : UIControl
     public int ItemHeight { get; set; } = 24;
     public Color BackgroundColor { get; set; } = new Color(30, 35, 45, 120);
     public Color TextColor { get; set; } = Color.White;
-    public Color SelectedTextColor { get; set; } = new Color(100, 180, 255);
+    public Color SelectedBackgroundColor { get; set; } = new Color(30, 100, 125, 190);
+    public Color SelectedTextColor { get; set; } = Color.White;
     public Color ScrollBarColor { get; set; } = new Color(100, 100, 120, 180);
 
     public int ScrollOffset { get; set; }
@@ -96,7 +95,7 @@ public class UIListBox : UIControl
 
             if (index == SelectedIndex)
             {
-                sb.Draw(WhitePixel, itemRect, new Color(50, 100, 180, 80));
+                sb.Draw(WhitePixel, itemRect, SelectedBackgroundColor);
             }
 
             FontManager.DrawString(sb, font, Items[index], new Vector2(itemRect.X, itemRect.Y),

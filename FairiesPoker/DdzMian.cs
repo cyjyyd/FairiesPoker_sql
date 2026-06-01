@@ -70,6 +70,7 @@ namespace FairiesPoker
         private PictureBox picSelfAvatar; // 自己头像
         private List<PictureBox> leftPlayerCardBacks; // 左边玩家牌背
         private List<PictureBox> rightPlayerCardBacks; // 右边玩家牌背
+        private Label lblLandlordMarker; // 地主文字标记
         // 滑动选牌相关字段
         private bool isSlidingSelection = false; // 是否正在滑动选牌
         private int slideStartIndex = -1; // 滑动起始牌索引
@@ -219,6 +220,90 @@ namespace FairiesPoker
                 pictureBox.BackgroundImage = Properties.Resources.Pla;
                 AvatarHandler.RequestDownloadAvatar(avatarUrl);
             }
+        }
+
+        private void RunOnUiThread(Action action)
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            if (InvokeRequired)
+            {
+                if (!IsHandleCreated)
+                {
+                    return;
+                }
+
+                try
+                {
+                    Invoke(action);
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+                catch (InvalidOperationException)
+                {
+                }
+
+                return;
+            }
+
+            action();
+        }
+
+        private void ShowLandlordMarker(int x, int y)
+        {
+            RunOnUiThread(() =>
+            {
+                pic_dz.SetBounds(x, y, 60, 60);
+                pic_dz.Visible = true;
+                pic_dz.BringToFront();
+                pic_dz.Image = Properties.Resources.hook;
+
+                if (lblLandlordMarker == null)
+                {
+                    lblLandlordMarker = new Label
+                    {
+                        AutoSize = false,
+                        BackColor = Color.FromArgb(210, 120, 36, 24),
+                        ForeColor = Color.Gold,
+                        Font = new Font("微软雅黑", 10F, FontStyle.Bold),
+                        Size = new Size(54, 24),
+                        Text = "地主",
+                        TextAlign = ContentAlignment.MiddleCenter,
+                        Visible = false
+                    };
+                    Controls.Add(lblLandlordMarker);
+                }
+
+                int markerY = Math.Min(ClientSize.Height - lblLandlordMarker.Height - 4, y + 42);
+                lblLandlordMarker.Location = new Point(x + 3, markerY);
+                lblLandlordMarker.Visible = true;
+                lblLandlordMarker.BringToFront();
+            });
+        }
+
+        private void ShowOnlineLandlordMarker(Control playerPanel)
+        {
+            if (playerPanel == null) return;
+
+            int x = playerPanel.Left + playerPanel.Width - 54;
+            int y = playerPanel.Top + 12;
+            ShowLandlordMarker(x, y);
+        }
+
+        private void HideLandlordMarker()
+        {
+            RunOnUiThread(() =>
+            {
+                pic_dz.Visible = false;
+                if (lblLandlordMarker != null)
+                {
+                    lblLandlordMarker.Visible = false;
+                }
+            });
         }
 
         // 多人模式网络更新定时器
@@ -457,8 +542,6 @@ namespace FairiesPoker
                         break;
                     case 6:mpath = Path.UI_LN.ToString();
                         break;
-                    case 7:mpath = Path.UI_LN.ToString();
-                        break;
                 }
                 audioPlayer.Play(Application.StartupPath + "\\" + mpath + "\\background.mp3", true);
             }
@@ -524,25 +607,19 @@ namespace FairiesPoker
                 {
                     paizhi(juese2,juese3);
                     kouDiPai(juese1);name();xianshi();
-                    pic_dz.SetBounds(1190, 144, 60, 60);
-                    pic_dz.Visible = true; pic_dz.BringToFront();
-                    pic_dz.Image = Properties.Resources.hook;
+                    ShowLandlordMarker(1190, 144);
                 }
                 else if (switchDiZhu==2)
                 {
                     paizhi(juese1, juese3);
                     kouDiPai(juese2);name();xianshi();
-                    pic_dz.SetBounds(1090, 645, 60, 60);
-                    pic_dz.Visible = true; pic_dz.BringToFront();
-                    pic_dz.Image = Properties.Resources.hook;
+                    ShowLandlordMarker(1090, 645);
                 }
                 else if (switchDiZhu==3)
                 {
                     paizhi(juese1, juese2);
                     kouDiPai(juese3);name();xianshi();
-                    pic_dz.SetBounds(100, 463, 60, 60);
-                    pic_dz.Visible = true; pic_dz.BringToFront();
-                    pic_dz.Image = Properties.Resources.hook;
+                    ShowLandlordMarker(100, 463);
                 }
             }
             else
@@ -1074,7 +1151,7 @@ namespace FairiesPoker
             bl_isDiZhu = false;
             bl_isFirst = false;
             bl_chuPaiOver = false;
-            pic_dz.Visible = false;
+            HideLandlordMarker();
             buChuPai = 0;
             pic1.Height = 131;
             pic2.Height = 131;
@@ -2416,49 +2493,24 @@ namespace FairiesPoker
         /// </summary>
         private Image GetCardImage(int weight, int color)
         {
-            try
+            string fileName = GetCardImageFileName(weight, color);
+            if (fileName == null)
             {
-                // 获取UI设置
-                string uiFolder = "5"; // 默认
-                try
-                {
-                    uiFolder = new config().UI.ToString();
-                }
-                catch { }
-
-                // 服务器花色映射: 0=Hearts, 1=Diamonds, 2=Clubs, 3=Spades
-                // 客户端花色映射: heitao, hongtao, meihua, fangkuai
-                string[] colorNames = { "hongtao", "fangkuai", "meihua", "heitao" };
-
-                string fileName;
-                if (weight == 16)
-                {
-                    // 小王
-                    fileName = Application.StartupPath + @"\Pokers\" + uiFolder + "\\16.png";
-                }
-                else if (weight == 17)
-                {
-                    // 大王
-                    fileName = Application.StartupPath + @"\Pokers\" + uiFolder + "\\17.png";
-                }
-                else if (weight >= 3 && weight <= 15 && color >= 0 && color <= 3)
-                {
-                    // 普通牌
-                    fileName = Application.StartupPath + @"\Pokers\" + uiFolder + "\\" + colorNames[color] + weight + ".png";
-                }
-                else
-                {
-                    return Properties.Resources.牌背3;
-                }
-
-                if (System.IO.File.Exists(fileName))
-                {
-                    return Image.FromFile(fileName);
-                }
+                return Properties.Resources.牌背3;
             }
-            catch { }
 
-            return Properties.Resources.牌背3;
+            Image image = ThemeAssetResolver.LoadCardImage(con.UI, fileName);
+            return image ?? Properties.Resources.牌背3;
+        }
+
+        private string GetCardImageFileName(int weight, int color)
+        {
+            if (weight == 16) return "16.png";
+            if (weight == 17) return "17.png";
+            if (weight < 3 || weight > 15 || color < 0 || color > 3) return null;
+
+            string[] colorNames = { "hongtao", "fangkuai", "meihua", "heitao" };
+            return colorNames[color] + weight + ".png";
         }
 
         /// <summary>
@@ -2668,7 +2720,6 @@ namespace FairiesPoker
                     case 4: mpath = Path.UI_SW.ToString(); break;
                     case 5: mpath = Path.UI_PF.ToString(); break;
                     case 6: mpath = Path.UI_LN.ToString(); break;
-                    case 7: mpath = Path.UI_LN.ToString(); break;
                 }
                 audioPlayer.Play(Application.StartupPath + "\\" + mpath + "\\background.mp3", true);
             }
@@ -2680,13 +2731,18 @@ namespace FairiesPoker
 
             tableCards = grabDto.TableCardList;
 
-            // 更新地主标识（用文字标识，不显示图标）
+            juese1.Dizhu = false;
+            juese2.Dizhu = false;
+            juese3.Dizhu = false;
+
+            // 更新地主标识
             if (landlordId == Models.GameModel.UserDto.Id)
             {
                 // 自己是地主
                 string name = Models.GameModel.UserDto.Name;
                 groupBox2.Text = "【地主】" + name;
                 juese2.Dizhu = true;
+                ShowOnlineLandlordMarker(groupBox2);
 
                 // 给地主添加底牌
                 AddTableCardsToHand();
@@ -2697,6 +2753,7 @@ namespace FairiesPoker
                 string name = Models.GameModel.MatchRoomDto.UIdUserDict[landlordId].Name;
                 groupBox1.Text = "【地主】" + name;
                 juese1.Dizhu = true;
+                ShowOnlineLandlordMarker(groupBox1);
             }
             else if (landlordId == Models.GameModel.MatchRoomDto.RightId)
             {
@@ -2704,6 +2761,7 @@ namespace FairiesPoker
                 string name = Models.GameModel.MatchRoomDto.UIdUserDict[landlordId].Name;
                 groupBox3.Text = "【地主】" + name;
                 juese3.Dizhu = true;
+                ShowOnlineLandlordMarker(groupBox3);
             }
         }
 
@@ -2943,15 +3001,18 @@ namespace FairiesPoker
         /// </summary>
         private void RemoveMyCards(List<CardDto> cardList)
         {
-            // 创建要移除的牌的权重列表
-            List<int> weightsToRemove = cardList.Select(c => c.Weight).ToList();
+            if (cardList == null || cardList.Count == 0) return;
+
+            var cardsToRemove = new List<CardDto>(cardList);
 
             // 从后往前遍历，避免索引问题
             for (int i = myCardList.Count - 1; i >= 0; i--)
             {
-                if (weightsToRemove.Contains(myCardList[i].Weight))
+                int removeIndex = cardsToRemove.FindIndex(c =>
+                    c.Weight == myCardList[i].Weight && c.Color == myCardList[i].Color);
+                if (removeIndex >= 0)
                 {
-                    weightsToRemove.Remove(myCardList[i].Weight);
+                    cardsToRemove.RemoveAt(removeIndex);
 
                     // 移除对应的PictureBox
                     if (i < myCardPictureBoxes.Count)
@@ -3066,10 +3127,11 @@ namespace FairiesPoker
             else
             {
                 // 不出成功，重置选中的牌位置
+                int passUserId = result > 0 ? result : currentTurnUserId;
                 ResetSelectedCards();
                 StopTurnTimer();
                 HideDealButtons();
-                label3.Text = "不出";
+                SetOnlinePlayerStatus(passUserId, "不出");
                 soundFx(0);
             }
         }
@@ -3160,6 +3222,23 @@ namespace FairiesPoker
             return $"玩家{userId}";
         }
 
+        private void SetOnlinePlayerStatus(int userId, string status)
+        {
+            var matchRoom = Models.GameModel.MatchRoomDto;
+            if (matchRoom != null && userId == matchRoom.LeftId)
+            {
+                label1.Text = status;
+            }
+            else if (matchRoom != null && userId == matchRoom.RightId)
+            {
+                label2.Text = status;
+            }
+            else if (Models.GameModel.UserDto != null && userId == Models.GameModel.UserDto.Id)
+            {
+                label3.Text = status;
+            }
+        }
+
         #endregion
 
         #region 多人模式出牌计时器
@@ -3183,6 +3262,7 @@ namespace FairiesPoker
         private void StartOtherPlayerTimer(int userId)
         {
             isMyTurn = false;
+            currentTurnUserId = userId;
             otherPlayerRemainingSeconds = turnTimeoutSeconds;
             timerTurnTimeout.Start();
 

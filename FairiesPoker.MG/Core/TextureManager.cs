@@ -25,8 +25,10 @@ public static class TextureManager
     {
         if (_textures.TryGetValue(key, out var existing)) return existing;
 
-        if (_graphicsDevice == null || !System.IO.File.Exists(filePath))
-            return Texture2D.FromFile(_graphicsDevice!, filePath);
+        if (_graphicsDevice == null)
+            throw new InvalidOperationException("TextureManager is not initialized.");
+        if (!System.IO.File.Exists(filePath))
+            return GetPlaceholder();
 
         try
         {

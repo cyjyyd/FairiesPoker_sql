@@ -33,8 +33,6 @@ namespace FairiesPoker
         private List<UserDto> privateHistoryUsersList = new List<UserDto>();
 
         // 历史消息相关
-        private long worldEarliestTimestamp = 0;
-        private long privateEarliestTimestamp = 0;
         private bool isLoadingHistory = false;
         private bool hasMoreWorldHistory = true;
         private bool hasMorePrivateHistory = true;

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Drawing;
+using System.IO;
 using System.Windows.Forms;
 
 namespace FairiesPoker
@@ -20,22 +21,22 @@ namespace FairiesPoker
             {
                 if (result[0] == false && result[2] == false)
                 {
-                    this.BackgroundImage = Image.FromFile(Application.StartupPath + @"\Results\" + u.uiselect + "\\win_dz.png");
+                    this.BackgroundImage = GetResultImage("win_dz.png");
                 }
                 else
                 {
-                    this.BackgroundImage = Image.FromFile(Application.StartupPath + @"\Results\" + u.uiselect + "\\win_nm.png");
+                    this.BackgroundImage = GetResultImage("win_nm.png");
                 }
             }
             else if (result[1]==false)
             {
                 if (result[0] == true&&result[2] == true)
                 {
-                    this.BackgroundImage = Image.FromFile(Application.StartupPath + @"\Results\" + u.uiselect + "\\lose_dz.png");
+                    this.BackgroundImage = GetResultImage("lose_dz.png");
                 }
                 else
                 {
-                    this.BackgroundImage = Image.FromFile(Application.StartupPath + @"\Results\" + u.uiselect + "\\lose_nm.png");
+                    this.BackgroundImage = GetResultImage("lose_nm.png");
                 }
             }
             label2.Text = name[0];
@@ -44,6 +45,11 @@ namespace FairiesPoker
             label5.Text = layout(result[0]);
             label6.Text = layout(result[1]);
             label7.Text = layout(result[2]);
+        }
+
+        private Image GetResultImage(string imageName)
+        {
+            return ThemeAssetResolver.LoadResultImage(u.uiselect, imageName) ?? u.Background;
         }
         #region 所有事件
         private void win_Load(object sender, EventArgs e)

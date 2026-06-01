@@ -211,27 +211,37 @@ public class CardSelectionHandler
     /// <summary>
     /// 查找鼠标位置对应的牌索引
     /// </summary>
-    private static int FindCardIndexAtPosition(Point pos, Vector2[] cardPositions, bool[] selectedStates)
+    public static int FindCardIndexAtPosition(Point pos, Vector2[] cardPositions, bool[] selectedStates)
     {
-        // 重叠牌优先命中后绘制、视觉上位于上层的牌。
-        for (int i = cardPositions.Length - 1; i >= 0; i--)
-        {
-            int yOffset = 0;
-            if (selectedStates != null && i < selectedStates.Length && selectedStates[i])
-            {
-                yOffset = -CardRenderer.SelectedOffset;
-            }
+        if (cardPositions.Length == 0)
+            return -1;
 
-            var rect = new Rectangle(
-                (int)cardPositions[i].X,
-                (int)cardPositions[i].Y + yOffset,
-                CardRenderer.CardWidth,
-                CardRenderer.CardHeight
-            );
-            if (rect.Contains(pos))
+        bool rightToLeft = cardPositions[0].X >= cardPositions[cardPositions.Length - 1].X;
+        int start = rightToLeft ? 0 : cardPositions.Length - 1;
+        int end = rightToLeft ? cardPositions.Length : -1;
+        int step = rightToLeft ? 1 : -1;
+
+        for (int i = start; i != end; i += step)
+        {
+            if (GetCardBounds(i, cardPositions, selectedStates).Contains(pos))
                 return i;
         }
+
         return -1;
+    }
+
+    private static Rectangle GetCardBounds(int index, Vector2[] cardPositions, bool[] selectedStates)
+    {
+        int yOffset = selectedStates != null && index < selectedStates.Length && selectedStates[index]
+            ? -CardRenderer.SelectedOffset
+            : 0;
+
+        return new Rectangle(
+            (int)cardPositions[index].X,
+            (int)cardPositions[index].Y + yOffset,
+            CardRenderer.CardWidth,
+            CardRenderer.CardHeight
+        );
     }
 
     /// <summary>

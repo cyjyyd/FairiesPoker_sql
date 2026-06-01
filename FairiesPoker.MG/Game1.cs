@@ -37,11 +37,15 @@ public class Game1 : Game
         UIResourceManager.Initialize(GraphicsDevice, ConfigManager.UITheme);
         UIResourceManager.LoadThemeResources();
         InputManager = new InputManager();
+        InputManager.AttachTextInput(Window);
         AudioManager = new AudioManager
         {
             BackMusicEnabled = ConfigManager.BackMusic,
-            SoundFXEnabled = ConfigManager.SoundFX
+            SoundFXEnabled = ConfigManager.SoundFX,
+            BgmVolume = ConfigManager.BackMusicVolume,
+            SfxVolume = ConfigManager.SoundFXVolume
         };
+        AudioManager.PlayThemeBgm();
 
         base.Initialize();
     }
@@ -106,6 +110,7 @@ public class Game1 : Game
 
     protected override void EndRun()
     {
+        InputManager?.DetachTextInput();
         AudioManager?.Dispose();
         ConfigManager.Save();
         base.EndRun();

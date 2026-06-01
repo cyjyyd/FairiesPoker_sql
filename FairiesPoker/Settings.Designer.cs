@@ -197,12 +197,11 @@
             this.comboBox1.FormattingEnabled = true;
             this.comboBox1.Items.AddRange(new object[] {
             "奇妙仙子",
-            "失去的宝藏",
-            "拯救仙子大作战",
+            "失落的宝藏",
+            "拯救精灵大作战",
             "羽翼之谜",
             "海盗仙子",
-            "奇幻兽传说",
-            "仙尘谷大赛"});
+            "永无兽传奇"});
             this.comboBox1.Location = new System.Drawing.Point(299, 277);
             this.comboBox1.Name = "comboBox1";
             this.comboBox1.Size = new System.Drawing.Size(233, 41);

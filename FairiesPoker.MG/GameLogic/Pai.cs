@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using FairiesPoker.MG.Core;
 
 namespace FairiesPoker
 {
@@ -24,17 +25,52 @@ namespace FairiesPoker
         private static extern long GetPrivateProfileString(string section, string key, string def, StringBuilder retVal, int size, string filePath);
         public Pai(string huase, int size)
         {
+            if (size == 16 || size == 17)
+                huase = "";
+
             this.huase = huase;
             this.size = size;
-            try
+            this.image = LoadCardImage(huase, size) ?? new Bitmap(1, 1);
+        }
+
+        private static Image LoadCardImage(string huase, int size)
+        {
+            string fileName = huase + size + ".png";
+            foreach (string path in GetCardImageCandidates(fileName))
             {
-                this.image = Image.FromFile(Application.StartupPath + @"\Pokers\" + ReadIniData("Settings","UI","5",Application.StartupPath+"\\config.ini") + "\\"+ huase + size + ".png");
+                if (!File.Exists(path))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    using var source = Image.FromStream(stream);
+                    return new Bitmap(source);
+                }
+                catch
+                {
+                }
             }
-            catch (Exception)
+
+            return null;
+        }
+
+        private static IEnumerable<string> GetCardImageCandidates(string fileName)
+        {
+            int theme = ConfigManager.UITheme >= 1 && ConfigManager.UITheme <= ConfigManager.ThemeCount
+                ? ConfigManager.UITheme
+                : 5;
+            string basePath = AppDomain.CurrentDomain.BaseDirectory;
+
+            yield return System.IO.Path.Combine(basePath, "Pokers", theme.ToString(), fileName);
+            if (theme != 5)
             {
-                MessageBox.Show("错误！文件丢失！程序将关闭！","Error",MessageBoxButtons.OK,MessageBoxIcon.Error);
-                System.Environment.Exit(0);
+                yield return System.IO.Path.Combine(basePath, "Pokers", "5", fileName);
             }
+
+            yield return System.IO.Path.Combine(basePath, "Pokers", fileName);
         }
         public string Huase //牌的花色
         {

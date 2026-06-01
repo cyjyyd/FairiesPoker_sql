@@ -11,6 +11,8 @@ namespace FairiesPoker
     {
         Point mouseOff;//鼠标移动位置变量
         bool leftFlag;//标记是否为左键
+        private int appliedTheme = -1;
+        private Image themedBackground;
         #region 窗体设置
         public Main()
         {
@@ -21,8 +23,8 @@ namespace FairiesPoker
             this.SetStyle(ControlStyles.UserPaint, true);
             this.SetStyle(ControlStyles.AllPaintingInWmPaint, true);
             this.SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
-            config con = new config(); UI u = new UI();u.setUI(con.UI);
-            this.BackgroundImage = u.Background;Opacity = 0;timer1.Start(); 
+            ApplyTheme(true);
+            Opacity = 0;timer1.Start(); 
         }
         #endregion
         #region 所有事件
@@ -65,7 +67,56 @@ namespace FairiesPoker
         private void set_Click(object sender, EventArgs e)
         {
             Settings setting = new Settings();
-            setting.ShowDialog();
+            setting.ThemeSaved += (s, args) => ApplyTheme(true);
+            setting.ShowDialog(this);
+            ApplyTheme(true);
+        }
+
+        private void ApplyTheme(bool force = false)
+        {
+            config con = new config();
+            if (!force && con.UI == appliedTheme)
+            {
+                return;
+            }
+
+            UI u = new UI();
+            u.setUI(con.UI);
+
+            Image oldBackground = themedBackground;
+            themedBackground = u.Background;
+            BackgroundImage = null;
+            BackgroundImageLayout = ImageLayout.Stretch;
+            appliedTheme = con.UI;
+
+            if (oldBackground != null && !ReferenceEquals(oldBackground, themedBackground))
+            {
+                oldBackground.Dispose();
+            }
+
+            Invalidate(true);
+            foreach (Control control in Controls)
+            {
+                control.Invalidate();
+            }
+            Refresh();
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            if (themedBackground == null)
+            {
+                base.OnPaintBackground(e);
+                return;
+            }
+
+            e.Graphics.DrawImage(themedBackground, ClientRectangle);
+        }
+
+        protected override void OnActivated(EventArgs e)
+        {
+            base.OnActivated(e);
+            ApplyTheme();
         }
 
         private void SinPla_MouseEnter(object sender, EventArgs e)

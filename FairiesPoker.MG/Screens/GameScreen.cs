@@ -1,6 +1,7 @@
 using FairiesPoker;
 using FairiesPoker.MG.Core;
 using FairiesPoker.MG.Network;
+using FairiesPoker.MG.Network.Impl;
 using FairiesPoker.MG.Renderers;
 using FairiesPoker.MG.UI;
 using Microsoft.Xna.Framework;
@@ -94,11 +95,8 @@ public class GameScreen : ScreenBase
 
     // === 状态变量（完全对应原项目）===
     private bool _bl_isFirst;      // 是否首出（对应原bl_isFirst）
-    private bool _bl_isDiZhu;      // 是否地主（对应原bl_isDiZhu）
     private int _buChuPai;         // 不出计数（对应原buChuPai）
-    private int _chuPaiWeiZhi;     // 出牌位置（对应原chuPaiWeiZhi，用于显示位置）
     private int _tishi;            // 提示计数（对应原tishi）
-    private bool _noDiZhu;         // 无人叫地主（对应原noDiZhu）
     private bool _bl_chuPaiOver;   // 出牌结束（对应原bl_chuPaiOver）
 
     // === 轮转计数器（对应原项目的num）===
@@ -108,7 +106,6 @@ public class GameScreen : ScreenBase
     private int _turnNum;
 
     // === 发牌动画（旧系统，保留兼容）===
-    private float _dealAccumulator;
     private const float DealInterval = 80f; // ms per card
     private int _dealtCount;
     private int _totalDealCards = 54;
@@ -126,12 +123,11 @@ public class GameScreen : ScreenBase
     private float _turnTimerAccumulator;
     private int _remainingSeconds = 20;
     private bool _turnTimerActive;
+    private int _turnTimerUserId = -1;
 
     // === 输入 ===
     private bool _isSelecting;
     private Point _mousePos;
-    private bool _isDragging;
-    private Vector2 _dragOffset;
 
     // === 网络相关(联机模式) ===
     private NetManager? _netManager;
@@ -141,6 +137,22 @@ public class GameScreen : ScreenBase
     private bool _isMyTurnOnline;
     private DealDto? _lastDealDto;
     private int _lastPaiType;
+    private Texture2D? _defaultAvatarTexture;
+    private readonly Dictionary<string, Texture2D> _avatarTextures = new();
+    private readonly HashSet<string> _requestedAvatarUrls = new();
+    private string _leftAvatarUrl = "";
+    private string _selfAvatarUrl = "";
+    private string _rightAvatarUrl = "";
+    private int _pendingTurnGrabUserId;
+    private bool _hasPendingTurnGrabAfterDeal;
+    private OverDto? _pendingGameOverDto;
+    private bool _hasPendingGameOver;
+
+    private static readonly Rectangle OnlineLeftInfoRect = new(18, 105, 200, 76);
+    private static readonly Rectangle OnlineSelfInfoRect = new(1000, 620, 260, 76);
+    private static readonly Rectangle OnlineRightInfoRect = new(1045, 105, 220, 76);
+    private const int OnlineAvatarSize = 50;
+    private const string LandlordBadgeText = "地主";
 
     public GameScreen(Game1 game, ScreenManager screenManager, bool isOnline = false)
         : base(game, screenManager)
@@ -194,6 +206,9 @@ public class GameScreen : ScreenBase
             Models.OnGameOver += OnGameOverReceived;
             Models.OnMultipleChange += OnMultipleChangeReceived;
             Models.OnGameStart += OnGameStartReceived;
+            Models.OnMatchUpdate += OnOnlineMatchUpdateReceived;
+            Models.OnAvatarLoaded += OnAvatarLoadedReceived;
+            ConsumePendingOnlineEvents();
         }
     }
 
@@ -211,7 +226,15 @@ public class GameScreen : ScreenBase
             Models.OnGameOver -= OnGameOverReceived;
             Models.OnMultipleChange -= OnMultipleChangeReceived;
             Models.OnGameStart -= OnGameStartReceived;
+            Models.OnMatchUpdate -= OnOnlineMatchUpdateReceived;
+            Models.OnAvatarLoaded -= OnAvatarLoadedReceived;
         }
+
+        foreach (var texture in _avatarTextures.Values)
+        {
+            texture.Dispose();
+        }
+        _avatarTextures.Clear();
     }
 
     #region 单机模式初始化（一比一复刻原load函数）
@@ -369,9 +392,8 @@ public class GameScreen : ScreenBase
         _buChuPai = 0;
         _tishi = 0;
         _bl_chuPaiOver = false;
-        _noDiZhu = false;
         _bl_isFirst = false;
-        _bl_isDiZhu = false;
+        _landlordId = -1;
 
         // === 新增：初始化发牌动画 ===
         InitDealAnimations();
@@ -379,7 +401,6 @@ public class GameScreen : ScreenBase
         // 进入发牌阶段
         _state = GameState.DEALING;
         _dealtCount = 0;
-        _dealAccumulator = 0;
 
         // 隐藏所有按钮，显示状态标签
         ButtonSet(false, false, false, false, false);
@@ -390,6 +411,11 @@ public class GameScreen : ScreenBase
         _lblLeftStatus.Visible = false;
         _lblRightStatus.Visible = false;
         _lblMyStatus.Visible = false;
+    }
+
+    private void PlaySound(SoundCue cue)
+    {
+        Game.AudioManager?.PlaySfx(cue);
     }
 
     /// <summary>
@@ -495,12 +521,7 @@ public class GameScreen : ScreenBase
         var matchRoom = Models.GameModel?.MatchRoomDto;
         if (matchRoom != null)
         {
-            if (matchRoom.LeftId > 0 && matchRoom.UIdUserDict.TryGetValue(matchRoom.LeftId, out var leftUser))
-                _leftName = leftUser.Name;
-            if (Models.GameModel?.UserDto != null)
-                _selfName = Models.GameModel.UserDto.Name;
-            if (matchRoom.RightId > 0 && matchRoom.UIdUserDict.TryGetValue(matchRoom.RightId, out var rightUser))
-                _rightName = rightUser.Name;
+            RefreshOnlinePlayerInfo();
         }
 
         _state = GameState.WAITING;
@@ -511,6 +532,33 @@ public class GameScreen : ScreenBase
 
     #endregion
 
+    private void RefreshOnlinePlayerInfo()
+    {
+        var matchRoom = Models.GameModel?.MatchRoomDto;
+        var selfUser = Models.GameModel?.UserDto;
+
+        if (selfUser != null)
+        {
+            _selfName = selfUser.Name;
+            _selfAvatarUrl = selfUser.AvatarUrl ?? "";
+        }
+
+        if (matchRoom == null)
+            return;
+
+        if (matchRoom.LeftId > 0 && matchRoom.UIdUserDict.TryGetValue(matchRoom.LeftId, out var leftUser))
+        {
+            _leftName = leftUser.Name;
+            _leftAvatarUrl = leftUser.AvatarUrl ?? "";
+        }
+
+        if (matchRoom.RightId > 0 && matchRoom.UIdUserDict.TryGetValue(matchRoom.RightId, out var rightUser))
+        {
+            _rightName = rightUser.Name;
+            _rightAvatarUrl = rightUser.AvatarUrl ?? "";
+        }
+    }
+
     #region UI初始化
 
     private void InitUI()
@@ -519,6 +567,7 @@ public class GameScreen : ScreenBase
         string bgPath = System.IO.Path.Combine(ConfigManager.ThemePath, "main seq.jpg");
         if (File.Exists(bgPath))
             _bgTexture = TextureManager.Load("_game_bg", bgPath);
+        _defaultAvatarTexture = UIResourceManager.LoadResource("Pla.jpg");
         string cardBackPath = System.IO.Path.Combine(ConfigManager.ThemePath, "牌背3.png");
         if (!File.Exists(cardBackPath))
             cardBackPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Pokers", "牌背3.png");
@@ -610,40 +659,41 @@ public class GameScreen : ScreenBase
 
         // 状态标签（对应原项目label1/label2/label3的映射）
         // 原项目：label1=右AI状态, label2=左AI状态, label3=玩家状态
-        _lblRightStatus.Position = new Vector2(1110, 190); // 右AI状态
+        _lblRightStatus.Position = new Vector2(1045, 185); // 右AI状态
         _lblRightStatus.Text = "";
         _lblRightStatus.TextColor = Color.White;
         _lblRightStatus.Size = new Vector2(100, 30);
         _lblRightStatus.BackgroundColor = new Color(0, 0, 0, 100);
 
-        _lblLeftStatus.Position = new Vector2(20, 190); // 左AI状态
+        _lblLeftStatus.Position = new Vector2(20, 185); // 左AI状态
         _lblLeftStatus.Text = "";
         _lblLeftStatus.TextColor = Color.White;
         _lblLeftStatus.Size = new Vector2(100, 30);
         _lblLeftStatus.BackgroundColor = new Color(0, 0, 0, 100);
 
-        _lblMyStatus.Position = new Vector2(540, 370); // 玩家状态
+        _lblMyStatus.Position = new Vector2(835, 382); // 玩家状态
         _lblMyStatus.Text = "";
         _lblMyStatus.TextColor = Color.White;
-        _lblMyStatus.Size = new Vector2(200, 30);
+        _lblMyStatus.Size = new Vector2(120, 30);
+        _lblMyStatus.TextAlignment = UILabel.AlignmentType.Center;
         _lblMyStatus.BackgroundColor = new Color(0, 0, 0, 100);
 
-        _lblLeftRemain.Position = new Vector2(60, 470);
+        _lblLeftRemain.Position = new Vector2(125, 185);
         _lblLeftRemain.Text = "剩余: 17";
         _lblLeftRemain.TextColor = Color.White;
-        _lblLeftRemain.Size = new Vector2(100, 30);
+        _lblLeftRemain.Size = new Vector2(110, 30);
         _lblLeftRemain.BackgroundColor = new Color(0, 0, 0, 100);
 
-        _lblRightRemain.Position = new Vector2(1120, 470);
+        _lblRightRemain.Position = new Vector2(1155, 185);
         _lblRightRemain.Text = "剩余: 17";
         _lblRightRemain.TextColor = Color.White;
-        _lblRightRemain.Size = new Vector2(100, 30);
+        _lblRightRemain.Size = new Vector2(110, 30);
         _lblRightRemain.BackgroundColor = new Color(0, 0, 0, 100);
 
-        _lblStatus.Position = new Vector2(540, 340);
+        _lblStatus.Position = new Vector2(490, 382);
         _lblStatus.Text = "";
         _lblStatus.TextColor = Color.Yellow;
-        _lblStatus.Size = new Vector2(200, 30);
+        _lblStatus.Size = new Vector2(330, 30);
         _lblStatus.TextAlignment = UILabel.AlignmentType.Center;
         _lblStatus.BackgroundColor = new Color(0, 0, 0, 120);
 
@@ -963,7 +1013,6 @@ public class GameScreen : ScreenBase
                 // juese2是地主
                 KouDiPai(_juese2);
                 _landlordId = 2;
-                _bl_isDiZhu = true;
             }
             else if (switchDiZhu == 3)
             {
@@ -979,7 +1028,6 @@ public class GameScreen : ScreenBase
         {
             // 无人叫地主
             _lblStatus.Text = "没有人选择地主，重新发牌";
-            _noDiZhu = true;
             StartOfflineGame();
         }
     }
@@ -1106,7 +1154,15 @@ public class GameScreen : ScreenBase
             }
         }
 
-        // 6. 更新剩余牌数显示
+        // 6. 更新回合倒计时显示。服务器负责真正超时判定，这里只做UI同步。
+        if (_turnTimerActive)
+        {
+            _turnTimerAccumulator += dt;
+            int elapsedSeconds = (int)(_turnTimerAccumulator / 1000f);
+            _remainingSeconds = Math.Max(0, 20 - elapsedSeconds);
+        }
+
+        // 7. 更新剩余牌数显示
         if (_lblLeftRemain.Visible)
             _lblLeftRemain.Text = $"剩余牌：{_leftCardBackCount}";
         if (_lblRightRemain.Visible)
@@ -1368,7 +1424,7 @@ public class GameScreen : ScreenBase
         int cardCount = _juese2?.ShengYuPai.Count ?? 0;
         if (cardCount == 0) return;
 
-        _handPositions = CardLayoutManager.CalculateHandPositions(cardCount, _handSelected);
+        _handPositions = CardLayoutManager.CalculateHandPositions(cardCount);
 
         for (int i = cardCount - 1; i >= 0; i--)
         {
@@ -1381,12 +1437,20 @@ public class GameScreen : ScreenBase
 
     private void DrawPlayerNames(SpriteBatch spriteBatch)
     {
+        DrawPlayerName(spriteBatch, _leftName, new Vector2(20, 450), _juese1.Dizhu);
+        DrawPlayerName(spriteBatch, _selfName, new Vector2(1005, 630), _juese2.Dizhu);
+        DrawPlayerName(spriteBatch, _rightName, new Vector2(1110, 130), _juese3.Dizhu);
+    }
+
+    private void DrawPlayerName(SpriteBatch spriteBatch, string name, Vector2 position, bool isLandlord)
+    {
         var font = FontManager.Default;
         if (font == null) return;
 
-        FontManager.DrawString(spriteBatch, font, _leftName, new Vector2(20, 450), Color.White);
-        FontManager.DrawString(spriteBatch, font, _selfName, new Vector2(1005, 630), Color.White);
-        FontManager.DrawString(spriteBatch, font, _rightName, new Vector2(1110, 130), Color.White);
+        if (isLandlord)
+            DrawLandlordBadge(spriteBatch, position + new Vector2(0, -26));
+
+        FontManager.DrawString(spriteBatch, font, name, position, Color.White);
     }
 
     private void DrawOnline(SpriteBatch spriteBatch)
@@ -1491,8 +1555,8 @@ public class GameScreen : ScreenBase
 
         for (int i = 0; i < completedCards && i < 51; i++)
         {
-            if (i % 3 == 0) selfReceived++;
-            else if (i % 3 == 1) leftReceived++;
+            if (i % 3 == 0) leftReceived++;
+            else if ((i + 2) % 3 == 0) selfReceived++;
             else rightReceived++;
         }
 
@@ -1510,17 +1574,25 @@ public class GameScreen : ScreenBase
         // 渲染已落地的左玩家牌背
         if (leftReceived > 0 && _cardBackTexture != null)
         {
-            spriteBatch.Draw(_cardBackTexture,
-                new Rectangle(20, 220, CardRenderer.CardWidth, CardRenderer.CardHeight),
-                Color.White);
+            var leftPositions = CardLayoutManager.CalculateLeftPlayerBackPositions(17);
+            for (int i = 0; i < leftReceived && i < leftPositions.Length; i++)
+            {
+                spriteBatch.Draw(_cardBackTexture,
+                    new Rectangle((int)leftPositions[i].X, (int)leftPositions[i].Y, CardRenderer.CardWidth, CardRenderer.CardHeight),
+                    Color.White);
+            }
         }
 
         // 渲染已落地的右玩家牌背
         if (rightReceived > 0 && _cardBackTexture != null)
         {
-            spriteBatch.Draw(_cardBackTexture,
-                new Rectangle(1110, 220, CardRenderer.CardWidth, CardRenderer.CardHeight),
-                Color.White);
+            var rightPositions = CardLayoutManager.CalculateRightPlayerBackPositions(17);
+            for (int i = 0; i < rightReceived && i < rightPositions.Length; i++)
+            {
+                spriteBatch.Draw(_cardBackTexture,
+                    new Rectangle((int)rightPositions[i].X, (int)rightPositions[i].Y, CardRenderer.CardWidth, CardRenderer.CardHeight),
+                    Color.White);
+            }
         }
     }
 
@@ -1571,12 +1643,12 @@ public class GameScreen : ScreenBase
         int cardCount = _myOnlineHandCards?.Count ?? 0;
         if (cardCount == 0) return;
 
-        var positions = CardLayoutManager.CalculateHandPositions(cardCount, _handSelected);
+        _handPositions = CardLayoutManager.CalculateHandPositions(cardCount);
 
         for (int i = cardCount - 1; i >= 0; i--)
         {
             var card = _myOnlineHandCards[i];
-            CardRenderer.DrawCard(spriteBatch, positions[i], card.huase, card.size, _handSelected[i]);
+            CardRenderer.DrawCard(spriteBatch, _handPositions[i], card.huase, card.size, _handSelected[i]);
         }
     }
 
@@ -1589,21 +1661,156 @@ public class GameScreen : ScreenBase
         if (font == null) return;
 
         // 获取各玩家名称
-        string leftName = Models.GameModel.GetUserDto(Models.GameModel.GetLeftUserId())?.Name ?? "左玩家";
-        string selfName = Models.GameModel.UserDto?.Name ?? "玩家";
-        string rightName = Models.GameModel.GetUserDto(Models.GameModel.GetRightUserId())?.Name ?? "右玩家";
+        var leftUser = Models.GameModel.GetUserDto(Models.GameModel.GetLeftUserId());
+        var selfUser = Models.GameModel.UserDto;
+        var rightUser = Models.GameModel.GetUserDto(Models.GameModel.GetRightUserId());
 
-        // 显示地主标识
-        if (_landlordId == Models.GameModel.GetLeftUserId())
-            leftName += "(地主)";
-        else if (IsMyTurn(_landlordId))
-            selfName += "(地主)";
-        else if (_landlordId == Models.GameModel.GetRightUserId())
-            rightName += "(地主)";
+        string leftName = leftUser?.Name ?? _leftName;
+        string selfName = selfUser?.Name ?? _selfName;
+        string rightName = rightUser?.Name ?? _rightName;
+        string leftAvatarUrl = leftUser?.AvatarUrl ?? _leftAvatarUrl;
+        string selfAvatarUrl = selfUser?.AvatarUrl ?? _selfAvatarUrl;
+        string rightAvatarUrl = rightUser?.AvatarUrl ?? _rightAvatarUrl;
 
-        FontManager.DrawString(spriteBatch, font, leftName, new Vector2(20, 450), Color.White);
-        FontManager.DrawString(spriteBatch, font, selfName, new Vector2(1005, 630), Color.White);
-        FontManager.DrawString(spriteBatch, font, rightName, new Vector2(1110, 130), Color.White);
+        int leftUserId = Models.GameModel.GetLeftUserId();
+        int selfUserId = GetMyUserId();
+        int rightUserId = Models.GameModel.GetRightUserId();
+
+        DrawOnlinePlayerInfo(spriteBatch, OnlineLeftInfoRect, leftName, leftAvatarUrl, leftUserId, _landlordId == leftUserId);
+        DrawOnlinePlayerInfo(spriteBatch, OnlineSelfInfoRect, selfName, selfAvatarUrl, selfUserId, _landlordId == selfUserId);
+        DrawOnlinePlayerInfo(spriteBatch, OnlineRightInfoRect, rightName, rightAvatarUrl, rightUserId, _landlordId == rightUserId);
+    }
+
+    private void DrawOnlinePlayerInfo(SpriteBatch spriteBatch, Rectangle panelRect, string name, string avatarUrl, int userId, bool isLandlord)
+    {
+        var whitePixel = TextureManager.Get("_white") ?? CreateWhitePixel();
+        spriteBatch.Draw(whitePixel, panelRect, new Color(20, 24, 32, 140));
+        DrawBorder(spriteBatch, panelRect, new Color(220, 230, 245, 80));
+
+        var avatarRect = new Rectangle(panelRect.X + 8, panelRect.Y + 13, OnlineAvatarSize, OnlineAvatarSize);
+        DrawAvatar(spriteBatch, avatarUrl, avatarRect);
+
+        var textPos = new Vector2(panelRect.X + OnlineAvatarSize + 18, panelRect.Y + 17);
+        FontManager.DrawString(spriteBatch, FontManager.Default, name, textPos, Color.White);
+
+        if (isLandlord)
+            DrawLandlordBadge(spriteBatch, new Vector2(panelRect.Right - 58, panelRect.Y + 10));
+
+        string stateText = "";
+        Color stateColor = Color.Gold;
+        if (IsPlayerDisconnected(userId))
+        {
+            stateText = "已断线";
+            stateColor = Color.LightCoral;
+        }
+        else if (_turnTimerActive && _turnTimerUserId == userId)
+        {
+            stateText = $"{_remainingSeconds}s";
+        }
+
+        if (!string.IsNullOrEmpty(stateText))
+        {
+            FontManager.DrawString(spriteBatch, FontManager.Default,
+                stateText,
+                new Vector2(textPos.X, panelRect.Y + 43),
+                stateColor);
+        }
+    }
+
+    private void DrawLandlordBadge(SpriteBatch spriteBatch, Vector2 position)
+    {
+        var whitePixel = TextureManager.Get("_white") ?? CreateWhitePixel();
+        var badgeRect = new Rectangle((int)position.X, (int)position.Y, 50, 22);
+        spriteBatch.Draw(whitePixel, badgeRect, new Color(126, 36, 24, 220));
+        DrawBorder(spriteBatch, badgeRect, new Color(255, 218, 96, 210));
+
+        var textSize = FontManager.MeasureString(LandlordBadgeText, FontManager.Default, 0.72f);
+        var textPos = new Vector2(
+            badgeRect.X + (badgeRect.Width - textSize.X) / 2f,
+            badgeRect.Y + (badgeRect.Height - textSize.Y) / 2f);
+        FontManager.DrawString(spriteBatch, FontManager.Default, LandlordBadgeText, textPos, Color.Gold, 0.72f);
+    }
+
+    private void DrawAvatar(SpriteBatch spriteBatch, string avatarUrl, Rectangle rect)
+    {
+        var texture = GetAvatarTexture(avatarUrl) ?? _defaultAvatarTexture;
+        if (texture != null)
+        {
+            spriteBatch.Draw(texture, rect, Color.White);
+        }
+        else
+        {
+            spriteBatch.Draw(TextureManager.Get("_white") ?? CreateWhitePixel(), rect, new Color(55, 60, 72, 185));
+        }
+
+        DrawBorder(spriteBatch, rect, new Color(230, 235, 245, 120));
+    }
+
+    private void DrawBorder(SpriteBatch spriteBatch, Rectangle rect, Color color)
+    {
+        var whitePixel = TextureManager.Get("_white") ?? CreateWhitePixel();
+        spriteBatch.Draw(whitePixel, new Rectangle(rect.X, rect.Y, rect.Width, 1), color);
+        spriteBatch.Draw(whitePixel, new Rectangle(rect.X, rect.Y, 1, rect.Height), color);
+        spriteBatch.Draw(whitePixel, new Rectangle(rect.X, rect.Bottom - 1, rect.Width, 1), color);
+        spriteBatch.Draw(whitePixel, new Rectangle(rect.Right - 1, rect.Y, 1, rect.Height), color);
+    }
+
+    private Texture2D? GetAvatarTexture(string avatarUrl)
+    {
+        if (string.IsNullOrEmpty(avatarUrl))
+            return _defaultAvatarTexture;
+
+        if (_avatarTextures.TryGetValue(avatarUrl, out var texture))
+            return texture;
+
+        var cachedAvatar = AvatarHandler.GetCachedAvatar(avatarUrl);
+        if (cachedAvatar != null)
+        {
+            texture = CreateTextureFromImage(cachedAvatar);
+            if (texture != null)
+            {
+                _avatarTextures[avatarUrl] = texture;
+                return texture;
+            }
+        }
+
+        if (_requestedAvatarUrls.Add(avatarUrl))
+            AvatarHandler.RequestDownloadAvatar(avatarUrl);
+
+        return _defaultAvatarTexture;
+    }
+
+    private void OnAvatarLoadedReceived(string avatarUrl)
+    {
+        if (string.IsNullOrEmpty(avatarUrl))
+            return;
+
+        _requestedAvatarUrls.Remove(avatarUrl);
+        if (_avatarTextures.ContainsKey(avatarUrl))
+            return;
+
+        var cachedAvatar = AvatarHandler.GetCachedAvatar(avatarUrl);
+        if (cachedAvatar == null)
+            return;
+
+        var texture = CreateTextureFromImage(cachedAvatar);
+        if (texture != null)
+            _avatarTextures[avatarUrl] = texture;
+    }
+
+    private Texture2D? CreateTextureFromImage(System.Drawing.Image image)
+    {
+        try
+        {
+            using var ms = new MemoryStream();
+            image.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            ms.Position = 0;
+            return Texture2D.FromStream(Game.GraphicsDevice, ms);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private void DrawUI(SpriteBatch spriteBatch)
@@ -1632,13 +1839,6 @@ public class GameScreen : ScreenBase
     {
         _mousePos = new Point((int)input.MousePosition.X, (int)input.MousePosition.Y);
 
-        if (input.LeftMouseClicked && _mousePos.Y < 60)
-        {
-            _isDragging = true;
-            _dragOffset = input.MousePosition;
-        }
-        if (input.LeftMouseReleased) _isDragging = false;
-
         _btnStart.Update(input);
         _btnAction.Update(input);
         _btnPass.Update(input);
@@ -1648,7 +1848,7 @@ public class GameScreen : ScreenBase
         _btnMinimize.Update(input);
         _btnClose.Update(input);
 
-        if ((_state == GameState.MY_TURN || _state == GameState.GRABBING))
+        if (_state == GameState.MY_TURN)
         {
             HandleCardInput(input);
         }
@@ -1660,20 +1860,26 @@ public class GameScreen : ScreenBase
     private void HandleCardInput(InputManager input)
     {
         var mousePt = new Point((int)input.MousePosition.X, (int)input.MousePosition.Y);
+        var inputPositions = GetHandInputPositions();
+        if (inputPositions.Length == 0 || _handSelected.Length == 0)
+        {
+            _isSelecting = false;
+            return;
+        }
 
         if (input.LeftMouseClicked)
         {
-            int idx = FindCardIndexAtPosition(mousePt);
+            int idx = FindCardIndexAtPosition(mousePt, inputPositions, _handSelected);
             if (idx >= 0)
             {
                 _isSelecting = true;
-                _selection.OnMouseDown(mousePt, _handPositions, _handSelected);
+                _selection.OnMouseDown(mousePt, inputPositions, _handSelected);
             }
         }
 
         if (_isSelecting && input.LeftMouseHeld)
         {
-            _selection.OnMouseMove(mousePt, _handPositions, _handSelected);
+            _selection.OnMouseMove(mousePt, inputPositions, _handSelected);
             var sel = _selection.Selected;
             for (int i = 0; i < sel.Length && i < _handSelected.Length; i++)
                 _handSelected[i] = sel[i];
@@ -1681,11 +1887,11 @@ public class GameScreen : ScreenBase
 
         if (_isSelecting && input.LeftMouseReleased)
         {
-            _selection.OnMouseUp(mousePt, _handPositions, _handSelected);
+            _selection.OnMouseUp(mousePt, inputPositions, _handSelected);
 
             if (!_selection.HasSlided)
             {
-                int idx = FindCardIndexAtPosition(mousePt);
+                int idx = FindCardIndexAtPosition(mousePt, inputPositions, _handSelected);
                 if (idx >= 0)
                     _selection.ToggleCard(idx);
 
@@ -1698,21 +1904,21 @@ public class GameScreen : ScreenBase
         }
     }
 
-    private int FindCardIndexAtPosition(Point pos)
+    private Vector2[] GetHandInputPositions()
     {
-        int cardCount = _handPositions.Length;
-        for (int i = 0; i < cardCount; i++)
-        {
-            var rect = new Rectangle(
-                (int)_handPositions[i].X,
-                (int)_handPositions[i].Y,
-                CardRenderer.CardWidth,
-                CardRenderer.CardHeight
-            );
-            if (rect.Contains(pos))
-                return i;
-        }
-        return -1;
+        int cardCount = _isOnline
+            ? (_myOnlineHandCards?.Count ?? 0)
+            : (_juese2?.ShengYuPai.Count ?? 0);
+
+        if (cardCount <= 0)
+            return Array.Empty<Vector2>();
+
+        return CardLayoutManager.CalculateHandPositions(cardCount);
+    }
+
+    private int FindCardIndexAtPosition(Point pos, Vector2[] cardPositions, bool[] selectedStates)
+    {
+        return CardSelectionHandler.FindCardIndexAtPosition(pos, cardPositions, selectedStates);
     }
 
     #endregion
@@ -1730,7 +1936,6 @@ public class GameScreen : ScreenBase
         if (_btnAction.Text == "叫地主")
         {
             // 玩家叫地主
-            _bl_isDiZhu = true;
             _juese2.Dizhu = true;
             ButtonSet(3, false);
             _lblMyStatus.Text = "叫地主";
@@ -1979,6 +2184,7 @@ public class GameScreen : ScreenBase
         if (juese.ShangShouPai == null || juese.ShangShouPai.Count == 0)
         {
             // 无法接牌，不出
+            PlaySound(SoundCue.Click);
             if (juese == _juese1)
             {
                 _lblLeftStatus.Text = "不出";
@@ -2005,6 +2211,7 @@ public class GameScreen : ScreenBase
         if (!success)
         {
             // 接牌失败，不出
+            PlaySound(SoundCue.Click);
             if (juese == _juese1)
             {
                 _lblLeftStatus.Text = "不出";
@@ -2037,6 +2244,7 @@ public class GameScreen : ScreenBase
     {
         juese.ShangShouPai.Clear();
         _chupai.format(whatPai);
+        PlaySound(SoundCue.Deal);
 
         // 更新显示
         var playedList = juese.WeiZhi == 1 ? _leftPlayedCards : (juese.WeiZhi == 3 ? _rightPlayedCards : _myPlayedCards);
@@ -2358,6 +2566,7 @@ public class GameScreen : ScreenBase
 
         _lblMyStatus.Text = "不出";
         _lblMyStatus.Visible = true;
+        PlaySound(SoundCue.Click);
 
         ContinueDaPaiLoop();
     }
@@ -2442,6 +2651,7 @@ public class GameScreen : ScreenBase
         }
 
         _lblStatus.Text = results[1] ? "胜利!" : "失败!";
+        PlaySound(results[1] ? SoundCue.Win : SoundCue.Lose);
         // 传入回调，WinScreen关闭后调用
         ScreenManager.Push(new WinScreen(Game, ScreenManager, results, names, OnWinScreenClosed));
     }
@@ -2467,6 +2677,7 @@ public class GameScreen : ScreenBase
         _rightPlayedCards.Clear();
         _tableCards.Clear();
         _tableCardsRevealed = false;
+        _landlordId = -1;
 
         // 清空动画
         _animManager.Clear();
@@ -2475,15 +2686,12 @@ public class GameScreen : ScreenBase
 
         // 重置状态变量
         _bl_isFirst = false;
-        _bl_isDiZhu = false;
         _buChuPai = 0;
-        _chuPaiWeiZhi = 0;
         _tishi = 0;
-        _noDiZhu = false;
         _bl_chuPaiOver = false;
         _dealtCount = 0;
-        _dealAccumulator = 0;
         _aiAccumulator = 0;
+        _landlordId = -1;
 
         // 重置角色数据
         if (_juese1 != null)
@@ -2542,11 +2750,9 @@ public class GameScreen : ScreenBase
     // 叫地主状态
     private bool _waitingGrabResponse;
     private int _currentGrabUserId;
-    private bool _grabAnimationPlaying;
 
     // 出牌动画状态
     private bool _dealAnimationPlaying;
-    private DealDto _pendingDealDto;
 
     // 不出动画状态
     private float _passStatusDisplayTime;
@@ -2567,14 +2773,13 @@ public class GameScreen : ScreenBase
         };
     }
 
-    // 获取玩家位置名称
-    private string GetPlayerPositionName(int userId)
+    // 获取玩家显示名称
+    private string GetPlayerDisplayName(int userId)
     {
-        if (userId == Models.GameModel.GetLeftUserId())
-            return "左玩家";
-        else if (userId == Models.GameModel.GetRightUserId())
-            return "右玩家";
-        return "玩家";
+        if (IsMyTurn(userId))
+            return "你";
+
+        return Models.GameModel.GetUserDto(userId)?.Name ?? "对手";
     }
 
     // 获取自己的用户ID
@@ -2707,6 +2912,8 @@ public class GameScreen : ScreenBase
     /// </summary>
     private void OnGetCardsReceived(List<CardDto> cardList)
     {
+        RefreshOnlinePlayerInfo();
+
         // 存储手牌数据（按权重降序排序）
         SyncOnlineHandFromServerCards(cardList);
 
@@ -2762,25 +2969,25 @@ public class GameScreen : ScreenBase
         var rightPositions = CardLayoutManager.CalculateRightPlayerBackPositions(17);
         var tablePositions = CardLayoutManager.CalculateTableCardPositions();
 
-        // 发牌顺序：自己(0)、左玩家(1)、右玩家(2)交替
+        // 与单机模式保持一致：左玩家 -> 自己 -> 右玩家，最后发3张底牌。
         int selfIdx = 0, leftIdx = 0, rightIdx = 0;
 
         for (int i = 0; i < 51; i++)
         {
-            if (i % 3 == 0) // 自己的牌 - 正面
+            if (i % 3 == 0) // 左玩家 - 牌背
+            {
+                var anim = CardAnimation.CreateDealAnimation(
+                    leftIdx, dealStartPos, leftPositions[leftIdx], "", 0, true);
+                _animManager.QueueDealAnimation(anim);
+                leftIdx++;
+            }
+            else if ((i + 2) % 3 == 0) // 自己的牌 - 正面
             {
                 var card = _myOnlineHandCards[selfIdx];
                 var anim = CardAnimation.CreateDealAnimation(
                     selfIdx, dealStartPos, selfPositions[selfIdx], card.huase, card.size, false);
                 _animManager.QueueDealAnimation(anim);
                 selfIdx++;
-            }
-            else if (i % 3 == 1) // 左玩家 - 牌背
-            {
-                var anim = CardAnimation.CreateDealAnimation(
-                    leftIdx, dealStartPos, leftPositions[leftIdx], "", 0, true);
-                _animManager.QueueDealAnimation(anim);
-                leftIdx++;
             }
             else // 右玩家 - 牌背
             {
@@ -2812,13 +3019,24 @@ public class GameScreen : ScreenBase
 
         // 发牌完成，进入叫地主阶段
         _state = GameState.GRABBING;
-        _lblStatus.Text = "等待叫地主...";
 
         // 显示剩余牌数标签
         _lblLeftRemain.Visible = true;
         _lblRightRemain.Visible = true;
         _lblLeftRemain.Text = $"剩余牌：{_leftCardBackCount}";
         _lblRightRemain.Text = $"剩余牌：{_rightCardBackCount}";
+
+        if (_hasPendingTurnGrabAfterDeal)
+        {
+            int pendingUserId = _pendingTurnGrabUserId;
+            _hasPendingTurnGrabAfterDeal = false;
+            _pendingTurnGrabUserId = 0;
+            ApplyTurnGrab(pendingUserId);
+        }
+        else
+        {
+            _lblStatus.Text = "等待叫地主";
+        }
     }
 
     /// <summary>
@@ -2826,12 +3044,29 @@ public class GameScreen : ScreenBase
     /// </summary>
     private void OnTurnGrabReceived(int userId)
     {
+        if (_onlineDealAnimating || _showDealingCards || _state == GameState.DEALING ||
+            (_state == GameState.WAITING && (_onlineCards == null || _onlineCards.Count == 0)))
+        {
+            _pendingTurnGrabUserId = userId;
+            _hasPendingTurnGrabAfterDeal = true;
+            return;
+        }
+
+        ApplyTurnGrab(userId);
+    }
+
+    private void ApplyTurnGrab(int userId)
+    {
         _currentGrabUserId = userId;
+        _state = GameState.GRABBING;
+        _lblStatus.Visible = true;
+        StartTurnTimerDisplay(userId);
 
         if (IsMyTurn(userId))
         {
             // 轮到自己叫地主
             ButtonSet(1, true); // 显示叫地主/不叫按钮
+            _lblStatus.Text = "请选择是否叫地主";
             _lblMyStatus.Text = "";
             _lblMyStatus.Visible = true;
             _waitingGrabResponse = true;
@@ -2839,19 +3074,18 @@ public class GameScreen : ScreenBase
         else
         {
             // 其他玩家叫地主（显示等待状态）
-            string playerPos = GetPlayerPositionName(userId);
-            _lblStatus.Text = $"{playerPos} 正在选择...";
+            _lblStatus.Text = "等待对手选择";
             _waitingGrabResponse = false;
 
             // 在对应位置显示思考状态
             if (userId == Models.GameModel.GetLeftUserId())
             {
-                _lblLeftStatus.Text = "思考中...";
+                _lblLeftStatus.Text = "选择中";
                 _lblLeftStatus.Visible = true;
             }
             else if (userId == Models.GameModel.GetRightUserId())
             {
-                _lblRightStatus.Text = "思考中...";
+                _lblRightStatus.Text = "选择中";
                 _lblRightStatus.Visible = true;
             }
         }
@@ -2862,12 +3096,12 @@ public class GameScreen : ScreenBase
     /// </summary>
     private void OnGrabLandlordReceived(GrabDto grabDto)
     {
+        StopTurnTimerDisplay();
         _landlordId = grabDto.UserId;
-        _grabAnimationPlaying = true;
+        MarkOnlineLandlord(grabDto.UserId);
 
         // 显示抢地主结果
-        string landlordPos = GetPlayerPositionName(grabDto.UserId);
-        _lblStatus.Text = $"{landlordPos} 成为地主!";
+        _lblStatus.Text = $"{GetPlayerDisplayName(grabDto.UserId)} 成为地主";
 
         // 清空思考状态标签
         _lblLeftStatus.Visible = false;
@@ -2876,15 +3110,13 @@ public class GameScreen : ScreenBase
 
         // 存储底牌数据
         _tableCards = grabDto.TableCardList
-            .Select(c => (ConvertColorToHuase(c.Color), c.Weight))
+            .Select(ToRenderCard)
             .ToList();
         _tableCardsRevealed = true;
 
         // 如果自己是地主，添加底牌到手牌
         if (IsMyTurn(grabDto.UserId))
         {
-            _bl_isDiZhu = true;
-
             // 服务端广播的 PlayerCardList 已经是地主完整手牌，直接同步，避免重复合并底牌。
             SyncOnlineHandFromServerCards(grabDto.PlayerCardList);
 
@@ -2898,7 +3130,6 @@ public class GameScreen : ScreenBase
         // 进入出牌阶段（地主先出）
         _state = GameState.MY_TURN; // 假设先等待网络通知具体轮转
         ButtonSet(false, false, false, false, false);
-        _grabAnimationPlaying = false;
     }
 
     /// <summary>
@@ -2908,6 +3139,7 @@ public class GameScreen : ScreenBase
     {
         _currentTurnUserId = userId;
         _isMyTurnOnline = IsMyTurn(userId);
+        StartTurnTimerDisplay(userId);
 
         // 清空思考状态标签
         _lblLeftStatus.Visible = false;
@@ -2935,18 +3167,17 @@ public class GameScreen : ScreenBase
         {
             // 其他玩家出牌
             _state = GameState.AI_TURN; // 用AI_TURN表示等待其他玩家
-            string playerPos = GetPlayerPositionName(userId);
-            _lblStatus.Text = $"{playerPos} 正在出牌...";
+            _lblStatus.Text = "";
 
             // 在对应位置显示思考状态
             if (userId == Models.GameModel.GetLeftUserId())
             {
-                _lblLeftStatus.Text = "思考中...";
+                _lblLeftStatus.Text = "思考中";
                 _lblLeftStatus.Visible = true;
             }
             else if (userId == Models.GameModel.GetRightUserId())
             {
-                _lblRightStatus.Text = "思考中...";
+                _lblRightStatus.Text = "思考中";
                 _lblRightStatus.Visible = true;
             }
 
@@ -2959,6 +3190,7 @@ public class GameScreen : ScreenBase
     /// </summary>
     private void OnDealBroadcastReceived(DealDto dealDto)
     {
+        StopTurnTimerDisplay();
         _lastDealDto = dealDto;
         _lastPaiType = dealDto.Type;
 
@@ -3003,27 +3235,13 @@ public class GameScreen : ScreenBase
         // 创建出牌动画
         for (int i = 0; i < dealDto.SelectCardList.Count; i++)
         {
-            var card = dealDto.SelectCardList[i];
-            string huase = ConvertColorToHuase(card.Color);
-            int size = card.Weight;
+            var (huase, size) = ToRenderCard(dealDto.SelectCardList[i]);
 
             // 从牌堆位置飞向目标位置
             var anim = CardAnimation.CreatePlayAnimation(
                 i, dealStartPos, targetPositions[i], huase, size);
             _animManager.StartPlayAnimation(anim);
         }
-
-        // 缓存已出的牌用于渲染
-        var playedCards = dealDto.SelectCardList
-            .Select(c => (ConvertColorToHuase(c.Color), c.Weight))
-            .ToList();
-
-        if (IsMyTurn(dealDto.UserId))
-            _myPlayedCards = playedCards;
-        else if (dealDto.UserId == Models.GameModel.GetLeftUserId())
-            _leftPlayedCards = playedCards;
-        else
-            _rightPlayedCards = playedCards;
 
         // 设置动画完成回调
         _animationCompleteCallbacks.Enqueue(() => FinishOnlineDealAnimation(dealDto));
@@ -3036,6 +3254,8 @@ public class GameScreen : ScreenBase
     {
         _dealAnimationPlaying = false;
         _showPlayingCards = false;
+        SetOnlinePlayedCards(dealDto);
+        PlaySound(SoundCue.Deal);
 
         // 如果是自己出牌，更新手牌
         if (IsMyTurn(dealDto.UserId) && dealDto.RemainCardList != null)
@@ -3057,6 +3277,28 @@ public class GameScreen : ScreenBase
             _rightCardBackCount = dealDto.RemainCardList?.Count ?? _rightCardBackCount - dealDto.SelectCardList.Count;
             _lblRightRemain.Text = $"剩余牌：{_rightCardBackCount}";
         }
+
+        if (_hasPendingGameOver && _pendingGameOverDto != null)
+        {
+            var pending = _pendingGameOverDto;
+            _pendingGameOverDto = null;
+            _hasPendingGameOver = false;
+            ApplyOnlineGameOver(pending);
+        }
+    }
+
+    private void SetOnlinePlayedCards(DealDto dealDto)
+    {
+        var playedCards = dealDto.SelectCardList
+            .Select(ToRenderCard)
+            .ToList();
+
+        if (IsMyTurn(dealDto.UserId))
+            _myPlayedCards = playedCards;
+        else if (dealDto.UserId == Models.GameModel.GetLeftUserId())
+            _leftPlayedCards = playedCards;
+        else
+            _rightPlayedCards = playedCards;
     }
 
     /// <summary>
@@ -3067,7 +3309,7 @@ public class GameScreen : ScreenBase
         if (result == -1)
         {
             // 出牌失败
-            _lblStatus.Text = "出牌不合法!";
+            _lblStatus.Text = "出牌不符合规则";
             // 重新显示按钮
             if (_lastDealDto == null || _lastDealDto.UserId == GetMyUserId())
                 ButtonSet(4, true);
@@ -3077,6 +3319,7 @@ public class GameScreen : ScreenBase
         else
         {
             // 出牌成功
+            StopTurnTimerDisplay();
             ButtonSet(false, false, false, false, false);
             _lblStatus.Text = "";
         }
@@ -3090,25 +3333,28 @@ public class GameScreen : ScreenBase
         if (result == -1)
         {
             // 不能不出
-            _lblStatus.Text = "必须出牌!";
+            _lblStatus.Text = "当前回合必须出牌";
         }
         else
         {
+            int passUserId = result > 0 ? result : _currentTurnUserId;
+
             // 不出成功
+            StopTurnTimerDisplay();
             ButtonSet(false, false, false, false, false);
 
             // 显示"不出"状态
-            if (IsMyTurn(_currentTurnUserId))
+            if (IsMyTurn(passUserId))
             {
                 _lblMyStatus.Text = "不出";
                 _lblMyStatus.Visible = true;
             }
-            else if (_currentTurnUserId == Models.GameModel.GetLeftUserId())
+            else if (passUserId == Models.GameModel.GetLeftUserId())
             {
                 _lblLeftStatus.Text = "不出";
                 _lblLeftStatus.Visible = true;
             }
-            else if (_currentTurnUserId == Models.GameModel.GetRightUserId())
+            else if (passUserId == Models.GameModel.GetRightUserId())
             {
                 _lblRightStatus.Text = "不出";
                 _lblRightStatus.Visible = true;
@@ -3116,6 +3362,7 @@ public class GameScreen : ScreenBase
 
             // 设置显示时长
             _passStatusDisplayTime = 1500f;
+            PlaySound(SoundCue.Click);
         }
     }
 
@@ -3124,30 +3371,166 @@ public class GameScreen : ScreenBase
     /// </summary>
     private void OnGameOverReceived(OverDto overDto)
     {
+        StopTurnTimerDisplay();
+        if (_showPlayingCards || _dealAnimationPlaying || _animationCompleteCallbacks.Count > 0)
+        {
+            _state = GameState.FINISHED;
+            ButtonSet(false, false, false, false, false);
+            _lblStatus.Text = "正在结算...";
+            _pendingGameOverDto = overDto;
+            _hasPendingGameOver = true;
+            return;
+        }
+
+        ApplyOnlineGameOver(overDto);
+    }
+
+    private void ApplyOnlineGameOver(OverDto overDto)
+    {
         _state = GameState.FINISHED;
         ButtonSet(false, false, false, false, false);
         _animManager.Clear();
+        _showPlayingCards = false;
+        _dealAnimationPlaying = false;
 
         // 计算胜负
         int myId = GetMyUserId();
-        bool iWon = overDto.WinUIdList.Contains(myId);
+        var winners = overDto.WinUIdList ?? new List<int>();
+        bool iWon = winners.Contains(myId);
 
         _lblStatus.Text = iWon ? "胜利!" : "失败!";
+        PlaySound(iWon ? SoundCue.Win : SoundCue.Lose);
 
         // 构建结果数组
         bool[] results = new bool[3];
         string[] names = new string[3];
+        int[] playerIds =
+        {
+            Models.GameModel.GetLeftUserId(),
+            myId,
+            Models.GameModel.GetRightUserId()
+        };
 
         // 设置玩家名和结果
-        names[0] = Models.GameModel.GetUserDto(Models.GameModel.GetLeftUserId())?.Name ?? "左玩家";
+        names[0] = Models.GameModel.GetUserDto(playerIds[0])?.Name ?? "左玩家";
         names[1] = Models.GameModel.UserDto?.Name ?? "自己";
-        names[2] = Models.GameModel.GetUserDto(Models.GameModel.GetRightUserId())?.Name ?? "右玩家";
+        names[2] = Models.GameModel.GetUserDto(playerIds[2])?.Name ?? "右玩家";
 
-        results[0] = overDto.WinUIdList.Contains(Models.GameModel.GetLeftUserId());
+        results[0] = winners.Contains(playerIds[0]);
         results[1] = iWon;
-        results[2] = overDto.WinUIdList.Contains(Models.GameModel.GetRightUserId());
+        results[2] = winners.Contains(playerIds[2]);
 
-        ScreenManager.Push(new WinScreen(Game, ScreenManager, results, names, OnWinScreenClosed));
+        int[] beanDeltas = CalculateOnlineBeanDeltas(overDto, playerIds);
+        ApplyOnlineSettlement(playerIds, results, beanDeltas);
+
+        ScreenManager.Push(new WinScreen(Game, ScreenManager, results, names, OnOnlineWinScreenClosed, beanDeltas));
+    }
+
+    private int[] CalculateOnlineBeanDeltas(OverDto overDto, int[] playerIds)
+    {
+        var deltas = new int[playerIds.Length];
+        int basePoints = Math.Max(0, overDto.BeenCount);
+        if (basePoints == 0)
+            return deltas;
+
+        var winners = new HashSet<int>(overDto.WinUIdList ?? new List<int>());
+        int landlordId = _landlordId;
+        if (landlordId <= 0)
+        {
+            landlordId = overDto.WinIdentity == 0
+                ? winners.FirstOrDefault()
+                : playerIds.FirstOrDefault(id => id > 0 && !winners.Contains(id));
+        }
+
+        bool landlordWins = overDto.WinIdentity == 0 || (landlordId > 0 && winners.Contains(landlordId));
+        int farmerPoints = landlordWins ? Math.Max(1, basePoints / 2) : basePoints;
+        int landlordPoints = landlordWins ? basePoints : basePoints * 2;
+
+        for (int i = 0; i < playerIds.Length; i++)
+        {
+            int userId = playerIds[i];
+            if (userId <= 0)
+                continue;
+
+            if (userId == landlordId)
+                deltas[i] = landlordWins ? landlordPoints : -landlordPoints;
+            else
+                deltas[i] = landlordWins ? -farmerPoints : farmerPoints;
+        }
+
+        return deltas;
+    }
+
+    private void ApplyOnlineSettlement(int[] playerIds, bool[] results, int[] beanDeltas)
+    {
+        var gameModel = Models.GameModel;
+        var matchRoom = gameModel?.MatchRoomDto;
+        if (gameModel == null)
+            return;
+
+        for (int i = 0; i < playerIds.Length; i++)
+        {
+            int userId = playerIds[i];
+            if (userId <= 0)
+                continue;
+
+            UserDto? roomUser = null;
+            if (matchRoom?.UIdUserDict != null &&
+                matchRoom.UIdUserDict.TryGetValue(userId, out roomUser))
+            {
+                ApplyUserSettlement(roomUser, results[i], beanDeltas[i]);
+            }
+
+            if (gameModel.UserDto?.Id == userId && !ReferenceEquals(gameModel.UserDto, roomUser))
+            {
+                ApplyUserSettlement(gameModel.UserDto, results[i], beanDeltas[i]);
+            }
+        }
+    }
+
+    private static void ApplyUserSettlement(UserDto user, bool isWin, int beanDelta)
+    {
+        user.Been = Math.Max(0, user.Been + beanDelta);
+        if (isWin)
+            user.WinCount++;
+        else
+            user.LoseCount++;
+    }
+
+    private void OnOnlineWinScreenClosed()
+    {
+        ScreenManager.Replace(new LobbyScreen(Game, ScreenManager));
+    }
+
+    private void OnOnlineMatchUpdateReceived(MatchRoomDto matchRoom)
+    {
+        if (matchRoom == null)
+            return;
+
+        Models.GameModel.MatchRoomDto = matchRoom;
+        matchRoom.ResetPosition(GetMyUserId());
+        RefreshOnlinePlayerInfo();
+    }
+
+    private void StartTurnTimerDisplay(int userId)
+    {
+        _turnTimerUserId = userId;
+        _turnTimerAccumulator = 0f;
+        _remainingSeconds = 20;
+        _turnTimerActive = userId > 0;
+    }
+
+    private void StopTurnTimerDisplay()
+    {
+        _turnTimerActive = false;
+        _turnTimerUserId = -1;
+        _turnTimerAccumulator = 0f;
+        _remainingSeconds = 20;
+    }
+
+    private bool IsPlayerDisconnected(int userId)
+    {
+        return userId > 0 && Models.GameModel?.MatchRoomDto?.IsDisconnected(userId) == true;
     }
 
     /// <summary>
@@ -3164,7 +3547,21 @@ public class GameScreen : ScreenBase
     private void OnGameStartReceived()
     {
         // 游戏开始通知，准备接收手牌
+        RefreshOnlinePlayerInfo();
         _lblStatus.Text = "游戏即将开始...";
+    }
+
+    private void ConsumePendingOnlineEvents()
+    {
+        if (Models.TryConsumePendingGetCards(out var cardList))
+        {
+            OnGetCardsReceived(cardList);
+        }
+
+        if (Models.TryConsumePendingTurnGrab(out int userId))
+        {
+            OnTurnGrabReceived(userId);
+        }
     }
 
     private List<CardDto> GetSelectedOnlineCards()
@@ -3185,7 +3582,7 @@ public class GameScreen : ScreenBase
     {
         _onlineCards = SortOnlineCards(cards);
         _myOnlineHandCards = _onlineCards
-            .Select(c => (ConvertColorToHuase(c.Color), c.Weight))
+            .Select(ToRenderCard)
             .ToList();
     }
 
@@ -3265,14 +3662,14 @@ public class GameScreen : ScreenBase
     {
         if (IsLeftPlayer(userId))
         {
-            _leftCardCount = count;
-            _lblLeftRemain.Text = $"剩余牌：{count}";
+            _leftCardBackCount = count;
+            _lblLeftRemain.Text = $"剩余牌：{_leftCardBackCount}";
             _lblLeftRemain.Visible = true;
         }
         else if (IsRightPlayer(userId))
         {
-            _rightCardCount = count;
-            _lblRightRemain.Text = $"剩余牌：{count}";
+            _rightCardBackCount = count;
+            _lblRightRemain.Text = $"剩余牌：{_rightCardBackCount}";
             _lblRightRemain.Visible = true;
         }
     }
@@ -3295,11 +3692,11 @@ public class GameScreen : ScreenBase
         if (matchRoom == null) return;
 
         if (matchRoom.UIdUserDict.TryGetValue(matchRoom.LeftId, out var leftUser))
-            _leftName = (userId == matchRoom.LeftId ? "【地主】" : "") + leftUser.Name;
+            _leftName = leftUser.Name;
         if (Models.GameModel?.UserDto != null)
-            _selfName = (userId == Models.GameModel.UserDto.Id ? "【地主】" : "") + Models.GameModel.UserDto.Name;
+            _selfName = Models.GameModel.UserDto.Name;
         if (matchRoom.UIdUserDict.TryGetValue(matchRoom.RightId, out var rightUser))
-            _rightName = (userId == matchRoom.RightId ? "【地主】" : "") + rightUser.Name;
+            _rightName = rightUser.Name;
 
         _juese1.Dizhu = userId == matchRoom.LeftId;
         _juese2.Dizhu = IsSelf(userId);
@@ -3333,7 +3730,7 @@ public class GameScreen : ScreenBase
         if (_whitePixel != null) return _whitePixel;
         _whitePixel = new Texture2D(Game1.Instance.GraphicsDevice, 1, 1);
         _whitePixel.SetData(new[] { Color.White });
-        TextureManager.Load("_white", "");
+        TextureManager.LoadInternal("_white", _whitePixel);
         return _whitePixel;
     }
 

@@ -16,7 +16,7 @@ public static class CardLayoutManager
     private const int PlayedCardsY = 193;
     private const int LeftPlayerCardX = 20;
     private const int LeftPlayerCardStartY = 220;
-    private const int RightPlayerCardX = 1110;
+    private const int RightPlayerCardX = 1060;
     private const int RightPlayerCardStartY = 220;
     private const int TableCardStartX = 440;
     private const int TableCardY = 6;

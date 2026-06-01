@@ -70,6 +70,7 @@ public class UIButton : UIControl
         {
             // 在同一个按钮上按下并释放 → 触发点击
             IsPressed = false;
+            Game1.Instance.AudioManager?.PlaySfx(SoundCue.Click);
             OnClick?.Invoke();
         }
         else if (!input.LeftMouseHeld)
