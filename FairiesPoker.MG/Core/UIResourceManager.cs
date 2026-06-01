@@ -188,6 +188,9 @@ public static class UIResourceManager
         foreach (var tex in _cachedTextures.Values)
             tex.Dispose();
         _cachedTextures.Clear();
+
+        _whitePixel?.Dispose();
+        _whitePixel = null;
     }
 
     /// <summary>

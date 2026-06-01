@@ -4,6 +4,7 @@ using FPServer.Network;
 using Microsoft.Extensions.Logging;
 using Protocol.Code;
 using Protocol.Dto.Fight;
+using System.Collections.Concurrent;
 
 namespace FPServer.Handlers
 {
@@ -16,6 +17,9 @@ namespace FPServer.Handlers
         private readonly ILogger<FightHandler> _logger;
         private readonly OnlineUserCache _userCache;
         private readonly RoomManager _roomManager;
+        private readonly ConcurrentDictionary<string, CancellationTokenSource> _turnTimers = new();
+        private const int TurnTimeoutMs = 20000;
+        private const int DisconnectedAutoPlayDelayMs = 1000;
 
         public FightHandler(MessageHandler messageHandler, ILoggerFactory loggerFactory, OnlineUserCache userCache, RoomManager roomManager)
         {
@@ -96,7 +100,18 @@ namespace FPServer.Handlers
             _logger.LogInformation("用户抢地主: {UserId} {Grab}", client.UserId, grab);
 
             // 处理抢地主
-            int result = gameState.ProcessGrab(client.UserId, grab);
+            int result;
+            lock (room)
+            {
+                if (gameState.GetNextGrabUserId() != client.UserId)
+                {
+                    _logger.LogWarning("不是用户 {UserId} 的抢地主回合", client.UserId);
+                    return;
+                }
+
+                result = gameState.ProcessGrab(client.UserId, grab);
+                CancelTurnTimer(room.RoomId);
+            }
 
             if (result > 0)
             {
@@ -134,6 +149,7 @@ namespace FPServer.Handlers
             _logger.LogDebug("广播抢地主轮换: {UserId}", userId);
             var msg = new SocketMsg(OpCode.FIGHT, FightCode.TURN_GRAB_BRO, userId);
             _messageHandler.BroadcastTo(room.GetPlayerIds(), msg);
+            StartTurnTimer(room, userId, isGrabTurn: true);
         }
 
         /// <summary>
@@ -153,7 +169,15 @@ namespace FPServer.Handlers
             _logger.LogInformation("用户出牌: {UserId}", client.UserId);
 
             // 处理出牌
-            if (gameState.ProcessDeal(client.UserId, dealDto))
+            bool success;
+            lock (room)
+            {
+                success = gameState.ProcessDeal(client.UserId, dealDto);
+                if (success)
+                    CancelTurnTimer(room.RoomId);
+            }
+
+            if (success)
             {
                 // 出牌成功，广播出牌结果
                 var msg = new SocketMsg(OpCode.FIGHT, FightCode.DEAL_BRO, dealDto);
@@ -197,11 +221,18 @@ namespace FPServer.Handlers
             _logger.LogInformation("用户不出: {UserId}", client.UserId);
 
             // 处理不出
-            if (gameState.ProcessPass(client.UserId))
+            bool success;
+            lock (room)
             {
-                // 不出成功，发送响应
-                var sresMsg = new SocketMsg(OpCode.FIGHT, FightCode.PASS_SRES, 0);
-                _messageHandler.Send(client, sresMsg);
+                success = gameState.ProcessPass(client.UserId);
+                if (success)
+                    CancelTurnTimer(room.RoomId);
+            }
+
+            if (success)
+            {
+                // 不出成功，广播给所有玩家以便客户端显示当前玩家“不出”
+                BroadcastPass(room, client.UserId);
 
                 // 广播下一个出牌的玩家
                 BroadcastTurnDeal(room, gameState.CurrentTurnUserId);
@@ -222,6 +253,7 @@ namespace FPServer.Handlers
             _logger.LogDebug("广播出牌轮换: {UserId}", userId);
             var msg = new SocketMsg(OpCode.FIGHT, FightCode.TURN_DEAL_BRO, userId);
             _messageHandler.BroadcastTo(room.GetPlayerIds(), msg);
+            StartTurnTimer(room, userId, isGrabTurn: false);
         }
 
         /// <summary>
@@ -247,7 +279,194 @@ namespace FPServer.Handlers
             _messageHandler.BroadcastTo(room.GetPlayerIds(), msg);
 
             // 结束游戏
+            CancelTurnTimer(room.RoomId);
             room.EndGame();
+
+            foreach (var userId in room.GetDisconnectedPlayerIds())
+            {
+                _roomManager.RemovePlayerFromRoom(room, userId);
+            }
+
+            if (room.IsEmpty())
+            {
+                _roomManager.RemoveRoom(room.RoomId);
+                BroadcastRoomListUpdate();
+                return;
+            }
+
+            BroadcastRoomState(room);
+            BroadcastRoomListUpdate();
+        }
+
+        public void HandlePlayerDisconnected(Room room, int userId)
+        {
+            BroadcastRoomState(room);
+
+            var gameState = room.GameState;
+            if (gameState == null)
+                return;
+
+            if (gameState.State == GameStateEnum.GRABBING && gameState.GetNextGrabUserId() == userId)
+            {
+                StartTurnTimer(room, userId, isGrabTurn: true);
+            }
+            else if (gameState.State == GameStateEnum.PLAYING && gameState.CurrentTurnUserId == userId)
+            {
+                StartTurnTimer(room, userId, isGrabTurn: false);
+            }
+        }
+
+        public void CancelRoomTimers(string roomId)
+        {
+            CancelTurnTimer(roomId);
+        }
+
+        private void BroadcastPass(Room room, int userId)
+        {
+            _logger.LogDebug("广播用户不出: {UserId}", userId);
+            var msg = new SocketMsg(OpCode.FIGHT, FightCode.PASS_SRES, userId);
+            _messageHandler.BroadcastTo(room.GetPlayerIds(), msg);
+        }
+
+        private void StartTurnTimer(Room room, int userId, bool isGrabTurn)
+        {
+            CancelTurnTimer(room.RoomId);
+
+            int delay = room.IsPlayerDisconnected(userId) ? DisconnectedAutoPlayDelayMs : TurnTimeoutMs;
+            var cts = new CancellationTokenSource();
+            _turnTimers[room.RoomId] = cts;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(delay, cts.Token);
+                    if (cts.IsCancellationRequested)
+                        return;
+
+                    if (isGrabTurn)
+                        ProcessAutoGrab(room, userId);
+                    else
+                        ProcessAutoDeal(room, userId);
+                }
+                catch (TaskCanceledException)
+                {
+                }
+            });
+        }
+
+        private void CancelTurnTimer(string roomId)
+        {
+            if (_turnTimers.TryRemove(roomId, out var cts))
+            {
+                cts.Cancel();
+                cts.Dispose();
+            }
+        }
+
+        private void ProcessAutoGrab(Room room, int userId)
+        {
+            var gameState = room.GameState;
+            if (gameState == null)
+                return;
+
+            int result;
+            lock (room)
+            {
+                if (room.GameState != gameState ||
+                    gameState.State != GameStateEnum.GRABBING ||
+                    gameState.GetNextGrabUserId() != userId)
+                    return;
+
+                result = gameState.ProcessGrab(userId, false);
+                CancelTurnTimer(room.RoomId);
+            }
+
+            _logger.LogInformation("用户 {UserId} 抢地主超时，默认不叫", userId);
+
+            if (result > 0)
+            {
+                room.LandlordId = result;
+                var grabDto = new GrabDto(
+                    result,
+                    gameState.GetTableCards(),
+                    gameState.GetPlayerCards(result));
+                var msg = new SocketMsg(OpCode.FIGHT, FightCode.GRAB_LANDLORD_BRO, grabDto);
+                _messageHandler.BroadcastTo(room.GetPlayerIds(), msg);
+                BroadcastTurnDeal(room, result);
+            }
+            else
+            {
+                int nextUserId = gameState.GetNextGrabUserId();
+                if (nextUserId > 0)
+                    BroadcastTurnGrab(room, nextUserId);
+            }
+        }
+
+        private void ProcessAutoDeal(Room room, int userId)
+        {
+            var gameState = room.GameState;
+            if (gameState == null)
+                return;
+
+            bool disconnected = room.IsPlayerDisconnected(userId);
+
+            lock (room)
+            {
+                if (room.GameState != gameState ||
+                    gameState.State != GameStateEnum.PLAYING ||
+                    gameState.CurrentTurnUserId != userId)
+                    return;
+
+                CancelTurnTimer(room.RoomId);
+
+                if (!disconnected && gameState.ProcessPass(userId))
+                {
+                    _logger.LogInformation("用户 {UserId} 出牌超时，默认不出", userId);
+                    BroadcastPass(room, userId);
+                    BroadcastTurnDeal(room, gameState.CurrentTurnUserId);
+                    return;
+                }
+
+                var aiDeal = ServerAiPlayer.ChooseDeal(gameState, userId);
+                if (aiDeal != null && gameState.ProcessDeal(userId, aiDeal))
+                {
+                    _logger.LogInformation("用户 {UserId} 由服务端托管出牌", userId);
+                    var dealMsg = new SocketMsg(OpCode.FIGHT, FightCode.DEAL_BRO, aiDeal);
+                    _messageHandler.BroadcastTo(room.GetPlayerIds(), dealMsg);
+
+                    if (gameState.IsGameFinished())
+                        HandleGameOver(room);
+                    else
+                        BroadcastTurnDeal(room, gameState.CurrentTurnUserId);
+                    return;
+                }
+
+                if (gameState.ProcessPass(userId))
+                {
+                    _logger.LogInformation("用户 {UserId} 托管无可接牌，默认不出", userId);
+                    BroadcastPass(room, userId);
+                    BroadcastTurnDeal(room, gameState.CurrentTurnUserId);
+                }
+            }
+        }
+
+        private void BroadcastRoomState(Room room)
+        {
+            foreach (var userId in room.GetPlayerIds())
+            {
+                var roomDto = room.GetMatchRoomDtoForPlayer(userId);
+                var msg = new SocketMsg(OpCode.MATCH, MatchCode.READY_BRO, roomDto);
+                _messageHandler.SendToUser(userId, msg);
+            }
+        }
+
+        private void BroadcastRoomListUpdate()
+        {
+            var rooms = _roomManager.GetAllRooms();
+            var roomList = rooms.Select(r => r.GetRoomDto()).ToList();
+            var msg = new SocketMsg(OpCode.MATCH, RoomCode.GET_ROOMS_SRES, roomList);
+            _messageHandler.Broadcast(msg);
         }
     }
 }

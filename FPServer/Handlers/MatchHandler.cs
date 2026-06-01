@@ -163,6 +163,11 @@ namespace FPServer.Handlers
 
                 // 广播准备状态
                 BroadcastRoomUpdate(room);
+
+                if (room.IsQuickMatch && room.IsFull() && room.IsAllReady())
+                {
+                    StartGame(room);
+                }
             }
         }
 

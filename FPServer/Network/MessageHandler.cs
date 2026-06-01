@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
 using Protocol.Code;
+using Protocol.Dto;
 
 namespace FPServer.Network
 {
@@ -112,25 +113,55 @@ namespace FPServer.Network
                 // 处理房间离开并通知其他玩家
                 if (room != null)
                 {
-                    // 移除玩家
-                    _roomManager.LeaveRoom(client.UserId);
-
-                    // 通知房间内其他玩家
-                    if (room.GetPlayerCount() > 0)
+                    if (room.Status == RoomStatus.PLAYING && room.GameState != null)
                     {
-                        foreach (var userId in room.GetPlayerIds())
+                        room.MarkPlayerDisconnected(client.UserId);
+
+                        if (room.AreAllPlayersDisconnected())
                         {
-                            var roomDto = room.GetMatchRoomDtoForPlayer(userId);
-                            var leaveMsg = new SocketMsg(OpCode.MATCH, RoomCode.UPDATE_BRO, roomDto);
-                            var userClient = _userCache.GetClient(userId);
-                            if (userClient != null)
-                            {
-                                Send(userClient, leaveMsg);
-                            }
+                            _fightHandler.CancelRoomTimers(room.RoomId);
+                            _roomManager.RemoveRoom(room.RoomId);
+                            BroadcastRoomListUpdate();
+                            return;
                         }
+
+                        BroadcastRoomUpdate(room);
+                        _fightHandler.HandlePlayerDisconnected(room, client.UserId);
+                    }
+                    else
+                    {
+                        // 非对局中断线按离房处理，保持空房间销毁逻辑不变。
+                        _roomManager.LeaveRoom(client.UserId);
+
+                        if (room.GetPlayerCount() > 0)
+                            BroadcastRoomUpdate(room);
+
+                        BroadcastRoomListUpdate();
                     }
                 }
             }
+        }
+
+        private void BroadcastRoomUpdate(Room room)
+        {
+            foreach (var userId in room.GetPlayerIds())
+            {
+                var roomDto = room.GetMatchRoomDtoForPlayer(userId);
+                var updateMsg = new SocketMsg(OpCode.MATCH, RoomCode.UPDATE_BRO, roomDto);
+                var userClient = _userCache.GetClient(userId);
+                if (userClient != null)
+                {
+                    Send(userClient, updateMsg);
+                }
+            }
+        }
+
+        private void BroadcastRoomListUpdate()
+        {
+            var rooms = _roomManager.GetAllRooms();
+            var roomList = rooms.Select(r => r.GetRoomDto()).ToList();
+            var msg = new SocketMsg(OpCode.MATCH, RoomCode.GET_ROOMS_SRES, roomList);
+            Broadcast(msg);
         }
 
         /// <summary>

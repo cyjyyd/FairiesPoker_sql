@@ -68,6 +68,8 @@ public static class TextureManager
         foreach (var t in _textures.Values)
             t.Dispose();
         _textures.Clear();
+        _placeholder?.Dispose();
+        _placeholder = null;
     }
 
     /// <summary>

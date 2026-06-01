@@ -20,6 +20,7 @@ namespace FPServer.Game
         private readonly Dictionary<int, UserDto> _players = new();
         private readonly List<int> _playerOrder = new();
         private readonly HashSet<int> _readyPlayers = new();
+        private readonly HashSet<int> _disconnectedPlayers = new();
         private readonly ILogger<Room> _logger;
         private readonly ILoggerFactory _loggerFactory;
 
@@ -46,6 +47,7 @@ namespace FPServer.Game
 
             _players[userId] = userDto;
             _playerOrder.Add(userId);
+            _disconnectedPlayers.Remove(userId);
             _logger.LogDebug("房间 {RoomId} 添加玩家: {UserId}", RoomId, userId);
             return true;
         }
@@ -58,6 +60,7 @@ namespace FPServer.Game
             _players.Remove(userId);
             _playerOrder.Remove(userId);
             _readyPlayers.Remove(userId);
+            _disconnectedPlayers.Remove(userId);
 
             // 如果房主离开，转移房主
             if (HostId == userId && _playerOrder.Count > 0)
@@ -118,6 +121,21 @@ namespace FPServer.Game
         /// </summary>
         public bool IsAllReady() => _readyPlayers.Count == _players.Count && _players.Count > 0;
 
+        public void MarkPlayerDisconnected(int userId)
+        {
+            if (_players.ContainsKey(userId))
+            {
+                _disconnectedPlayers.Add(userId);
+                _readyPlayers.Remove(userId);
+            }
+        }
+
+        public bool IsPlayerDisconnected(int userId) => _disconnectedPlayers.Contains(userId);
+
+        public bool AreAllPlayersDisconnected() => _players.Count > 0 && _disconnectedPlayers.Count >= _players.Count;
+
+        public List<int> GetDisconnectedPlayerIds() => _disconnectedPlayers.ToList();
+
         /// <summary>
         /// 获取玩家ID列表
         /// </summary>
@@ -153,6 +171,7 @@ namespace FPServer.Game
             }
             dto.UIdList = _playerOrder.ToList();
             dto.ReadyUIdList = _readyPlayers.ToList();
+            dto.DisconnectedUIdList = _disconnectedPlayers.ToList();
             dto.HostId = HostId;
             dto.RoomId = RoomId;
             dto.RoomName = RoomName;
@@ -176,6 +195,7 @@ namespace FPServer.Game
             }
             dto.UIdList = _playerOrder.ToList();
             dto.ReadyUIdList = _readyPlayers.ToList();
+            dto.DisconnectedUIdList = _disconnectedPlayers.ToList();
             dto.HostId = HostId;
             dto.RoomId = RoomId;
             dto.RoomName = RoomName;

@@ -274,6 +274,38 @@ public class CardSelectionHandlerTests
     }
 
     [Fact]
+    public void FindCardIndexAtPosition_RightToLeftOverlap_ShouldHitVisibleCardStrip()
+    {
+        var cardPositions = new Vector2[]
+        {
+            new Vector2(160, 100),
+            new Vector2(130, 100),
+            new Vector2(100, 100)
+        };
+        var selected = new bool[3];
+
+        Assert.Equal(0, CardSelectionHandler.FindCardIndexAtPosition(new Microsoft.Xna.Framework.Point(170, 110), cardPositions, selected));
+        Assert.Equal(1, CardSelectionHandler.FindCardIndexAtPosition(new Microsoft.Xna.Framework.Point(135, 110), cardPositions, selected));
+        Assert.Equal(2, CardSelectionHandler.FindCardIndexAtPosition(new Microsoft.Xna.Framework.Point(105, 110), cardPositions, selected));
+    }
+
+    [Fact]
+    public void FindCardIndexAtPosition_SelectedCard_ShouldUseSelectedOffset()
+    {
+        var cardPositions = new Vector2[]
+        {
+            new Vector2(160, 100),
+            new Vector2(130, 100),
+            new Vector2(100, 100)
+        };
+        var selected = new[] { false, true, false };
+
+        Assert.Equal(1, CardSelectionHandler.FindCardIndexAtPosition(new Microsoft.Xna.Framework.Point(135, 75), cardPositions, selected));
+        Assert.Equal(1, CardSelectionHandler.FindCardIndexAtPosition(new Microsoft.Xna.Framework.Point(200, 75), cardPositions, selected));
+        Assert.Equal(0, CardSelectionHandler.FindCardIndexAtPosition(new Microsoft.Xna.Framework.Point(170, 110), cardPositions, selected));
+    }
+
+    [Fact]
     public void OnMouseUp_ShouldEndSelectionState()
     {
         var handler = new CardSelectionHandler(3);

@@ -17,12 +17,23 @@ public static class FontManager
 {
     private static readonly Dictionary<string, SpriteFont> _fonts = new();
     private static readonly Dictionary<string, Texture2D> _emojiTextures = new();
+    private static readonly Dictionary<string, GlyphTexture> _fallbackGlyphTextures = new();
+    private static readonly HashSet<char> _bakedCharacters = BuildInitialCharacterSet();
     private static GraphicsDevice? _graphicsDevice;
     private static float _currentFontSize;
 
     private const float BaseFontSize = 20f;
-    private const int DefaultAtlasSize = 4096;
-    private const int LargeAtlasSize = 8192;
+    private const float MaxFontSize = 32f;
+    private const int DefaultAtlasSize = 2048;
+    private const int LargeAtlasSize = 4096;
+    private const int FallbackGlyphTextureSize = 64;
+    private const float FallbackGlyphFontSize = 48f;
+
+    private const string CommonChineseText =
+        "斗地主单人模式多人模式联机模式设置退出返回登录注册用户名密码确认头像大厅房间创建加入快速匹配准备取消开始离开刷新在线玩家聊天发送系统消息" +
+        "胜利失败结算继续地主农民叫地主抢地主不叫不抢出牌不出提示托管重新开始剩余底牌我的上家下家左边右边等待连接服务器端口断开错误成功失败" +
+        "主题天波龙女芙蓉素问霹雳琳琅背景音乐音效音量窗口全屏无边框保存应用默认恢复返回主菜单请输入暂无加载中游戏结束分数积分倍数春天炸弹王炸顺子连对飞机三带一对" +
+        "黑桃红桃梅花方块大小王一二三四五六七八九十零百千万上下左右中高低大小是否已未当前回合轮到玩家房主观战重连掉线自动通过拒绝审核列表测试";
 
     /// <summary>
     /// 当前默认字体相对于1280x720设计字体的绘制补偿。
@@ -55,12 +66,12 @@ public static class FontManager
     {
         if (_graphicsDevice == null) return;
 
-        float targetSize = Math.Clamp(BaseFontSize * Math.Max(1f, displayScale), BaseFontSize, 42f);
+        float targetSize = Math.Clamp(BaseFontSize * Math.Max(1f, displayScale), BaseFontSize, MaxFontSize);
         if (Math.Abs(targetSize - _currentFontSize) < 0.5f && _fonts.ContainsKey("default"))
             return;
 
-        if (TryBakeDefaultFont(targetSize, LargeAtlasSize) ||
-            TryBakeDefaultFont(targetSize, DefaultAtlasSize) ||
+        if (TryBakeDefaultFont(targetSize, DefaultAtlasSize) ||
+            TryBakeDefaultFont(targetSize, LargeAtlasSize) ||
             TryBakeDefaultFont(BaseFontSize, DefaultAtlasSize))
         {
             return;
@@ -70,8 +81,8 @@ public static class FontManager
     public static Vector2 MeasureString(string text, SpriteFont? font = null, float scale = 1f)
     {
         var resolvedFont = font ?? Default;
-        if (ContainsEmoji(text))
-            return MeasureStringWithEmoji(text, resolvedFont, scale);
+        if (NeedsInlineTextureRendering(text))
+            return MeasureStringWithInlineTextures(text, resolvedFont, scale);
 
         try
         {
@@ -91,9 +102,9 @@ public static class FontManager
     public static void DrawString(SpriteBatch spriteBatch, SpriteFont? font, string text, Vector2 position, Color color, float scale = 1f)
     {
         var resolvedFont = font ?? Default;
-        if (ContainsEmoji(text))
+        if (NeedsInlineTextureRendering(text))
         {
-            DrawStringWithEmoji(spriteBatch, resolvedFont, text, position, color, scale);
+            DrawStringWithInlineTextures(spriteBatch, resolvedFont, text, position, color, scale);
             return;
         }
 
@@ -137,7 +148,38 @@ public static class FontManager
         return false;
     }
 
-    private static Vector2 MeasureStringWithEmoji(string text, SpriteFont font, float scale)
+    private static bool NeedsInlineTextureRendering(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return false;
+
+        var enumerator = StringInfo.GetTextElementEnumerator(text);
+        while (enumerator.MoveNext())
+        {
+            if (NeedsTextureForTextElement((string)enumerator.GetTextElement()))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool NeedsTextureForTextElement(string textElement)
+    {
+        return IsEmojiTextElement(textElement) || !IsBakedTextElement(textElement);
+    }
+
+    private static bool IsBakedTextElement(string textElement)
+    {
+        if (IsLineBreak(textElement))
+            return true;
+
+        if (string.IsNullOrEmpty(textElement) || textElement.Length != 1)
+            return false;
+
+        return IsKnownBakedCharacter(textElement[0]);
+    }
+
+    private static Vector2 MeasureStringWithInlineTextures(string text, SpriteFont font, float scale)
     {
         float lineHeight = GetScaledLineHeight(font, scale);
         float x = 0f;
@@ -167,10 +209,10 @@ public static class FontManager
                 continue;
             }
 
-            if (IsEmojiTextElement(element))
+            if (NeedsTextureForTextElement(element))
             {
                 FlushTextRun();
-                x += GetEmojiAdvance(font, scale);
+                x += GetInlineTextureAdvance(font, scale);
                 continue;
             }
 
@@ -182,10 +224,10 @@ public static class FontManager
         return new Vector2(maxX, y + lineHeight);
     }
 
-    private static void DrawStringWithEmoji(SpriteBatch spriteBatch, SpriteFont font, string text, Vector2 position, Color color, float scale)
+    private static void DrawStringWithInlineTextures(SpriteBatch spriteBatch, SpriteFont font, string text, Vector2 position, Color color, float scale)
     {
         float lineHeight = GetScaledLineHeight(font, scale);
-        float emojiSize = GetEmojiAdvance(font, scale);
+        float inlineTextureSize = GetInlineTextureAdvance(font, scale);
         var cursor = position;
         var textRun = new StringBuilder();
 
@@ -212,19 +254,21 @@ public static class FontManager
                 continue;
             }
 
-            if (IsEmojiTextElement(element))
+            if (NeedsTextureForTextElement(element))
             {
                 FlushTextRun();
-                var texture = GetEmojiTexture(element);
+                var texture = IsEmojiTextElement(element)
+                    ? GetEmojiTexture(element)
+                    : GetFallbackGlyphTexture(element)?.Texture;
                 if (texture != null)
                 {
                     var rect = new Rectangle(
                         (int)Math.Round(cursor.X),
-                        (int)Math.Round(cursor.Y + Math.Max(0f, (lineHeight - emojiSize) / 2f)),
-                        (int)Math.Ceiling(emojiSize),
-                        (int)Math.Ceiling(emojiSize));
+                        (int)Math.Round(cursor.Y + Math.Max(0f, (lineHeight - inlineTextureSize) / 2f)),
+                        (int)Math.Ceiling(inlineTextureSize),
+                        (int)Math.Ceiling(inlineTextureSize));
                     spriteBatch.Draw(texture, rect, color);
-                    cursor.X += emojiSize;
+                    cursor.X += inlineTextureSize;
                 }
                 else
                 {
@@ -269,7 +313,7 @@ public static class FontManager
         return Math.Max(1f, lineHeight * RenderScale * scale);
     }
 
-    private static float GetEmojiAdvance(SpriteFont font, float scale)
+    private static float GetInlineTextureAdvance(SpriteFont font, float scale)
     {
         return GetScaledLineHeight(font, scale);
     }
@@ -355,6 +399,58 @@ public static class FontManager
         }
     }
 
+    private static GlyphTexture? GetFallbackGlyphTexture(string textElement)
+    {
+        if (_graphicsDevice == null || string.IsNullOrEmpty(textElement))
+            return null;
+
+        if (_fallbackGlyphTextures.TryGetValue(textElement, out var cached))
+            return cached;
+
+        try
+        {
+            using var bitmap = new System.Drawing.Bitmap(
+                FallbackGlyphTextureSize,
+                FallbackGlyphTextureSize,
+                System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using var graphics = System.Drawing.Graphics.FromImage(bitmap);
+            graphics.Clear(System.Drawing.Color.Transparent);
+            graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+
+            using var font = new System.Drawing.Font(
+                "Microsoft YaHei",
+                FallbackGlyphFontSize,
+                System.Drawing.FontStyle.Regular,
+                System.Drawing.GraphicsUnit.Pixel);
+            using var brush = new System.Drawing.SolidBrush(System.Drawing.Color.White);
+            using var format = new System.Drawing.StringFormat
+            {
+                Alignment = System.Drawing.StringAlignment.Center,
+                LineAlignment = System.Drawing.StringAlignment.Center
+            };
+
+            graphics.DrawString(
+                textElement,
+                font,
+                brush,
+                new System.Drawing.RectangleF(0f, -2f, FallbackGlyphTextureSize, FallbackGlyphTextureSize + 4f),
+                format);
+
+            using var ms = new MemoryStream();
+            bitmap.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            ms.Position = 0;
+
+            var texture = Texture2D.FromStream(_graphicsDevice, ms);
+            var glyph = new GlyphTexture(texture);
+            _fallbackGlyphTextures[textElement] = glyph;
+            return glyph;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static string SanitizeForSpriteFont(string text)
     {
         if (string.IsNullOrEmpty(text))
@@ -383,18 +479,103 @@ public static class FontManager
 
     private static bool IsKnownBakedCharacter(char c)
     {
-        return c == '\n' || c == '\r' ||
-               (c >= 0x20 && c <= 0x7E) ||
-               (c >= 0x2000 && c <= 0x206F) ||
-               (c >= 0x3000 && c <= 0x303F) ||
-               (c >= 0x3400 && c <= 0x4DB5) ||
-               (c >= 0x4E00 && c <= 0x9FEF) ||
-               (c >= 0xFF00 && c <= 0xFFEF);
+        return c == '\n' || c == '\r' || _bakedCharacters.Contains(c);
     }
 
     private static bool IsVariationSelector(char c)
     {
         return c >= 0xFE00 && c <= 0xFE0F;
+    }
+
+    private static HashSet<char> BuildInitialCharacterSet()
+    {
+        var chars = new HashSet<char>();
+        AddCharacterRange(chars, 0x20, 0x7E);
+        AddCharacterRange(chars, 0x2000, 0x206F);
+        AddCharacterRange(chars, 0x3000, 0x303F);
+        AddCharacterRange(chars, 0xFF00, 0xFFEF);
+
+        foreach (char c in CommonChineseText)
+        {
+            if (!char.IsControl(c))
+                chars.Add(c);
+        }
+
+        return chars;
+    }
+
+    private static void AddCharacterRange(HashSet<char> chars, int start, int end)
+    {
+        for (int codePoint = start; codePoint <= end; codePoint++)
+        {
+            chars.Add((char)codePoint);
+        }
+    }
+
+    private static CharacterRange[] BuildCharacterRanges(IEnumerable<char> chars)
+    {
+        var ordered = chars
+            .Where(c => !char.IsControl(c))
+            .Distinct()
+            .OrderBy(c => c)
+            .ToArray();
+
+        if (ordered.Length == 0)
+            return Array.Empty<CharacterRange>();
+
+        var ranges = new List<CharacterRange>();
+        char rangeStart = ordered[0];
+        char previous = ordered[0];
+
+        for (int i = 1; i < ordered.Length; i++)
+        {
+            char current = ordered[i];
+            if (current == previous + 1)
+            {
+                previous = current;
+                continue;
+            }
+
+            ranges.Add(new CharacterRange(rangeStart, previous));
+            rangeStart = current;
+            previous = current;
+        }
+
+        ranges.Add(new CharacterRange(rangeStart, previous));
+        return ranges.ToArray();
+    }
+
+    public static void Clear()
+    {
+        foreach (var font in _fonts.Values)
+        {
+            font.Texture.Dispose();
+        }
+        _fonts.Clear();
+
+        foreach (var texture in _emojiTextures.Values)
+        {
+            texture.Dispose();
+        }
+        _emojiTextures.Clear();
+
+        foreach (var glyph in _fallbackGlyphTextures.Values)
+        {
+            glyph.Texture.Dispose();
+        }
+        _fallbackGlyphTextures.Clear();
+
+        _currentFontSize = 0f;
+    }
+
+    private sealed class GlyphTexture
+    {
+        public GlyphTexture(Texture2D texture)
+        {
+            Texture = texture;
+        }
+
+        public Texture2D Texture { get; }
     }
 
     private static bool TryBakeDefaultFont(float size, int atlasSize)
@@ -421,15 +602,7 @@ public static class FontManager
                     size,
                     atlasSize,
                     atlasSize,
-                    new[]
-                    {
-                        new CharacterRange((char)0x20, (char)0x7E),
-                        new CharacterRange((char)0x2000, (char)0x206F),
-                        new CharacterRange((char)0x3000, (char)0x303F),
-                        new CharacterRange((char)0x3400, (char)0x4DB5),
-                        new CharacterRange((char)0x4E00, (char)0x9FEF),
-                        new CharacterRange((char)0xFF00, (char)0xFFEF),
-                    });
+                    BuildCharacterRanges(_bakedCharacters));
 
                 var spriteFont = result.CreateSpriteFont(_graphicsDevice);
                 if (spriteFont.MeasureString("测试").X <= 10) continue;

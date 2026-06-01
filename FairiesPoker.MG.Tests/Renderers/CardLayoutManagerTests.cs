@@ -237,8 +237,9 @@ public class CardLayoutManagerTests
     {
         var positions = CardLayoutManager.CalculateRightPlayerBackPositions(6);
 
-        // First card at RightPlayerCardX = 1110
-        Assert.True(positions[0].X >= 1110f);
+        // First card at RightPlayerCardX = 1060; six columns should stay inside 1280 width.
+        Assert.Equal(1060f, positions[0].X, Epsilon);
+        Assert.True(positions[5].X + 120f <= 1280f);
         Assert.Equal(220f, positions[0].Y, Epsilon);
     }
 
@@ -333,7 +334,7 @@ public class CardLayoutManagerTests
     public void GetDealStartPos_ShouldReturnFixedPosition()
     {
         var pos = CardLayoutManager.GetDealStartPos();
-        Assert.Equal(1110f, pos.X, Epsilon);
+        Assert.Equal(1060f, pos.X, Epsilon);
         Assert.Equal(220f, pos.Y, Epsilon);
     }
 

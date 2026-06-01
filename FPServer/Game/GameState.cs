@@ -292,16 +292,24 @@ namespace FPServer.Game
                 return false;
             }
 
+            if (dealDto == null || dealDto.SelectCardList == null || dealDto.SelectCardList.Count == 0)
+            {
+                _logger.LogWarning("出牌列表为空");
+                return false;
+            }
+
             // 验证手牌
             var playerCards = GetPlayerCards(userId);
+            var remainingCards = new List<CardDto>(playerCards);
             foreach (var card in dealDto.SelectCardList)
             {
-                var found = playerCards.FirstOrDefault(c => c.Weight == card.Weight && c.Color == card.Color);
+                var found = remainingCards.FirstOrDefault(c => c.Weight == card.Weight && c.Color == card.Color);
                 if (found == null)
                 {
                     _logger.LogWarning("玩家 {UserId} 没有这张牌", userId);
                     return false;
                 }
+                remainingCards.Remove(found);
             }
 
             // 验证牌型
@@ -323,15 +331,9 @@ namespace FPServer.Game
                 }
             }
 
-            // 移除出的牌
-            foreach (var card in dealDto.SelectCardList)
-            {
-                var toRemove = playerCards.FirstOrDefault(c => c.Weight == card.Weight && c.Color == card.Color);
-                if (toRemove != null)
-                {
-                    playerCards.Remove(toRemove);
-                }
-            }
+            // 移除出的牌。使用上面逐张消耗后的剩余手牌，避免重复提交同一张牌时只删一张。
+            playerCards.Clear();
+            playerCards.AddRange(remainingCards);
 
             // 更新状态
             LastDeal = dealDto;

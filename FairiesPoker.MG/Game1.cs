@@ -112,6 +112,9 @@ public class Game1 : Game
     {
         InputManager?.DetachTextInput();
         AudioManager?.Dispose();
+        FontManager.Clear();
+        UIResourceManager.Clear();
+        TextureManager.Clear();
         ConfigManager.Save();
         base.EndRun();
     }
