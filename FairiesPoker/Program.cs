@@ -14,6 +14,7 @@ namespace FairiesPoker
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            Application.Idle += (_, _) => AppIcon.ApplyToOpenForms();
             Application.Run(new Form1());
         }
     }

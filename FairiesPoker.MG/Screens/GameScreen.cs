@@ -656,6 +656,7 @@ public class GameScreen : ScreenBase
         _btnClose.HoverTexture = btnNormal;
         _btnClose.PressedTexture = btnPressed;
         _btnClose.OnClick = () => Game.Exit();
+        UpdateWindowControlButtons();
 
         // 状态标签（对应原项目label1/label2/label3的映射）
         // 原项目：label1=右AI状态, label2=左AI状态, label3=玩家状态
@@ -1815,6 +1816,8 @@ public class GameScreen : ScreenBase
 
     private void DrawUI(SpriteBatch spriteBatch)
     {
+        UpdateWindowControlButtons();
+
         _btnStart.Draw(spriteBatch);
         _btnAction.Draw(spriteBatch);
         _btnPass.Draw(spriteBatch);
@@ -1844,6 +1847,7 @@ public class GameScreen : ScreenBase
         _btnPass.Update(input);
         _btnHint.Update(input);
         _btnReselect.Update(input);
+        UpdateWindowControlButtons();
         _btnBack.Update(input);
         _btnMinimize.Update(input);
         _btnClose.Update(input);
@@ -1919,6 +1923,14 @@ public class GameScreen : ScreenBase
     private int FindCardIndexAtPosition(Point pos, Vector2[] cardPositions, bool[] selectedStates)
     {
         return CardSelectionHandler.FindCardIndexAtPosition(pos, cardPositions, selectedStates);
+    }
+
+    private void UpdateWindowControlButtons()
+    {
+        bool showCustomWindowButtons = Game.Window.IsBorderless;
+        _btnMinimize.Visible = showCustomWindowButtons;
+        _btnClose.Visible = showCustomWindowButtons;
+        _btnBack.Position = showCustomWindowButtons ? new Vector2(1202, 12) : new Vector2(1238, 12);
     }
 
     #endregion
