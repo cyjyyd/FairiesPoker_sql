@@ -10,6 +10,11 @@ namespace FairiesPoker
     class Puke
     {
         public Puke(int size, Image image)
+            : this(size, 0, image)
+        {
+        }
+
+        public Puke(int size, int color, Image image)
         {
             this.color = color;
             this.size = size;

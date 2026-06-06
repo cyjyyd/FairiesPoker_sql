@@ -141,6 +141,17 @@ namespace FPServer.Game
         /// </summary>
         public List<int> GetPlayerIds() => _playerOrder.ToList();
 
+        public UserDto GetPlayerData(int userId)
+        {
+            return _players.TryGetValue(userId, out var userDto) ? userDto : null;
+        }
+
+        public void UpdatePlayerData(int userId, UserDto userDto)
+        {
+            if (_players.ContainsKey(userId))
+                _players[userId] = userDto;
+        }
+
         /// <summary>
         /// 获取房间数据传输对象（用于房间列表）
         /// </summary>
@@ -216,6 +227,7 @@ namespace FPServer.Game
             GameState = new GameState(_loggerFactory.CreateLogger<GameState>());
             GameState.InitGame(_playerOrder.ToList());
             LandlordId = -1;
+            Multiple = 1;
             _logger.LogInformation("房间 {RoomId} 开始游戏", RoomId);
         }
 

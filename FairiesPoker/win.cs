@@ -7,6 +7,7 @@ namespace FairiesPoker
 {
     public partial class win : Form
     {
+        private const int CornerRadius = 28;
         private bool leftFlag;//是否左键
         Point mouseOff;//记录鼠标位置
         UI u = new UI();config con = new config();
@@ -45,6 +46,7 @@ namespace FairiesPoker
             label5.Text = layout(result[0]);
             label6.Text = layout(result[1]);
             label7.Text = layout(result[2]);
+            ApplyRoundedCorners();
         }
 
         private Image GetResultImage(string imageName)
@@ -55,10 +57,46 @@ namespace FairiesPoker
         private void win_Load(object sender, EventArgs e)
         {
             button1.BackgroundImage = u.Button;
+            ApplyRoundedCorners();
             // 确保窗口显示在最前面
             this.TopMost = true;
             this.BringToFront();
             this.Activate();
+        }
+
+        protected override void OnSizeChanged(EventArgs e)
+        {
+            base.OnSizeChanged(e);
+            ApplyRoundedCorners();
+        }
+
+        private void ApplyRoundedCorners()
+        {
+            if (ClientSize.Width <= 0 || ClientSize.Height <= 0)
+                return;
+
+            Region oldRegion = Region;
+            using var path = CreateRoundedPath(ClientRectangle, CornerRadius);
+            Region = new Region(path);
+            oldRegion?.Dispose();
+        }
+
+        private static System.Drawing.Drawing2D.GraphicsPath CreateRoundedPath(Rectangle bounds, int radius)
+        {
+            var path = new System.Drawing.Drawing2D.GraphicsPath();
+            int diameter = Math.Min(radius * 2, Math.Min(bounds.Width, bounds.Height));
+            var arc = new Rectangle(bounds.Location, new Size(diameter, diameter));
+
+            path.AddArc(arc, 180, 90);
+            arc.X = bounds.Right - diameter;
+            path.AddArc(arc, 270, 90);
+            arc.Y = bounds.Bottom - diameter;
+            path.AddArc(arc, 0, 90);
+            arc.X = bounds.Left;
+            path.AddArc(arc, 90, 90);
+            path.CloseFigure();
+
+            return path;
         }
         private string layout (bool bl)
         {

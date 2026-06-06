@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Text;
+using FairiesPoker.MG.Core;
 using FairiesPoker.MG.Network.Impl;
 
 namespace FairiesPoker.MG.Network
@@ -14,7 +15,6 @@ namespace FairiesPoker.MG.Network
 /// </summary>
 public class NetManager
 {
-    bool debug = true;
     public static NetManager Instance = null;
     private ClientPeer client;
 
@@ -36,16 +36,13 @@ public class NetManager
 
     public void Start()
     {
-        debug = true;
-        if (debug)
-        {
-            // 直接使用 127.0.0.1，避免 DNS 解析问题
-            client = new ClientPeer("127.0.0.1", 40960);
-        }
-        else
-        {
-            client = new ClientPeer("www.fairybcd.top", 40960);
-        }
+        string serverIp = string.IsNullOrWhiteSpace(ConfigManager.ServerIP)
+            ? ConfigManager.DefaultServerIP
+            : ConfigManager.ServerIP.Trim();
+        int serverPort = ConfigManager.ServerPort > 0
+            ? ConfigManager.ServerPort
+            : ConfigManager.DefaultServerPort;
+        client = new ClientPeer(serverIp, serverPort);
 
         // 订阅连接事件
         client.OnConnectSuccess += () =>

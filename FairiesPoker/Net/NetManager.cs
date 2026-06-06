@@ -10,7 +10,6 @@ using System.Text;
 /// </summary>
 public class NetManager
 {
-    bool debug = true;
     public static NetManager Instance = null;
     private ClientPeer client;
 
@@ -32,16 +31,10 @@ public class NetManager
 
     public void Start()
     {
-        debug = true;
-        if (debug)
-        {
-            // 直接使用 127.0.0.1，避免 DNS 解析问题
-            client = new ClientPeer("127.0.0.1", 40960);
-        }
-        else
-        {
-            client = new ClientPeer("www.fairybcd.top", 40960);
-        }
+        var cfg = new FairiesPoker.config();
+        string serverIp = string.IsNullOrWhiteSpace(cfg.IPAddress) ? "www.fairybcd.top" : cfg.IPAddress.Trim();
+        int serverPort = cfg.Port > 0 ? cfg.Port : 40960;
+        client = new ClientPeer(serverIp, serverPort);
 
         // 订阅连接事件
         client.OnConnectSuccess += () =>
@@ -67,9 +60,8 @@ public class NetManager
         if (client == null)
             return;
 
-        while (client.socketMsgQueue.Count > 0)
+        while (client.TryDequeueSocketMsg(out SocketMsg msg))
         {
-            SocketMsg msg = client.socketMsgQueue.Dequeue();
             //处理消息
             processSocketMsg(msg);
         }
@@ -123,7 +115,7 @@ public class NetManager
         switch (eventCode)
         {
             case 0:
-                client.Send(message as SocketMsg);
+                client?.Send(message as SocketMsg);
                 break;
             default:
                 break;

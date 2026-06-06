@@ -35,6 +35,7 @@ namespace FPServer.Tests
 
             TestGameState_InitGame();
             TestGameState_ProcessGrab();
+            TestGameEconomy_Settlement();
             TestGameState_ProcessDeal();
             TestGameState_ProcessPass();
             TestGameState_CanBeat();
@@ -90,7 +91,11 @@ namespace FPServer.Tests
 
             // 测试玩家2抢地主
             int result2 = gameState.ProcessGrab(2, true);
-            Assert(result2 == 2, "玩家2抢地主成功，应返回2");
+            Assert(result2 == -1, "玩家2抢地主后，应继续等待下一位玩家表态");
+            Assert(gameState.LandlordId == 2, "玩家2应成为当前候选地主");
+
+            int result3 = gameState.ProcessGrab(3, false);
+            Assert(result3 == 2, "第三位玩家不抢后，玩家2应成为最终地主");
 
             // 验证地主ID
             Assert(gameState.LandlordId == 2, $"地主ID应为2，实际为 {gameState.LandlordId}");
@@ -104,6 +109,73 @@ namespace FPServer.Tests
 
             // 验证当前回合为地主
             Assert(gameState.CurrentTurnUserId == 2, "当前回合应为地主(2)");
+
+            gameState.InitGame(playerIds);
+            gameState.ProcessGrab(1, false);
+            gameState.ProcessGrab(2, false);
+            int noGrabResult = gameState.ProcessGrab(3, false);
+            Assert(noGrabResult == 0, "所有玩家不抢时应返回0，表示重新发牌");
+
+            Console.WriteLine("  ✓ 通过\n");
+        }
+
+        private void TestGameEconomy_Settlement()
+        {
+            Console.WriteLine("测试: GameEconomy.CalculateSettlement");
+
+            var economy = new Game.GameEconomy(1000, 20, 16, 30, 500, 1000, 7);
+            var settlement = economy.CalculateSettlement(
+                new List<int> { 1, 2, 3 },
+                new List<int> { 2, 3 },
+                landlordId: 1,
+                multiple: 64,
+                currentBeans: new Dictionary<int, int>
+                {
+                    [1] = 1000,
+                    [2] = 1000,
+                    [3] = 1000
+                });
+
+            Assert(!settlement.LandlordWins, "地主应失败");
+            Assert(settlement.EffectiveMultiple == 16, $"倍率应封顶为16，实际为 {settlement.EffectiveMultiple}");
+            Assert(settlement.ClientBasePoints == 320, $"农民胜利时客户端基础点数应为320，实际为 {settlement.ClientBasePoints}");
+            Assert(settlement.Deltas.First(d => d.UserId == 1).BeanDelta == -300, "地主单局最多应扣除当前点数30%");
+            Assert(settlement.Deltas.First(d => d.UserId == 2).BeanDelta == 150, "农民1应平分地主实际扣除点数");
+            Assert(settlement.Deltas.First(d => d.UserId == 3).BeanDelta == 150, "农民2应平分地主实际扣除点数");
+
+            var lowBeanSettlement = economy.CalculateSettlement(
+                new List<int> { 1, 2, 3 },
+                new List<int> { 1 },
+                landlordId: 1,
+                multiple: 64,
+                currentBeans: new Dictionary<int, int>
+                {
+                    [1] = 1000,
+                    [2] = 2,
+                    [3] = 1
+                });
+
+            Assert(lowBeanSettlement.LandlordWins, "地主应获胜");
+            Assert(lowBeanSettlement.Deltas.First(d => d.UserId == 1).BeanDelta == 1, "地主只能获得农民实际可扣除点数");
+            Assert(lowBeanSettlement.Deltas.First(d => d.UserId == 2).BeanDelta == -1, "低分农民应至少保留1点");
+            Assert(lowBeanSettlement.Deltas.First(d => d.UserId == 3).BeanDelta == 0, "仅剩1点的玩家不应被一局清零");
+
+            var lowLandlordSettlement = economy.CalculateSettlement(
+                new List<int> { 1, 2, 3 },
+                new List<int> { 2, 3 },
+                landlordId: 1,
+                multiple: 64,
+                currentBeans: new Dictionary<int, int>
+                {
+                    [1] = 2,
+                    [2] = 1000,
+                    [3] = 1000
+                });
+
+            Assert(lowLandlordSettlement.Deltas.First(d => d.UserId == 1).BeanDelta == -1, "低分地主应至少保留1点");
+            Assert(
+                lowLandlordSettlement.Deltas.Where(d => d.UserId != 1).Sum(d => d.BeanDelta) == 1,
+                "地主实际扣除的点数应完整分给农民");
 
             Console.WriteLine("  ✓ 通过\n");
         }
@@ -122,6 +194,7 @@ namespace FPServer.Tests
             // 玩家2抢地主
             gameState.ProcessGrab(1, false);
             gameState.ProcessGrab(2, true);
+            gameState.ProcessGrab(3, false);
 
             // 获取玩家2的手牌
             var landlordCards = gameState.GetPlayerCards(2);
@@ -159,6 +232,7 @@ namespace FPServer.Tests
             // 玩家2抢地主
             gameState.ProcessGrab(1, false);
             gameState.ProcessGrab(2, true);
+            gameState.ProcessGrab(3, false);
 
             // 地主出牌
             var landlordCards = gameState.GetPlayerCards(2);
@@ -260,6 +334,14 @@ namespace FPServer.Tests
             var playerRoom = roomManager.GetRoomByPlayerId(1);
             Assert(playerRoom == room, "应能通过玩家ID获取房间");
 
+            // 同一玩家不能被重复加入到另一个房间，否则旧房间会残留幽灵玩家。
+            var otherRoom = roomManager.CreateRoom(9, "另一个房间");
+            bool duplicateAdd = roomManager.AddPlayerToRoom(otherRoom, 1, userDto1);
+            Assert(!duplicateAdd, "同一玩家不应同时加入第二个房间");
+            Assert(roomManager.GetRoomByPlayerId(1) == room, "重复加入失败后玩家房间映射不应变化");
+            Assert(room.GetPlayerIds().Contains(1), "重复加入失败后旧房间仍应保留玩家");
+            Assert(!otherRoom.GetPlayerIds().Contains(1), "重复加入失败后新房间不应出现该玩家");
+
             // 测试移除玩家
             roomManager.RemovePlayerFromRoom(room, 1);
             Assert(room.GetPlayerCount() == 2, "移除后玩家数应为2");
@@ -307,7 +389,11 @@ namespace FPServer.Tests
             gameState.ProcessGrab(firstGrabUserId, false);
 
             int secondGrabUserId = gameState.GetNextGrabUserId();
-            int landlordId = gameState.ProcessGrab(secondGrabUserId, true);
+            int secondResult = gameState.ProcessGrab(secondGrabUserId, true);
+            Assert(secondResult == -1, "第二个抢地主的玩家表态后应继续等待下一位玩家");
+
+            int thirdGrabUserId = gameState.GetNextGrabUserId();
+            int landlordId = gameState.ProcessGrab(thirdGrabUserId, false);
 
             Assert(landlordId == secondGrabUserId, "第二个抢地主的玩家应成为地主");
             // 注意：房间LandlordId由FightHandler更新，这里只验证GameState

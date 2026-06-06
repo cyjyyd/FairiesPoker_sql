@@ -151,7 +151,7 @@
             button1.Name = "button1";
             button1.Size = new System.Drawing.Size(380, 31);
             button1.TabIndex = 25;
-            button1.Text = "显示开发人员名单(&O)";
+            button1.Text = "关闭";
             button1.Click += button1_Click;
             // 
             // AboutBox1

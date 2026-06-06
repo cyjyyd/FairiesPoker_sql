@@ -1,8 +1,11 @@
 using FPServer.Cache;
+using FPServer.Database;
 using FPServer.Game;
 using FPServer.Network;
 using Microsoft.Extensions.Logging;
 using Protocol.Code;
+using Protocol.Constant;
+using Protocol.Dto;
 using Protocol.Dto.Fight;
 using System.Collections.Concurrent;
 
@@ -17,16 +20,26 @@ namespace FPServer.Handlers
         private readonly ILogger<FightHandler> _logger;
         private readonly OnlineUserCache _userCache;
         private readonly RoomManager _roomManager;
+        private readonly GameEconomy _economy;
+        private readonly UserEconomyStore _userEconomyStore;
         private readonly ConcurrentDictionary<string, CancellationTokenSource> _turnTimers = new();
         private const int TurnTimeoutMs = 20000;
         private const int DisconnectedAutoPlayDelayMs = 1000;
 
-        public FightHandler(MessageHandler messageHandler, ILoggerFactory loggerFactory, OnlineUserCache userCache, RoomManager roomManager)
+        public FightHandler(
+            MessageHandler messageHandler,
+            ILoggerFactory loggerFactory,
+            OnlineUserCache userCache,
+            RoomManager roomManager,
+            GameEconomy economy,
+            UserEconomyStore userEconomyStore)
         {
             _messageHandler = messageHandler;
             _logger = loggerFactory.CreateLogger<FightHandler>();
             _userCache = userCache;
             _roomManager = roomManager;
+            _economy = economy ?? GameEconomy.Default;
+            _userEconomyStore = userEconomyStore;
         }
 
         public void Handle(ClientConnection client, int subCode, object value)
@@ -79,6 +92,8 @@ namespace FPServer.Handlers
                 _messageHandler.SendToUser(userId, msg);
             }
 
+            BroadcastMultiple(room);
+
             // 广播第一个抢地主的玩家
             int firstGrabUserId = gameState.GetNextGrabUserId();
             BroadcastTurnGrab(room, firstGrabUserId);
@@ -111,6 +126,9 @@ namespace FPServer.Handlers
 
                 result = gameState.ProcessGrab(client.UserId, grab);
                 CancelTurnTimer(room.RoomId);
+
+                if (grab)
+                    DoubleRoomMultiple(room);
             }
 
             if (result > 0)
@@ -129,6 +147,11 @@ namespace FPServer.Handlers
 
                 // 广播地主开始出牌
                 BroadcastTurnDeal(room, result);
+            }
+            else if (result == 0)
+            {
+                _logger.LogInformation("房间 {RoomId} 无人抢地主，重新发牌", room.RoomId);
+                StartGame(room);
             }
             else
             {
@@ -179,6 +202,8 @@ namespace FPServer.Handlers
 
             if (success)
             {
+                ApplyDealMultiple(room, dealDto);
+
                 // 出牌成功，广播出牌结果
                 var msg = new SocketMsg(OpCode.FIGHT, FightCode.DEAL_BRO, dealDto);
                 _messageHandler.BroadcastTo(room.GetPlayerIds(), msg);
@@ -256,6 +281,95 @@ namespace FPServer.Handlers
             StartTurnTimer(room, userId, isGrabTurn: false);
         }
 
+        private void DoubleRoomMultiple(Room room)
+        {
+            int current = _economy.GetEffectiveMultiple(room.Multiple);
+            int next = _economy.GetEffectiveMultiple(current * 2);
+            bool changed = room.Multiple != current || next != current;
+
+            room.Multiple = next;
+            if (changed)
+            {
+                BroadcastMultiple(room);
+            }
+            else
+            {
+                _logger.LogInformation("房间 {RoomId} 倍率已达到上限 x{Multiple}", room.RoomId, room.Multiple);
+            }
+        }
+
+        private void ApplyDealMultiple(Room room, DealDto dealDto)
+        {
+            int cardType = dealDto.Type;
+            if (cardType == CardType.NONE && dealDto.SelectCardList != null)
+                cardType = CardType.GetCardType(dealDto.SelectCardList);
+
+            if (cardType == CardType.BOOM || cardType == CardType.JOKER_BOOM)
+            {
+                _logger.LogInformation("房间 {RoomId} 出现炸弹，倍率翻倍", room.RoomId);
+                DoubleRoomMultiple(room);
+            }
+        }
+
+        private void BroadcastMultiple(Room room)
+        {
+            var msg = new SocketMsg(OpCode.FIGHT, FightCode.REFRESH_MULTIPLE, room.Multiple);
+            _messageHandler.BroadcastTo(room.GetPlayerIds(), msg);
+        }
+
+        private void ApplySettlementToMemory(Room room, IReadOnlyList<GameSettlementDelta> deltas)
+        {
+            foreach (var delta in deltas)
+            {
+                var cacheUser = _userCache.GetUserData(delta.UserId);
+                var roomUser = room.GetPlayerData(delta.UserId);
+
+                if (cacheUser != null)
+                    ApplyUserSettlement(cacheUser, delta);
+
+                if (roomUser != null && !ReferenceEquals(roomUser, cacheUser))
+                    ApplyUserSettlement(roomUser, delta);
+
+                if (cacheUser != null && !ReferenceEquals(roomUser, cacheUser))
+                    room.UpdatePlayerData(delta.UserId, cacheUser);
+            }
+        }
+
+        private static void ApplyUserSettlement(UserDto user, GameSettlementDelta delta)
+        {
+            user.Been = Math.Max(0, user.Been + delta.BeanDelta);
+            if (delta.IsWinner)
+                user.WinCount++;
+            else
+                user.LoseCount++;
+        }
+
+        private async Task PersistSettlementAsync(IReadOnlyList<GameSettlementDelta> deltas)
+        {
+            try
+            {
+                await _userEconomyStore.ApplySettlementAsync(deltas);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "保存对局点数结算失败");
+            }
+        }
+
+        private Dictionary<int, int> GetCurrentBeans(Room room)
+        {
+            var beans = new Dictionary<int, int>();
+            foreach (var userId in room.GetPlayerIds())
+            {
+                var roomUser = room.GetPlayerData(userId);
+                var cacheUser = _userCache.GetUserData(userId);
+                int currentBeans = roomUser?.Been ?? cacheUser?.Been ?? _economy.InitialBeans;
+                beans[userId] = Math.Max(0, currentBeans);
+            }
+
+            return beans;
+        }
+
         /// <summary>
         /// 处理游戏结束
         /// </summary>
@@ -263,15 +377,22 @@ namespace FPServer.Handlers
         {
             var gameState = room.GameState;
             var winners = gameState.GetWinners();
+            var currentBeans = GetCurrentBeans(room);
+            var settlement = _economy.CalculateSettlement(room.GetPlayerIds(), winners, room.LandlordId, room.Multiple, currentBeans);
 
             _logger.LogInformation("游戏结束，胜利者: {Winners}", string.Join(",", winners));
+            ApplySettlementToMemory(room, settlement.Deltas);
+            _ = PersistSettlementAsync(settlement.Deltas);
 
             // 创建结束DTO
             var overDto = new OverDto
             {
                 WinUIdList = winners,
-                WinIdentity = winners.Contains(room.LandlordId) ? 0 : 1, // 0=地主赢，1=农民赢
-                BeenCount = room.Multiple * (winners.Contains(room.LandlordId) ? 2 : 1)
+                WinIdentity = settlement.LandlordWins ? 0 : 1, // 0=地主赢，1=农民赢
+                BeenCount = settlement.ClientBasePoints,
+                BeanDeltaUserIds = settlement.Deltas.Select(delta => delta.UserId).ToList(),
+                BeanDeltas = settlement.Deltas.Select(delta => delta.BeanDelta).ToList(),
+                Multiple = settlement.EffectiveMultiple
             };
 
             // 广播游戏结束
@@ -382,7 +503,7 @@ namespace FPServer.Handlers
                 CancelTurnTimer(room.RoomId);
             }
 
-            _logger.LogInformation("用户 {UserId} 抢地主超时，默认不叫", userId);
+            _logger.LogInformation("用户 {UserId} 抢地主超时，默认不抢", userId);
 
             if (result > 0)
             {
@@ -400,6 +521,8 @@ namespace FPServer.Handlers
                 int nextUserId = gameState.GetNextGrabUserId();
                 if (nextUserId > 0)
                     BroadcastTurnGrab(room, nextUserId);
+                else if (result == 0)
+                    StartGame(room);
             }
         }
 
@@ -432,6 +555,7 @@ namespace FPServer.Handlers
                 if (aiDeal != null && gameState.ProcessDeal(userId, aiDeal))
                 {
                     _logger.LogInformation("用户 {UserId} 由服务端托管出牌", userId);
+                    ApplyDealMultiple(room, aiDeal);
                     var dealMsg = new SocketMsg(OpCode.FIGHT, FightCode.DEAL_BRO, aiDeal);
                     _messageHandler.BroadcastTo(room.GetPlayerIds(), dealMsg);
 

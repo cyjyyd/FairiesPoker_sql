@@ -16,6 +16,7 @@ public class WinScreen : ScreenBase
 {
     // 结算背景图片
     private Texture2D? _resultBgTexture;
+    private Texture2D? _roundedResultBgTexture;
 
     // 按钮纹理
     private Texture2D? _btnNormalTexture;
@@ -41,6 +42,7 @@ public class WinScreen : ScreenBase
     // 窗口尺寸 (原win.cs: 822x508)
     private const int WindowWidth = 822;
     private const int WindowHeight = 508;
+    private const int CornerRadius = 28;
 
     // 按钮状态
     private bool _btnPressed;
@@ -168,6 +170,14 @@ public class WinScreen : ScreenBase
         }
 
         _resultBgTexture = UIResourceManager.LoadResultImage(imageName);
+        _roundedResultBgTexture = CreateRoundedTexture(_resultBgTexture, CornerRadius);
+    }
+
+    public override void UnloadContent()
+    {
+        _roundedResultBgTexture?.Dispose();
+        _roundedResultBgTexture = null;
+        base.UnloadContent();
     }
 
     public override void Update(GameTime gameTime)
@@ -182,9 +192,10 @@ public class WinScreen : ScreenBase
         var layout = GetWindowLayout();
 
         // 绘制结算背景图片
-        if (_resultBgTexture != null)
+        var resultTexture = _roundedResultBgTexture ?? _resultBgTexture;
+        if (resultTexture != null)
         {
-            spriteBatch.Draw(_resultBgTexture,
+            spriteBatch.Draw(resultTexture,
                 layout.Bounds,
                 color);
         }
@@ -306,6 +317,52 @@ public class WinScreen : ScreenBase
             rect.Y + (rect.Height - textSize.Y) / 2f);
 
         FontManager.DrawString(spriteBatch, font, button.Text, textPos, button.TextColor * Opacity, scale);
+    }
+
+    private static Texture2D? CreateRoundedTexture(Texture2D? source, int radius)
+    {
+        if (source == null || radius <= 0)
+            return null;
+
+        int width = source.Width;
+        int height = source.Height;
+        int safeRadius = Math.Clamp(radius, 1, Math.Min(width, height) / 2);
+        var pixels = new Color[width * height];
+
+        source.GetData(pixels);
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int dx = x < safeRadius
+                    ? safeRadius - x
+                    : x >= width - safeRadius ? x - (width - safeRadius - 1) : 0;
+                int dy = y < safeRadius
+                    ? safeRadius - y
+                    : y >= height - safeRadius ? y - (height - safeRadius - 1) : 0;
+
+                if (dx <= 0 || dy <= 0)
+                    continue;
+
+                float distance = MathF.Sqrt(dx * dx + dy * dy);
+                float edge = safeRadius - distance;
+                int index = y * width + x;
+
+                if (edge <= 0f)
+                {
+                    pixels[index] = Color.Transparent;
+                }
+                else if (edge < 1f)
+                {
+                    byte alpha = (byte)(pixels[index].A * edge);
+                    pixels[index] = new Color(pixels[index].R, pixels[index].G, pixels[index].B, alpha);
+                }
+            }
+        }
+
+        var rounded = new Texture2D(source.GraphicsDevice, width, height);
+        rounded.SetData(pixels);
+        return rounded;
     }
 
     private readonly struct WindowLayout

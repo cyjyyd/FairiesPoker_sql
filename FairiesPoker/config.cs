@@ -20,7 +20,7 @@ namespace FairiesPoker
         string lstFilePath = Application.StartupPath + "\\Filelist.lst";
         string pokFilePath = Application.StartupPath + "\\Pokers\\";
         string resFilePath = Application.StartupPath + "\\Results\\";
-        private string ipaddress = "127.0.0.1";
+        private string ipaddress = "www.fairybcd.top";
         private int ui;
         private bool backmusic;
         private bool soundfx;
@@ -138,8 +138,8 @@ namespace FairiesPoker
             WriteIniData("Video", "ScreenWidth", Convert.ToString(width), iniFilePath);
             WriteIniData("Video", "ScreenHeight", Convert.ToString(height), iniFilePath);
             WriteIniData("Video", "FullScreen", Convert.ToString(FullScreen), iniFilePath);
-            WriteIniData("Network", "IPAddress", "127.0.0.1", iniFilePath);
-            WriteIniData("Network", "Port", "8088", iniFilePath);
+            WriteIniData("Network", "IPAddress", "www.fairybcd.top", iniFilePath);
+            WriteIniData("Network", "Port", "40960", iniFilePath);
         }
         private void readset ()
         {
@@ -151,8 +151,8 @@ namespace FairiesPoker
             Width = Convert.ToInt32(ReadIniData("Video", "ScreenWidth", "1280", iniFilePath));
             Height = Convert.ToInt32(ReadIniData("Video", "ScreenHeight", "720", iniFilePath));
             FullScreen = Convert.ToBoolean(ReadIniData("Video", "FullScreen", "false", iniFilePath));
-            IPAddress = ReadIniData("Network", "IPAddress", "127.0.0.1", iniFilePath);
-            Port = Convert.ToInt32(ReadIniData("Network", "Port", "8088", iniFilePath));
+            IPAddress = ReadIniData("Network", "IPAddress", "www.fairybcd.top", iniFilePath);
+            Port = Convert.ToInt32(ReadIniData("Network", "Port", "40960", iniFilePath));
         }
         public int Filecheck(int a)
         {

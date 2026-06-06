@@ -1,5 +1,6 @@
 using FPServer.Cache;
 using FPServer.Database;
+using FPServer.Game;
 using FPServer.Network;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
@@ -17,13 +18,22 @@ namespace FPServer.Handlers
         private readonly ILogger<AccountHandler> _logger;
         private readonly OnlineUserCache _userCache;
         private readonly Func<ChatHandler> _getChatHandler;
+        private readonly GameEconomy _economy;
+        private readonly UserEconomyStore _userEconomyStore;
 
-        public AccountHandler(MessageHandler messageHandler, ILoggerFactory loggerFactory, OnlineUserCache userCache)
+        public AccountHandler(
+            MessageHandler messageHandler,
+            ILoggerFactory loggerFactory,
+            OnlineUserCache userCache,
+            GameEconomy economy,
+            UserEconomyStore userEconomyStore)
         {
             _messageHandler = messageHandler;
             _logger = loggerFactory.CreateLogger<AccountHandler>();
             _userCache = userCache;
             _getChatHandler = () => messageHandler.GetChatHandler();
+            _economy = economy ?? GameEconomy.Default;
+            _userEconomyStore = userEconomyStore;
         }
 
         /// <summary>
@@ -91,11 +101,12 @@ namespace FPServer.Handlers
                 // 插入新用户
                 await DbHelper.Instance.ExecuteNonQueryAsync(
                     @"INSERT INTO users (username, password_hash, avatar_url, nickname, beans, created_at)
-                      VALUES (@username, @password, @avatarUrl, @nickname, 1000, NOW())",
+                      VALUES (@username, @password, @avatarUrl, @nickname, @beans, NOW())",
                     new MySqlParameter("@username", username),
                     new MySqlParameter("@password", hashedPassword),
                     new MySqlParameter("@avatarUrl", DBNull.Value),
-                    new MySqlParameter("@nickname", username));
+                    new MySqlParameter("@nickname", username),
+                    new MySqlParameter("@beans", _economy.InitialBeans));
 
                 _logger.LogInformation("新用户注册成功: {Username}", username);
                 SendRegisterResponse(client, 0); // 注册成功
@@ -163,6 +174,8 @@ namespace FPServer.Handlers
                     SendLoginErrorResponse(client, -3); // 密码错误
                     return;
                 }
+
+                beans = await _userEconomyStore.TryGrantWeeklyReliefAsync(userId, beans);
 
                 // 更新登录状态
                 await DbHelper.Instance.ExecuteNonQueryAsync(

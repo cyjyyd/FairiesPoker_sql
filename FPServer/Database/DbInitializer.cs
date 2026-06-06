@@ -37,11 +37,23 @@ CREATE TABLE IF NOT EXISTS users (
     exp INT DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_login DATETIME NULL,
+    weekly_relief_at DATETIME NULL,
     is_online TINYINT DEFAULT 0,
     INDEX idx_username (username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
 
                 await DbHelper.Instance.ExecuteNonQueryAsync(createUserTable);
+                await EnsureUserColumnAsync("avatar_url", "VARCHAR(255) DEFAULT NULL AFTER password_hash");
+                await EnsureUserColumnAsync("nickname", "VARCHAR(50) AFTER avatar_url");
+                await EnsureUserColumnAsync("beans", "INT DEFAULT 1000 AFTER nickname");
+                await EnsureUserColumnAsync("win_count", "INT DEFAULT 0 AFTER beans");
+                await EnsureUserColumnAsync("lose_count", "INT DEFAULT 0 AFTER win_count");
+                await EnsureUserColumnAsync("run_count", "INT DEFAULT 0 AFTER lose_count");
+                await EnsureUserColumnAsync("level", "INT DEFAULT 1 AFTER run_count");
+                await EnsureUserColumnAsync("exp", "INT DEFAULT 0 AFTER level");
+                await EnsureUserColumnAsync("last_login", "DATETIME NULL AFTER created_at");
+                await EnsureUserColumnAsync("weekly_relief_at", "DATETIME NULL AFTER last_login");
+                await EnsureUserColumnAsync("is_online", "TINYINT DEFAULT 0 AFTER weekly_relief_at");
                 _logger.LogInformation("用户表创建成功");
 
                 // 头像审核表
@@ -126,6 +138,23 @@ CREATE TABLE IF NOT EXISTS chat_messages (
             {
                 _logger.LogError(ex, "数据库初始化失败");
                 throw;
+            }
+        }
+
+        private async Task EnsureUserColumnAsync(string columnName, string columnDefinition)
+        {
+            var exists = await DbHelper.Instance.ExecuteScalarAsync(
+                @"SELECT COUNT(*)
+                  FROM INFORMATION_SCHEMA.COLUMNS
+                  WHERE TABLE_SCHEMA = DATABASE()
+                    AND TABLE_NAME = 'users'
+                    AND COLUMN_NAME = @columnName",
+                new MySqlConnector.MySqlParameter("@columnName", columnName));
+
+            if (Convert.ToInt32(exists) == 0)
+            {
+                await DbHelper.Instance.ExecuteNonQueryAsync($"ALTER TABLE users ADD COLUMN {columnName} {columnDefinition}");
+                _logger.LogInformation("用户表新增字段: {ColumnName}", columnName);
             }
         }
     }

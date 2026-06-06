@@ -73,6 +73,21 @@ namespace FPServer.Game
         {
             lock (_lock)
             {
+                if (_playerRoomMap.TryGetValue(userId, out var existingRoomId))
+                {
+                    if (existingRoomId == room.RoomId)
+                    {
+                        return room.GetPlayerIds().Contains(userId);
+                    }
+
+                    _logger.LogWarning(
+                        "玩家 {UserId} 已在房间 {ExistingRoomId} 中，拒绝加入房间 {TargetRoomId}",
+                        userId,
+                        existingRoomId,
+                        room.RoomId);
+                    return false;
+                }
+
                 if (room.AddPlayer(userId, userDto))
                 {
                     _playerRoomMap[userId] = room.RoomId;

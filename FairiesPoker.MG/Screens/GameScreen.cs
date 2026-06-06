@@ -76,6 +76,14 @@ public class GameScreen : ScreenBase
     private string _rightName = "Computer2";
 
     // === 按钮 ===
+    private const float GameButtonY = 405f;
+    private const float StatusLabelY = 370f;
+    private const float ActionButtonX = 547f;
+    private const float FirstActionButtonX = 595f;
+    private const float PassButtonX = 643f;
+    private const float HintButtonX = 739f;
+    private const float ReselectButtonX = 451f;
+
     private readonly UIButton _btnStart = new();
     private readonly UIButton _btnAction = new();  // 叫地主/出牌
     private readonly UIButton _btnPass = new();    // 不叫/不出
@@ -133,6 +141,7 @@ public class GameScreen : ScreenBase
     private NetManager? _netManager;
     private List<CardDto>? _onlineCards;
     private int _landlordId = -1;
+    private int _currentMultiple = 1;
     private int _currentTurnUserId = -1;
     private bool _isMyTurnOnline;
     private DealDto? _lastDealDto;
@@ -394,6 +403,7 @@ public class GameScreen : ScreenBase
         _bl_chuPaiOver = false;
         _bl_isFirst = false;
         _landlordId = -1;
+        _currentMultiple = 1;
 
         // === 新增：初始化发牌动画 ===
         InitDealAnimations();
@@ -591,7 +601,7 @@ public class GameScreen : ScreenBase
         _btnStart.OnClick = StartOfflineGame;
 
         // 主操作按钮（原button2）
-        _btnAction.Position = new Vector2(547, 420);
+        _btnAction.Position = new Vector2(ActionButtonX, GameButtonY);
         _btnAction.Size = new Vector2(90, 30);
         _btnAction.Text = "";
         _btnAction.TextColor = Color.Gold;
@@ -601,7 +611,7 @@ public class GameScreen : ScreenBase
         _btnAction.OnClick = OnActionClick;
 
         // 取消按钮（原button3）
-        _btnPass.Position = new Vector2(643, 420);
+        _btnPass.Position = new Vector2(PassButtonX, GameButtonY);
         _btnPass.Size = new Vector2(90, 30);
         _btnPass.Text = "";
         _btnPass.TextColor = Color.Gold;
@@ -611,7 +621,7 @@ public class GameScreen : ScreenBase
         _btnPass.OnClick = OnPassClick;
 
         // 提示按钮（原button6）
-        _btnHint.Position = new Vector2(739, 420);
+        _btnHint.Position = new Vector2(HintButtonX, GameButtonY);
         _btnHint.Size = new Vector2(90, 30);
         _btnHint.Text = "提示";
         _btnHint.TextColor = Color.Gold;
@@ -621,7 +631,7 @@ public class GameScreen : ScreenBase
         _btnHint.OnClick = OnHintClick;
 
         // 重选按钮（原button4）
-        _btnReselect.Position = new Vector2(451, 420);
+        _btnReselect.Position = new Vector2(ReselectButtonX, GameButtonY);
         _btnReselect.Size = new Vector2(90, 30);
         _btnReselect.Text = "重选";
         _btnReselect.TextColor = Color.Gold;
@@ -691,7 +701,7 @@ public class GameScreen : ScreenBase
         _lblRightRemain.Size = new Vector2(110, 30);
         _lblRightRemain.BackgroundColor = new Color(0, 0, 0, 100);
 
-        _lblStatus.Position = new Vector2(490, 382);
+        _lblStatus.Position = new Vector2(490, StatusLabelY);
         _lblStatus.Text = "";
         _lblStatus.TextColor = Color.Yellow;
         _lblStatus.Size = new Vector2(330, 30);
@@ -727,16 +737,21 @@ public class GameScreen : ScreenBase
     {
         if (status == 1)
         {
+            _btnAction.Position = new Vector2(ActionButtonX, GameButtonY);
+            _btnPass.Position = new Vector2(PassButtonX, GameButtonY);
             _btnAction.Visible = visible;
             _btnPass.Visible = visible;
-            _btnAction.Text = "叫地主";
-            _btnPass.Text = "不叫";
+            _btnAction.Text = "抢地主";
+            _btnPass.Text = "不抢";
             _btnHint.Visible = false;
             _btnReselect.Visible = false;
         }
         else if (status == 2)
         {
-            _btnAction.Position = new Vector2(547, 420);
+            _btnAction.Position = new Vector2(ActionButtonX, GameButtonY);
+            _btnPass.Position = new Vector2(PassButtonX, GameButtonY);
+            _btnHint.Position = new Vector2(HintButtonX, GameButtonY);
+            _btnReselect.Position = new Vector2(ReselectButtonX, GameButtonY);
             _btnReselect.Visible = visible;
             _btnHint.Visible = visible;
             _btnAction.Visible = visible;
@@ -748,7 +763,10 @@ public class GameScreen : ScreenBase
         }
         else if (status == 3)
         {
-            _btnAction.Position = new Vector2(547, 420);
+            _btnAction.Position = new Vector2(ActionButtonX, GameButtonY);
+            _btnPass.Position = new Vector2(PassButtonX, GameButtonY);
+            _btnHint.Position = new Vector2(HintButtonX, GameButtonY);
+            _btnReselect.Position = new Vector2(ReselectButtonX, GameButtonY);
             _btnReselect.Visible = visible;
             _btnHint.Visible = visible;
             _btnAction.Visible = visible;
@@ -760,7 +778,7 @@ public class GameScreen : ScreenBase
         }
         else if (status == 4)
         {
-            _btnAction.Position = new Vector2(595, 420);
+            _btnAction.Position = new Vector2(FirstActionButtonX, GameButtonY);
             _btnAction.Visible = visible;
             _btnAction.Text = "出牌";
             _btnPass.Visible = false;
@@ -848,6 +866,8 @@ public class GameScreen : ScreenBase
     private void StartGrabbingPhase()
     {
         _state = GameState.GRABBING;
+        _lblStatus.Visible = true;
+        _lblStatus.Text = $"抢地主阶段  倍率 x{_currentMultiple}";
 
         // 随机选择谁先叫地主（对应原fapai中的Random rd = new Random(); int num = rd.Next(3) + 1;）
         Random rd = new Random();
@@ -888,13 +908,14 @@ public class GameScreen : ScreenBase
                         // juese3叫地主（原项目case 1中是juese3！）
                         if (IsJiaoDiZhu(_juese3))
                         {
-                            count = 3; _juese3.Dizhu = true; switchDiZhu = 3;
-                            _lblRightStatus.Text = "叫地主"; // label1对应juese3
+                            switchDiZhu = 3;
+                            DoubleOfflineMultiple();
+                            _lblRightStatus.Text = "抢地主"; // label1对应juese3
                             _lblRightStatus.Visible = true;
                         }
                         else
                         {
-                            _lblRightStatus.Text = "不  叫";
+                            _lblRightStatus.Text = "不  抢";
                             _lblRightStatus.Visible = true;
                         }
                     }
@@ -910,13 +931,14 @@ public class GameScreen : ScreenBase
                         // juese1叫地主（原项目case 2中是juese1！）
                         if (IsJiaoDiZhu(_juese1))
                         {
-                            count = 3; _juese1.Dizhu = true; switchDiZhu = 1;
-                            _lblLeftStatus.Text = "叫地主"; // label2对应juese1
+                            switchDiZhu = 1;
+                            DoubleOfflineMultiple();
+                            _lblLeftStatus.Text = "抢地主"; // label2对应juese1
                             _lblLeftStatus.Visible = true;
                         }
                         else
                         {
-                            _lblLeftStatus.Text = "不  叫";
+                            _lblLeftStatus.Text = "不  抢";
                             _lblLeftStatus.Visible = true;
                         }
                     }
@@ -982,6 +1004,13 @@ public class GameScreen : ScreenBase
         return quanzhi >= 7;
     }
 
+    private void DoubleOfflineMultiple()
+    {
+        _currentMultiple = Math.Max(1, _currentMultiple) * 2;
+        _lblStatus.Visible = true;
+        _lblStatus.Text = $"当前倍率 x{_currentMultiple}";
+    }
+
     /// <summary>
     /// 叫地主结束处理（对应原fapai中叫地主结束后的逻辑）
     /// </summary>
@@ -1001,23 +1030,29 @@ public class GameScreen : ScreenBase
         {
             // 显示底牌
             _tableCardsRevealed = true;
+            _juese1.Dizhu = false;
+            _juese2.Dizhu = false;
+            _juese3.Dizhu = false;
 
             // 根据地主位置处理
             if (switchDiZhu == 1)
             {
                 // juese1是地主
+                _juese1.Dizhu = true;
                 KouDiPai(_juese1);
                 _landlordId = 1;
             }
             else if (switchDiZhu == 2)
             {
                 // juese2是地主
+                _juese2.Dizhu = true;
                 KouDiPai(_juese2);
                 _landlordId = 2;
             }
             else if (switchDiZhu == 3)
             {
                 // juese3是地主
+                _juese3.Dizhu = true;
                 KouDiPai(_juese3);
                 _landlordId = 3;
             }
@@ -1028,7 +1063,7 @@ public class GameScreen : ScreenBase
         else
         {
             // 无人叫地主
-            _lblStatus.Text = "没有人选择地主，重新发牌";
+            _lblStatus.Text = "没有人抢地主，重新发牌";
             StartOfflineGame();
         }
     }
@@ -1438,9 +1473,25 @@ public class GameScreen : ScreenBase
 
     private void DrawPlayerNames(SpriteBatch spriteBatch)
     {
-        DrawPlayerName(spriteBatch, _leftName, new Vector2(20, 450), _juese1.Dizhu);
+        if (_isOnline)
+        {
+            DrawPlayerName(spriteBatch, _leftName, new Vector2(20, 450), _juese1.Dizhu);
+        }
+        else if (_juese1.Dizhu)
+        {
+            DrawLandlordBadge(spriteBatch, new Vector2(20, 424));
+        }
+
         DrawPlayerName(spriteBatch, _selfName, new Vector2(1005, 630), _juese2.Dizhu);
-        DrawPlayerName(spriteBatch, _rightName, new Vector2(1110, 130), _juese3.Dizhu);
+
+        if (_isOnline)
+        {
+            DrawPlayerName(spriteBatch, _rightName, new Vector2(1110, 130), _juese3.Dizhu);
+        }
+        else if (_juese3.Dizhu)
+        {
+            DrawLandlordBadge(spriteBatch, new Vector2(1110, 104));
+        }
     }
 
     private void DrawPlayerName(SpriteBatch spriteBatch, string name, Vector2 position, bool isLandlord)
@@ -1852,7 +1903,7 @@ public class GameScreen : ScreenBase
         _btnMinimize.Update(input);
         _btnClose.Update(input);
 
-        if (_state == GameState.MY_TURN)
+        if (_state == GameState.MY_TURN && (_isSelecting || !IsPointerOverGameButton(_mousePos)))
         {
             HandleCardInput(input);
         }
@@ -1933,6 +1984,23 @@ public class GameScreen : ScreenBase
         _btnBack.Position = showCustomWindowButtons ? new Vector2(1202, 12) : new Vector2(1238, 12);
     }
 
+    private bool IsPointerOverGameButton(Point point)
+    {
+        return IsPointerOverButton(_btnStart, point) ||
+            IsPointerOverButton(_btnAction, point) ||
+            IsPointerOverButton(_btnPass, point) ||
+            IsPointerOverButton(_btnHint, point) ||
+            IsPointerOverButton(_btnReselect, point) ||
+            IsPointerOverButton(_btnBack, point) ||
+            IsPointerOverButton(_btnMinimize, point) ||
+            IsPointerOverButton(_btnClose, point);
+    }
+
+    private static bool IsPointerOverButton(UIButton button, Point point)
+    {
+        return button.Visible && button.Enabled && button.ContainsPoint(point);
+    }
+
     #endregion
 
     #region 按钮事件
@@ -1945,19 +2013,15 @@ public class GameScreen : ScreenBase
             return;
         }
 
-        if (_btnAction.Text == "叫地主")
+        if (_state == GameState.GRABBING && (_btnAction.Text == "叫地主" || _btnAction.Text == "抢地主"))
         {
-            // 玩家叫地主
-            _juese2.Dizhu = true;
+            // 玩家抢地主，继续等待其他玩家表态，最后一个抢地主者成为地主。
             ButtonSet(3, false);
-            _lblMyStatus.Text = "叫地主";
+            _lblMyStatus.Text = "抢地主";
             _lblMyStatus.Visible = true;
-
-            // 继续叫地主流程
-            bool bl1 = true, bl2 = true, bl3 = true;
-            int count = 3;
-            int switchDiZhu = 2;
-            FinishGrabbing(switchDiZhu);
+            _grabSwitchDiZhu = 2;
+            DoubleOfflineMultiple();
+            ContinueGrabbingAfterPlayerPass();
         }
         else if (_btnAction.Text == "出牌")
         {
@@ -1973,11 +2037,11 @@ public class GameScreen : ScreenBase
             return;
         }
 
-        if (_btnPass.Text == "不叫")
+        if (_state == GameState.GRABBING && (_btnPass.Text == "不叫" || _btnPass.Text == "不抢"))
         {
             // 玩家不叫地主
             ButtonSet(3, false);
-            _lblMyStatus.Text = "不  叫";
+            _lblMyStatus.Text = "不  抢";
             _lblMyStatus.Visible = true;
 
             // 继续叫地主循环（玩家不叫后继续让AI轮转）
@@ -2001,65 +2065,7 @@ public class GameScreen : ScreenBase
     /// </summary>
     private void ContinueGrabbingAfterPlayerPass()
     {
-        // 玩家已经轮过了（bl3=true），count已经++
-        // 从_turnNum=1继续轮转
-
-        while (_grabCount != 3)
-        {
-            switch (_turnNum)
-            {
-                case 1:
-                    if (!_grabBl1)
-                    {
-                        _grabBl1 = true; _grabCount++; _turnNum++;
-                        if (IsJiaoDiZhu(_juese3))
-                        {
-                            _grabCount = 3; _juese3.Dizhu = true; _grabSwitchDiZhu = 3;
-                            _lblRightStatus.Text = "叫地主";
-                            _lblRightStatus.Visible = true;
-                        }
-                        else
-                        {
-                            _lblRightStatus.Text = "不  叫";
-                            _lblRightStatus.Visible = true;
-                        }
-                    }
-                    else
-                    {
-                        // 已轮过，跳到下一个
-                        _turnNum++;
-                    }
-                    break;
-                case 2:
-                    if (!_grabBl2)
-                    {
-                        _grabBl2 = true; _grabCount++; _turnNum++;
-                        if (IsJiaoDiZhu(_juese1))
-                        {
-                            _grabCount = 3; _juese1.Dizhu = true; _grabSwitchDiZhu = 1;
-                            _lblLeftStatus.Text = "叫地主";
-                            _lblLeftStatus.Visible = true;
-                        }
-                        else
-                        {
-                            _lblLeftStatus.Text = "不  叫";
-                            _lblLeftStatus.Visible = true;
-                        }
-                    }
-                    else
-                    {
-                        // 已轮过，跳到下一个
-                        _turnNum++;
-                    }
-                    break;
-                case 3:
-                    // 玩家已轮过，跳到下一个
-                    _turnNum = 1;
-                    break;
-            }
-        }
-
-        FinishGrabbing(_grabSwitchDiZhu);
+        ProcessGrabbing(ref _grabBl1, ref _grabBl2, ref _grabBl3, ref _grabCount, ref _grabSwitchDiZhu);
     }
 
     private void OnHintClick()
@@ -2256,6 +2262,8 @@ public class GameScreen : ScreenBase
     {
         juese.ShangShouPai.Clear();
         _chupai.format(whatPai);
+        if (_chupai.PaiType == (int)Guize.炸弹 || _chupai.PaiType == (int)Guize.天炸)
+            DoubleOfflineMultiple();
         PlaySound(SoundCue.Deal);
 
         // 更新显示
@@ -2807,10 +2815,10 @@ public class GameScreen : ScreenBase
     {
         if (_state == GameState.GRABBING && _waitingGrabResponse)
         {
-            // 叫地主
+            // 抢地主
             SendGrabRequest(true);
             ButtonSet(false, false, false, false, false);
-            _lblMyStatus.Text = "叫地主";
+            _lblMyStatus.Text = "抢地主";
             _lblMyStatus.Visible = true;
             _waitingGrabResponse = false;
         }
@@ -2828,10 +2836,10 @@ public class GameScreen : ScreenBase
     {
         if (_state == GameState.GRABBING && _waitingGrabResponse)
         {
-            // 不叫地主
+            // 不抢地主
             SendGrabRequest(false);
             ButtonSet(false, false, false, false, false);
-            _lblMyStatus.Text = "不叫";
+            _lblMyStatus.Text = "不抢";
             _lblMyStatus.Visible = true;
             _waitingGrabResponse = false;
         }
@@ -2925,6 +2933,10 @@ public class GameScreen : ScreenBase
     private void OnGetCardsReceived(List<CardDto> cardList)
     {
         RefreshOnlinePlayerInfo();
+        _landlordId = -1;
+        _currentMultiple = 1;
+        _lastDealDto = null;
+        _lastPaiType = 0;
 
         // 存储手牌数据（按权重降序排序）
         SyncOnlineHandFromServerCards(cardList);
@@ -3047,7 +3059,7 @@ public class GameScreen : ScreenBase
         }
         else
         {
-            _lblStatus.Text = "等待叫地主";
+            _lblStatus.Text = $"等待抢地主  x{_currentMultiple}";
         }
     }
 
@@ -3076,17 +3088,17 @@ public class GameScreen : ScreenBase
 
         if (IsMyTurn(userId))
         {
-            // 轮到自己叫地主
-            ButtonSet(1, true); // 显示叫地主/不叫按钮
-            _lblStatus.Text = "请选择是否叫地主";
+            // 轮到自己抢地主
+            ButtonSet(1, true);
+            _lblStatus.Text = $"请选择是否抢地主  x{_currentMultiple}";
             _lblMyStatus.Text = "";
             _lblMyStatus.Visible = true;
             _waitingGrabResponse = true;
         }
         else
         {
-            // 其他玩家叫地主（显示等待状态）
-            _lblStatus.Text = "等待对手选择";
+            // 其他玩家抢地主（显示等待状态）
+            _lblStatus.Text = $"等待对手选择  x{_currentMultiple}";
             _waitingGrabResponse = false;
 
             // 在对应位置显示思考状态
@@ -3113,7 +3125,7 @@ public class GameScreen : ScreenBase
         MarkOnlineLandlord(grabDto.UserId);
 
         // 显示抢地主结果
-        _lblStatus.Text = $"{GetPlayerDisplayName(grabDto.UserId)} 成为地主";
+        _lblStatus.Text = $"{GetPlayerDisplayName(grabDto.UserId)} 成为地主  x{_currentMultiple}";
 
         // 清空思考状态标签
         _lblLeftStatus.Visible = false;
@@ -3404,6 +3416,8 @@ public class GameScreen : ScreenBase
         _animManager.Clear();
         _showPlayingCards = false;
         _dealAnimationPlaying = false;
+        if (overDto.Multiple > 0)
+            _currentMultiple = overDto.Multiple;
 
         // 计算胜负
         int myId = GetMyUserId();
@@ -3441,6 +3455,29 @@ public class GameScreen : ScreenBase
     private int[] CalculateOnlineBeanDeltas(OverDto overDto, int[] playerIds)
     {
         var deltas = new int[playerIds.Length];
+        if (overDto.BeanDeltaUserIds != null && overDto.BeanDeltas != null)
+        {
+            var deltaByUserId = new Dictionary<int, int>();
+            int count = Math.Min(overDto.BeanDeltaUserIds.Count, overDto.BeanDeltas.Count);
+            for (int i = 0; i < count; i++)
+            {
+                int userId = overDto.BeanDeltaUserIds[i];
+                if (userId > 0)
+                    deltaByUserId[userId] = overDto.BeanDeltas[i];
+            }
+
+            if (deltaByUserId.Count > 0)
+            {
+                for (int i = 0; i < playerIds.Length; i++)
+                {
+                    if (deltaByUserId.TryGetValue(playerIds[i], out int beanDelta))
+                        deltas[i] = beanDelta;
+                }
+
+                return deltas;
+            }
+        }
+
         int basePoints = Math.Max(0, overDto.BeenCount);
         if (basePoints == 0)
             return deltas;
@@ -3550,7 +3587,9 @@ public class GameScreen : ScreenBase
     /// </summary>
     private void OnMultipleChangeReceived(int multiple)
     {
-        // 可用于显示倍数变化动画（暂不实现）
+        _currentMultiple = Math.Max(1, multiple);
+        _lblStatus.Visible = true;
+        _lblStatus.Text = $"当前倍率 x{_currentMultiple}";
     }
 
     /// <summary>

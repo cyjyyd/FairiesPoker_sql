@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
-using Microsoft.Xna.Framework.Audio;
 using NAudio.Wave;
 
 namespace FairiesPoker.MG.Core;
@@ -25,8 +25,8 @@ public class AudioManager : IDisposable
     private float _bgmVolume = 0.5f;
     private float _sfxVolume = 0.8f;
 
-    // 音效缓存
-    private readonly Dictionary<string, SoundEffect> _soundEffects = new();
+    private readonly object _sfxLock = new();
+    private readonly List<SfxPlayback> _activeSfx = new();
 
     // 设置
     public bool BackMusicEnabled { get; set; } = true;
@@ -44,7 +44,15 @@ public class AudioManager : IDisposable
     public float SfxVolume
     {
         get => _sfxVolume;
-        set => _sfxVolume = Clamp01(value);
+        set
+        {
+            _sfxVolume = Clamp01(value);
+            lock (_sfxLock)
+            {
+                foreach (var sfx in _activeSfx)
+                    sfx.Reader.Volume = _sfxVolume;
+            }
+        }
     }
 
     public void ApplySettings(bool backMusicEnabled, bool soundFXEnabled, float bgmVolume, float sfxVolume)
@@ -119,27 +127,61 @@ public class AudioManager : IDisposable
     /// </summary>
     public void PlaySfx(SoundCue cue)
     {
-        PlaySfx(GetSoundPath(cue));
+        PlaySfx(GetSoundPath(cue), GetCueGain(cue));
     }
 
     public void PlaySfx(string filePath)
     {
+        PlaySfx(filePath, 1f);
+    }
+
+    private void PlaySfx(string filePath, float gain)
+    {
         if (!SoundFXEnabled || !File.Exists(filePath)) return;
 
+        SfxPlayback? playback = null;
+        bool addedToActiveList = false;
         try
         {
-            if (!_soundEffects.TryGetValue(filePath, out var effect))
+            var reader = new AudioFileReader(filePath)
             {
-                using var fs = System.IO.File.OpenRead(filePath);
-                effect = SoundEffect.FromStream(fs);
-                _soundEffects[filePath] = effect;
+                Volume = ClampVolume(SfxVolume * gain)
+            };
+            var output = new WaveOutEvent();
+            playback = new SfxPlayback(output, reader);
+
+            output.Init(reader);
+            output.PlaybackStopped += (_, _) => DisposeSfxPlayback(playback);
+
+            lock (_sfxLock)
+            {
+                _activeSfx.Add(playback);
+                addedToActiveList = true;
             }
-            effect.Play(SfxVolume, 0, 0);
+
+            output.Play();
         }
-        catch
+        catch (Exception ex)
         {
-            // 忽略音频错误
+            if (playback != null)
+            {
+                if (addedToActiveList)
+                    DisposeSfxPlayback(playback);
+                else
+                    playback.Dispose();
+            }
+            Debug.WriteLine($"Failed to play sound effect '{filePath}': {ex.Message}");
         }
+    }
+
+    private void DisposeSfxPlayback(SfxPlayback playback)
+    {
+        lock (_sfxLock)
+        {
+            _activeSfx.Remove(playback);
+        }
+
+        playback.Dispose();
     }
 
     private static string GetSoundPath(SoundCue cue)
@@ -156,6 +198,23 @@ public class AudioManager : IDisposable
         return System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", fileName);
     }
 
+    private static float GetCueGain(SoundCue cue)
+    {
+        return cue switch
+        {
+            SoundCue.Deal => 1.6f,
+            SoundCue.Click => 1.2f,
+            _ => 1f
+        };
+    }
+
+    private static float ClampVolume(float value)
+    {
+        if (value < 0f) return 0f;
+        if (value > 2f) return 2f;
+        return value;
+    }
+
     private static float Clamp01(float value)
     {
         if (value < 0f) return 0f;
@@ -166,8 +225,36 @@ public class AudioManager : IDisposable
     public void Dispose()
     {
         StopBgm();
-        foreach (var sfx in _soundEffects.Values)
-            sfx.Dispose();
-        _soundEffects.Clear();
+        lock (_sfxLock)
+        {
+            foreach (var sfx in _activeSfx.ToArray())
+                sfx.Dispose();
+            _activeSfx.Clear();
+        }
+    }
+
+    private sealed class SfxPlayback : IDisposable
+    {
+        public SfxPlayback(WaveOutEvent output, AudioFileReader reader)
+        {
+            Output = output;
+            Reader = reader;
+        }
+
+        public WaveOutEvent Output { get; }
+        public AudioFileReader Reader { get; }
+
+        public void Dispose()
+        {
+            try
+            {
+                Output.Stop();
+                Output.Dispose();
+                Reader.Dispose();
+            }
+            catch
+            {
+            }
+        }
     }
 }

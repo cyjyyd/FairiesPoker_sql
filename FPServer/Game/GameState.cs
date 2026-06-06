@@ -58,9 +58,6 @@ namespace FPServer.Game
         // 是否有人抢了地主
         private bool _someoneGrabbed = false;
 
-        // 第一个抢地主的玩家（如果没人抢，由他当地主）
-        private int _firstGrabUserId = -1;
-
         public GameState(ILogger<GameState> logger)
         {
             _logger = logger;
@@ -82,7 +79,6 @@ namespace FPServer.Game
             LastDeal = null;
             _grabTurnIndex = 0;
             _someoneGrabbed = false;
-            _firstGrabUserId = -1;
 
             // 初始化玩家手牌
             foreach (var userId in playerIds)
@@ -206,50 +202,24 @@ namespace FPServer.Game
         /// </summary>
         /// <param name="userId">玩家ID</param>
         /// <param name="grab">是否抢</param>
-        /// <returns>返回是否抢地主成功（-1表示继续下一轮，其他表示抢地主的玩家ID）</returns>
+        /// <returns>返回抢地主结果：-1表示继续，0表示无人抢需重发，其他表示最终地主ID。</returns>
         public int ProcessGrab(int userId, bool grab)
         {
             _logger.LogInformation("玩家 {UserId} 抢地主: {Grab}", userId, grab);
 
-            // 记录第一个抢地主的玩家
-            if (_firstGrabUserId == -1)
-            {
-                _firstGrabUserId = userId;
-            }
-
             if (grab)
             {
-                // 抢地主成功
+                // 先记录候选地主，等所有玩家都表态后由最后一个抢地主的玩家成为地主。
                 _someoneGrabbed = true;
                 LandlordId = userId;
-
-                // 给地主添加底牌
-                foreach (var card in _tableCards)
-                {
-                    _playerCards[userId].Add(card);
-                }
-
-                // 排序手牌
-                SortPlayerCards(userId);
-
-                State = GameStateEnum.PLAYING;
-                CurrentTurnUserId = userId;
-
-                _logger.LogInformation("玩家 {UserId} 抢地主成功，获得底牌", userId);
-                return userId;
             }
 
-            // 不抢，继续下一个
             _grabTurnIndex++;
 
             if (_grabTurnIndex >= _grabOrder.Count)
             {
-                // 所有人都不抢
-                if (!_someoneGrabbed && _firstGrabUserId != -1)
+                if (_someoneGrabbed && LandlordId > 0)
                 {
-                    // 第一个玩家强制成为地主
-                    LandlordId = _firstGrabUserId;
-
                     foreach (var card in _tableCards)
                     {
                         _playerCards[LandlordId].Add(card);
@@ -260,11 +230,13 @@ namespace FPServer.Game
                     State = GameStateEnum.PLAYING;
                     CurrentTurnUserId = LandlordId;
 
-                    _logger.LogInformation("没有人抢地主，玩家 {UserId} 强制成为地主", LandlordId);
+                    _logger.LogInformation("抢地主结束，玩家 {UserId} 成为地主", LandlordId);
                     return LandlordId;
                 }
 
-                return -1; // 异常情况
+                State = GameStateEnum.WAITING;
+                _logger.LogInformation("没有人抢地主，本局重新发牌");
+                return 0;
             }
 
             return -1; // 继续下一轮

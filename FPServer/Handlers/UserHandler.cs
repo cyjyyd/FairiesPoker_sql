@@ -16,12 +16,18 @@ namespace FPServer.Handlers
         private readonly MessageHandler _messageHandler;
         private readonly ILogger<UserHandler> _logger;
         private readonly OnlineUserCache _userCache;
+        private readonly UserEconomyStore _userEconomyStore;
 
-        public UserHandler(MessageHandler messageHandler, ILoggerFactory loggerFactory, OnlineUserCache userCache)
+        public UserHandler(
+            MessageHandler messageHandler,
+            ILoggerFactory loggerFactory,
+            OnlineUserCache userCache,
+            UserEconomyStore userEconomyStore)
         {
             _messageHandler = messageHandler;
             _logger = loggerFactory.CreateLogger<UserHandler>();
             _userCache = userCache;
+            _userEconomyStore = userEconomyStore;
         }
 
         public void Handle(ClientConnection client, int subCode, object value)
@@ -78,15 +84,27 @@ namespace FPServer.Handlers
 
                 if (await reader.ReadAsync())
                 {
+                    int userId = reader.GetInt32("id");
+                    string nickname = reader.GetString("nickname");
+                    int beans = reader.GetInt32("beans");
+                    int winCount = reader.GetInt32("win_count");
+                    int loseCount = reader.GetInt32("lose_count");
+                    int runCount = reader.GetInt32("run_count");
+                    int level = reader.GetInt32("level");
+                    int exp = reader.GetInt32("exp");
+                    reader.Close();
+
+                    beans = await _userEconomyStore.TryGrantWeeklyReliefAsync(userId, beans);
+
                     var userDto = new UserDto(
-                        reader.GetInt32("id"),
-                        reader.GetString("nickname"),
-                        reader.GetInt32("beans"),
-                        reader.GetInt32("win_count"),
-                        reader.GetInt32("lose_count"),
-                        reader.GetInt32("run_count"),
-                        reader.GetInt32("level"),
-                        reader.GetInt32("exp"));
+                        userId,
+                        nickname,
+                        beans,
+                        winCount,
+                        loseCount,
+                        runCount,
+                        level,
+                        exp);
 
                     _userCache.UpdateUserData(client.UserId, userDto);
 

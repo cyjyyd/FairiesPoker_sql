@@ -76,6 +76,9 @@ namespace FPServer.Handlers
         /// </summary>
         private void HandleEnter(ClientConnection client)
         {
+            if (!LeaveCurrentWaitingRoom(client.UserId))
+                return;
+
             var room = _roomManager.FindOrCreateRoom();
             var userDto = _userCache.GetUserData(client.UserId);
 
@@ -251,6 +254,9 @@ namespace FPServer.Handlers
         private void HandleCreateRoom(ClientConnection client, RoomDto roomDto)
         {
             var userDto = _userCache.GetUserData(client.UserId);
+            if (!LeaveCurrentWaitingRoom(client.UserId))
+                return;
+
             var room = _roomManager.CreateRoom(client.UserId, roomDto?.RoomName ?? $"{userDto.Name}的房间");
 
             if (_roomManager.AddPlayerToRoom(room, client.UserId, userDto))
@@ -282,6 +288,17 @@ namespace FPServer.Handlers
             {
                 return;
             }
+
+            var currentRoom = _roomManager.GetRoomByPlayerId(client.UserId);
+            if (currentRoom != null && currentRoom.RoomId == room.RoomId)
+            {
+                var currentRoomMsg = new SocketMsg(OpCode.MATCH, RoomCode.UPDATE_BRO, room.GetMatchRoomDtoForPlayer(client.UserId));
+                _messageHandler.Send(client, currentRoomMsg);
+                return;
+            }
+
+            if (!LeaveCurrentWaitingRoom(client.UserId))
+                return;
 
             var userDto = _userCache.GetUserData(client.UserId);
             if (_roomManager.AddPlayerToRoom(room, client.UserId, userDto))
@@ -350,6 +367,34 @@ namespace FPServer.Handlers
             var roomList = rooms.Select(r => r.GetRoomDto()).ToList();
             var msg = new SocketMsg(OpCode.MATCH, RoomCode.GET_ROOMS_SRES, roomList);
             _messageHandler.Broadcast(msg);
+        }
+
+        private bool LeaveCurrentWaitingRoom(int userId)
+        {
+            var currentRoom = _roomManager.GetRoomByPlayerId(userId);
+            if (currentRoom == null)
+                return true;
+
+            if (!currentRoom.IsWaiting())
+            {
+                _logger.LogWarning("玩家 {UserId} 正在对局中，不能切换房间", userId);
+                return false;
+            }
+
+            _roomManager.RemovePlayerFromRoom(currentRoom, userId);
+            _logger.LogInformation("玩家 {UserId} 切换房间前离开旧房间: {RoomId}", userId, currentRoom.RoomId);
+
+            if (currentRoom.GetPlayerCount() > 0)
+            {
+                BroadcastRoomUpdate(currentRoom);
+            }
+            else
+            {
+                _roomManager.RemoveRoom(currentRoom.RoomId);
+            }
+
+            BroadcastRoomListUpdate();
+            return true;
         }
 
         #endregion

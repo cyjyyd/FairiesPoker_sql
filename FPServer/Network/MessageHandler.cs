@@ -26,6 +26,8 @@ namespace FPServer.Network
         private readonly AvatarHandler _avatarHandler;
         private readonly OnlineUserCache _userCache;
         private readonly RoomManager _roomManager;
+        private readonly GameEconomy _economy;
+        private readonly UserEconomyStore _userEconomyStore;
 
         public MessageHandler(ServerPeer server, ILoggerFactory loggerFactory, IConfiguration configuration)
         {
@@ -34,11 +36,13 @@ namespace FPServer.Network
             _logger = loggerFactory.CreateLogger<MessageHandler>();
             _userCache = new OnlineUserCache();
             _roomManager = new RoomManager(loggerFactory);
-            _accountHandler = new AccountHandler(this, loggerFactory, _userCache);
-            _userHandler = new UserHandler(this, loggerFactory, _userCache);
+            _economy = GameEconomy.FromConfiguration(configuration);
+            _userEconomyStore = new UserEconomyStore(_economy, loggerFactory.CreateLogger<UserEconomyStore>());
+            _accountHandler = new AccountHandler(this, loggerFactory, _userCache, _economy, _userEconomyStore);
+            _userHandler = new UserHandler(this, loggerFactory, _userCache, _userEconomyStore);
             _matchHandler = new MatchHandler(this, loggerFactory, _userCache, _roomManager);
             _chatHandler = new ChatHandler(this, loggerFactory, _userCache, _roomManager);
-            _fightHandler = new FightHandler(this, loggerFactory, _userCache, _roomManager);
+            _fightHandler = new FightHandler(this, loggerFactory, _userCache, _roomManager, _economy, _userEconomyStore);
             _avatarHandler = new AvatarHandler(this, loggerFactory, _userCache, configuration);
         }
 

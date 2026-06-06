@@ -243,14 +243,18 @@ namespace FPServer
   },
   ""Game"": {
     ""InitialBeans"": 1000,
-    ""BeansPerWin"": 100,
-    ""BeansPerLose"": 50
+    ""BaseStake"": 20,
+    ""MaxMultiple"": 16,
+    ""SingleGameLossLimitPercent"": 30,
+    ""WeeklyReliefThreshold"": 500,
+    ""WeeklyReliefBeans"": 1000,
+    ""WeeklyReliefCooldownDays"": 7
   },
   ""Avatar"": {
     ""AutoApprove"": true
   }
 }";
-            File.WriteAllText(path, defaultConfig);
+            File.WriteAllText(path, defaultConfig, System.Text.Encoding.UTF8);
         }
     }
 }

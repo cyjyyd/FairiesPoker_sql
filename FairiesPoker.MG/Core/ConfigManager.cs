@@ -13,6 +13,8 @@ public static class ConfigManager
     public const int ThemeCount = 6;
     public const int DefaultWindowWidth = 1280;
     public const int DefaultWindowHeight = 720;
+    public const string DefaultServerIP = "www.fairybcd.top";
+    public const int DefaultServerPort = 40960;
 
     public static readonly (int Width, int Height)[] ResolutionPresets =
     {
@@ -37,8 +39,8 @@ public static class ConfigManager
     public static bool FullScreen { get; set; } = false;
 
     // 网络设置
-    public static string ServerIP { get; set; } = "127.0.0.1";
-    public static int ServerPort { get; set; } = 40960;
+    public static string ServerIP { get; set; } = DefaultServerIP;
+    public static int ServerPort { get; set; } = DefaultServerPort;
 
     // 卡牌图像路径
     public static string DefaultCardImagePath => System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Pokers", "5");
@@ -70,8 +72,8 @@ public static class ConfigManager
             WindowHeight = int.Parse(ReadIniData("Settings", "Height", "720", path));
             BorderlessWindow = ReadIniData("Settings", "Borderless", "0", path) == "1";
             FullScreen = ReadIniData("Settings", "FullScreen", "0", path) == "1";
-            ServerIP = ReadIniData("Network", "IP", "127.0.0.1", path);
-            string portStr = ReadIniData("Network", "Port", "40960", path);
+            ServerIP = ReadIniData("Network", "IP", DefaultServerIP, path);
+            string portStr = ReadIniData("Network", "Port", DefaultServerPort.ToString(), path);
             if (int.TryParse(portStr, out int port)) ServerPort = port;
         }
         catch
@@ -133,6 +135,8 @@ public static class ConfigManager
         SoundFXVolume = Clamp01(SoundFXVolume);
         if (WindowWidth <= 0) WindowWidth = DefaultWindowWidth;
         if (WindowHeight <= 0) WindowHeight = DefaultWindowHeight;
+        if (string.IsNullOrWhiteSpace(ServerIP)) ServerIP = DefaultServerIP;
+        if (ServerPort <= 0 || ServerPort > 65535) ServerPort = DefaultServerPort;
         if (FullScreen) BorderlessWindow = false;
     }
 

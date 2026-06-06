@@ -15,12 +15,15 @@ public class MainMenuScreen : ScreenBase
 {
     private Texture2D? _bgTexture;
     private Texture2D? _logoTexture;
+    private Texture2D _logoHoverTexture;
     private int _loadedTheme = -1;
+    private bool _logoHovered;
 
     private readonly UILabel _singlePlayer = new();
     private readonly UILabel _multiPlayer = new();
     private readonly UILabel _settingsLabel = new();
     private readonly UILabel _quitLabel = new();
+    private static readonly Rectangle LogoBounds = new(157, 90, 968, 195);
 
     private Point _mousePos;
     private bool _isDragging;
@@ -40,6 +43,10 @@ public class MainMenuScreen : ScreenBase
         // Logo
         string logoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "FP.png");
         _logoTexture = TextureManager.Load("_logo", logoPath);
+        string logoHoverPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "FPR.png");
+        _logoHoverTexture = System.IO.File.Exists(logoHoverPath)
+            ? TextureManager.Load("_logo_hover", logoHoverPath)
+            : _logoTexture;
 
         // 初始化菜单文字 (位置对应原Main.cs)
         _singlePlayer.Position = new Vector2(161, 335);
@@ -160,9 +167,10 @@ public class MainMenuScreen : ScreenBase
         }
 
         // Logo
-        if (_logoTexture != null)
+        var logoTexture = _logoHovered && _logoHoverTexture != null ? _logoHoverTexture : _logoTexture;
+        if (logoTexture != null)
         {
-            spriteBatch.Draw(_logoTexture, new Rectangle(157, 90, 968, 195), color);
+            spriteBatch.Draw(logoTexture, LogoBounds, color);
         }
 
         // 菜单选项
@@ -195,6 +203,7 @@ public class MainMenuScreen : ScreenBase
         bool mpHover = _multiPlayer.Bounds.Contains(_mousePos);
         bool sHover = _settingsLabel.Bounds.Contains(_mousePos);
         bool qHover = _quitLabel.Bounds.Contains(_mousePos);
+        _logoHovered = LogoBounds.Contains(_mousePos);
 
         _singlePlayer.TextColor = spHover ? new Color(100, 149, 237) : Color.OrangeRed;
         _multiPlayer.TextColor = mpHover ? new Color(100, 149, 237) : Color.OrangeRed;
@@ -204,7 +213,9 @@ public class MainMenuScreen : ScreenBase
         // 点击事件
         if (input.LeftMouseReleased)
         {
-            if (spHover)
+            if (_logoHovered)
+                OnAbout();
+            else if (spHover)
                 OnSinglePlayer();
             else if (mpHover)
                 OnMultiPlayer();
@@ -233,6 +244,12 @@ public class MainMenuScreen : ScreenBase
     {
         Game.AudioManager?.PlaySfx(SoundCue.Click);
         ScreenManager.Push(new SettingsScreen(Game, ScreenManager));
+    }
+
+    private void OnAbout()
+    {
+        Game.AudioManager?.PlaySfx(SoundCue.Click);
+        ScreenManager.Push(new AboutScreen(Game, ScreenManager));
     }
 
     private void OnQuit()
