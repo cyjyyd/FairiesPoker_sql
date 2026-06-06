@@ -1,75 +1,36 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Drawing.Text;
-using System.Threading.Tasks;
+using System;
 using System.ComponentModel;
-using System.Windows.Forms;
 
 namespace FairiesPoker
 {
     public enum Path
     {
         [Description("奇妙仙子")]
-        UI_TB=1,
+        UI_TB = 1,
         [Description("失落的宝藏")]
-        UI_LT=2,
+        UI_LT = 2,
         [Description("拯救精灵大作战")]
-        UI_FR=3,
+        UI_FR = 3,
         [Description("羽翼之谜")]
-        UI_SW=4,
+        UI_SW = 4,
         [Description("海盗仙子")]
-        UI_PF=5,
+        UI_PF = 5,
         [Description("永无兽传奇")]
-        UI_LN=6
-
+        UI_LN = 6
     }
+
     class UI
     {
-        private Image button;
-        private Image buttonpress;
-        private Image background;
-        private string apppath = Application.StartupPath;
         private string uipath = "";
-        private string fpath = "";
         public int uiselect = 0;
-        public UI()
-        {
-            
-        }
-        public Image Button
-        {
-            get { return button; }
-            set { button = value; }
-        }
-        public Image Buttonpress
-        {
-            get { return buttonpress; }
-            set { buttonpress = value; }
-        }
-        public Image Background
-        {
-            get { return background; }
-            set { background = value; }
-        }
 
-        public bool setfont (Control c)
+        public string ThemeFolder => uipath;
+
+        public bool setfont(object c)
         {
-            PrivateFontCollection font = new PrivateFontCollection();
-            try
-            {
-                font.AddFontFile(fpath + "font.ttf");
-                Font myfont = new Font(font.Families[0].Name,c.Font.Size,c.Font.Style);
-                c.Font = myfont;
-            }
-            catch (Exception)
-            {
-                MessageBox.Show("字体不存在或加载失败，程序将以默认字体显示，请检查文件是否完整！","Error",MessageBoxButtons.OK,MessageBoxIcon.Error);
-                return false;
-            }
             return true;
         }
+
         public void setUI(int path)
         {
             switch (path)
@@ -96,36 +57,6 @@ namespace FairiesPoker
                     uipath = Path.UI_PF.ToString(); uiselect = Convert.ToInt32(Path.UI_PF);
                     break;
             }
-            fpath = apppath + "\\" + uipath + "\\";
-            button = LoadThemeImage("btn1.png") ?? new Bitmap(1, 1);
-            buttonpress = LoadThemeImage("btn2.png") ?? new Bitmap(1, 1);
-            background = LoadThemeImage("main seq.jpg") ?? new Bitmap(1, 1);
-        }
-
-        private Image LoadThemeImage(string fileName)
-        {
-            string currentPath = System.IO.Path.Combine(fpath, fileName);
-            string defaultPath = System.IO.Path.Combine(apppath, Path.UI_PF.ToString(), fileName);
-
-            foreach (string path in new[] { currentPath, defaultPath })
-            {
-                if (!System.IO.File.Exists(path))
-                {
-                    continue;
-                }
-
-                try
-                {
-                    using var stream = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite);
-                    using var source = Image.FromStream(stream);
-                    return new Bitmap(source);
-                }
-                catch
-                {
-                }
-            }
-
-            return null;
         }
     }
 }

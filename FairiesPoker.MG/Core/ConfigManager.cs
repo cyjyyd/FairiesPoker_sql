@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
-using System.Runtime.InteropServices;
-using FairiesPoker;
+using System.IO;
+using System.Text;
+using IOPath = System.IO.Path;
 
 namespace FairiesPoker.MG.Core;
 
@@ -10,6 +12,7 @@ namespace FairiesPoker.MG.Core;
 /// </summary>
 public static class ConfigManager
 {
+    private const string AppName = "FairiesPoker.MG";
     public const int ThemeCount = 6;
     public const int DefaultWindowWidth = 1280;
     public const int DefaultWindowHeight = 720;
@@ -42,39 +45,52 @@ public static class ConfigManager
     public static string ServerIP { get; set; } = DefaultServerIP;
     public static int ServerPort { get; set; } = DefaultServerPort;
 
+    public static string UserDataDirectory
+    {
+        get
+        {
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            if (string.IsNullOrWhiteSpace(appData))
+                return AppContext.BaseDirectory;
+
+            return IOPath.Combine(appData, AppName);
+        }
+    }
+
+    public static string ConfigFilePath => ResolveConfigFilePath();
+
     // 卡牌图像路径
-    public static string DefaultCardImagePath => System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Pokers", "5");
+    public static string DefaultCardImagePath => IOPath.Combine(AppContext.BaseDirectory, "Pokers", "5");
     public static string CardImagePath => ResolveDirectory(
-        System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Pokers", UITheme.ToString()),
+        IOPath.Combine(AppContext.BaseDirectory, "Pokers", UITheme.ToString()),
         DefaultCardImagePath);
 
     // 主题资源路径
-    public static string ThemePath => System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UI_" + GetThemeSuffix(UITheme));
+    public static string ThemePath => IOPath.Combine(AppContext.BaseDirectory, "UI_" + GetThemeSuffix(UITheme));
     public static string ThemeMusicPath => ResolveFile(
-        System.IO.Path.Combine(ThemePath, "background.mp3"),
-        System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UI_PF", "background.mp3"));
+        IOPath.Combine(ThemePath, "background.mp3"),
+        IOPath.Combine(AppContext.BaseDirectory, "UI_PF", "background.mp3"));
 
     // 加载配置
     public static void Load()
     {
         try
         {
-            // 复用原有config.cs的读取逻辑
-            string path = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.ini");
-            if (!System.IO.File.Exists(path)) return;
+            string path = ConfigFilePath;
+            if (!File.Exists(path)) return;
 
-            BackMusic = ParseBool(ReadIniData("Settings", "BackMusic", "1", path), true);
-            SoundFX = ParseBool(ReadIniData("Settings", "SoundFX", "1", path), true);
-            BackMusicVolume = ParseFloat(ReadIniData("Settings", "BackMusicVolume", "0.5", path), 0.5f);
-            SoundFXVolume = ParseFloat(ReadIniData("Settings", "SoundFXVolume", "0.8", path), 0.8f);
-            UITheme = int.Parse(ReadIniData("Settings", "UI", "5", path));
-            WindowWidth = int.Parse(ReadIniData("Settings", "Width", "1280", path));
-            WindowHeight = int.Parse(ReadIniData("Settings", "Height", "720", path));
-            BorderlessWindow = ReadIniData("Settings", "Borderless", "0", path) == "1";
-            FullScreen = ReadIniData("Settings", "FullScreen", "0", path) == "1";
-            ServerIP = ReadIniData("Network", "IP", DefaultServerIP, path);
-            string portStr = ReadIniData("Network", "Port", DefaultServerPort.ToString(), path);
-            if (int.TryParse(portStr, out int port)) ServerPort = port;
+            var data = ReadIniFile(path);
+            BackMusic = ParseBool(GetIniValue(data, "Settings", "BackMusic", "1"), true);
+            SoundFX = ParseBool(GetIniValue(data, "Settings", "SoundFX", "1"), true);
+            BackMusicVolume = ParseFloat(GetIniValue(data, "Settings", "BackMusicVolume", "0.5"), 0.5f);
+            SoundFXVolume = ParseFloat(GetIniValue(data, "Settings", "SoundFXVolume", "0.8"), 0.8f);
+            UITheme = ParseInt(GetIniValue(data, "Settings", "UI", "5"), 5);
+            WindowWidth = ParseInt(GetIniValue(data, "Settings", "Width", GetIniValue(data, "Video", "ScreenWidth", DefaultWindowWidth.ToString())), DefaultWindowWidth);
+            WindowHeight = ParseInt(GetIniValue(data, "Settings", "Height", GetIniValue(data, "Video", "ScreenHeight", DefaultWindowHeight.ToString())), DefaultWindowHeight);
+            BorderlessWindow = ParseBool(GetIniValue(data, "Settings", "Borderless", "0"), false);
+            FullScreen = ParseBool(GetIniValue(data, "Settings", "FullScreen", GetIniValue(data, "Video", "FullScreen", "0")), false);
+            ServerIP = GetIniValue(data, "Network", "IP", GetIniValue(data, "Network", "IPAddress", DefaultServerIP));
+            ServerPort = ParseInt(GetIniValue(data, "Network", "Port", DefaultServerPort.ToString()), DefaultServerPort);
         }
         catch
         {
@@ -89,18 +105,25 @@ public static class ConfigManager
     {
         try
         {
-            string path = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.ini");
-            WriteIniData("Settings", "BackMusic", BackMusic ? "1" : "0", path);
-            WriteIniData("Settings", "SoundFX", SoundFX ? "1" : "0", path);
-            WriteIniData("Settings", "BackMusicVolume", BackMusicVolume.ToString("0.00", CultureInfo.InvariantCulture), path);
-            WriteIniData("Settings", "SoundFXVolume", SoundFXVolume.ToString("0.00", CultureInfo.InvariantCulture), path);
-            WriteIniData("Settings", "UI", UITheme.ToString(), path);
-            WriteIniData("Settings", "Width", WindowWidth.ToString(), path);
-            WriteIniData("Settings", "Height", WindowHeight.ToString(), path);
-            WriteIniData("Settings", "Borderless", BorderlessWindow ? "1" : "0", path);
-            WriteIniData("Settings", "FullScreen", FullScreen ? "1" : "0", path);
-            WriteIniData("Network", "IP", ServerIP, path);
-            WriteIniData("Network", "Port", ServerPort.ToString(), path);
+            NormalizeWindowSize();
+            string path = ConfigFilePath;
+            string? directory = IOPath.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(directory))
+                Directory.CreateDirectory(directory);
+
+            var data = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+            SetIniValue(data, "Settings", "BackMusic", BackMusic ? "1" : "0");
+            SetIniValue(data, "Settings", "SoundFX", SoundFX ? "1" : "0");
+            SetIniValue(data, "Settings", "BackMusicVolume", BackMusicVolume.ToString("0.00", CultureInfo.InvariantCulture));
+            SetIniValue(data, "Settings", "SoundFXVolume", SoundFXVolume.ToString("0.00", CultureInfo.InvariantCulture));
+            SetIniValue(data, "Settings", "UI", UITheme.ToString(CultureInfo.InvariantCulture));
+            SetIniValue(data, "Settings", "Width", WindowWidth.ToString(CultureInfo.InvariantCulture));
+            SetIniValue(data, "Settings", "Height", WindowHeight.ToString(CultureInfo.InvariantCulture));
+            SetIniValue(data, "Settings", "Borderless", BorderlessWindow ? "1" : "0");
+            SetIniValue(data, "Settings", "FullScreen", FullScreen ? "1" : "0");
+            SetIniValue(data, "Network", "IP", ServerIP);
+            SetIniValue(data, "Network", "Port", ServerPort.ToString(CultureInfo.InvariantCulture));
+            WriteIniFile(path, data);
         }
         catch
         {
@@ -108,24 +131,20 @@ public static class ConfigManager
         }
     }
 
-    // INI读取 - 复用原有config.cs的P/Invoke逻辑
-    [System.Runtime.InteropServices.DllImport("kernel32")]
-    private static extern int GetPrivateProfileString(string section, string key, string def,
-        System.Text.StringBuilder retVal, int size, string filePath);
-
-    [System.Runtime.InteropServices.DllImport("kernel32")]
-    private static extern long WritePrivateProfileString(string section, string key, string val, string filePath);
-
-    private static string ReadIniData(string section, string key, string def, string path)
+    public static string GetUserDataPath(string fileName)
     {
-        var ret = new System.Text.StringBuilder(1024);
-        GetPrivateProfileString(section, key, def, ret, 1024, path);
-        return ret.ToString();
+        Directory.CreateDirectory(UserDataDirectory);
+        return IOPath.Combine(UserDataDirectory, fileName);
     }
 
-    private static void WriteIniData(string section, string key, string val, string path)
+    private static string ResolveConfigFilePath()
     {
-        WritePrivateProfileString(section, key, val, path);
+        string localConfig = IOPath.Combine(AppContext.BaseDirectory, "config.ini");
+        if (File.Exists(localConfig))
+            return localConfig;
+
+        Directory.CreateDirectory(UserDataDirectory);
+        return IOPath.Combine(UserDataDirectory, "config.ini");
     }
 
     public static void NormalizeWindowSize()
@@ -155,6 +174,13 @@ public static class ConfigManager
             : defaultValue;
     }
 
+    private static int ParseInt(string value, int defaultValue)
+    {
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed)
+            ? parsed
+            : defaultValue;
+    }
+
     private static float Clamp01(float value)
     {
         if (value < 0f) return 0f;
@@ -169,7 +195,7 @@ public static class ConfigManager
 
     private static string ResolveFile(string preferred, string fallback)
     {
-        return System.IO.File.Exists(preferred) ? preferred : fallback;
+        return File.Exists(preferred) ? preferred : fallback;
     }
 
     private static string GetThemeSuffix(int theme)
@@ -180,5 +206,72 @@ public static class ConfigManager
             5 => "PF", 6 => "LN",
             _ => "PF"
         };
+    }
+
+    private static Dictionary<string, Dictionary<string, string>> ReadIniFile(string path)
+    {
+        var data = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        string currentSection = string.Empty;
+
+        foreach (string rawLine in File.ReadAllLines(path, Encoding.UTF8))
+        {
+            string line = rawLine.Trim();
+            if (line.Length == 0 || line.StartsWith(';') || line.StartsWith('#'))
+                continue;
+
+            if (line.StartsWith('[') && line.EndsWith(']'))
+            {
+                currentSection = line[1..^1].Trim();
+                if (!data.ContainsKey(currentSection))
+                    data[currentSection] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                continue;
+            }
+
+            int separatorIndex = line.IndexOf('=');
+            if (separatorIndex <= 0)
+                continue;
+
+            string key = line[..separatorIndex].Trim();
+            string value = line[(separatorIndex + 1)..].Trim();
+            SetIniValue(data, currentSection, key, value);
+        }
+
+        return data;
+    }
+
+    private static void WriteIniFile(string path, Dictionary<string, Dictionary<string, string>> data)
+    {
+        var lines = new List<string>();
+        foreach (var section in data)
+        {
+            if (lines.Count > 0)
+                lines.Add(string.Empty);
+
+            lines.Add($"[{section.Key}]");
+            foreach (var pair in section.Value)
+            {
+                lines.Add($"{pair.Key}={pair.Value}");
+            }
+        }
+
+        File.WriteAllLines(path, lines, Encoding.UTF8);
+    }
+
+    private static string GetIniValue(Dictionary<string, Dictionary<string, string>> data, string section, string key, string defaultValue)
+    {
+        return data.TryGetValue(section, out var values) && values.TryGetValue(key, out string? value)
+            ? value
+            : defaultValue;
+    }
+
+    private static void SetIniValue(Dictionary<string, Dictionary<string, string>> data, string section, string key, string value)
+    {
+        if (!data.TryGetValue(section, out var values))
+        {
+            values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            data[section] = values;
+        }
+
+        values[key] = value;
     }
 }

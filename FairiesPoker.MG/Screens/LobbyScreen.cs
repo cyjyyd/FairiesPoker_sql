@@ -1333,10 +1333,10 @@ public class LobbyScreen : ScreenBase
         if (_avatarTextures.TryGetValue(avatarUrl, out var texture))
             return texture;
 
-        var cachedAvatar = AvatarHandler.GetCachedAvatar(avatarUrl);
+        var cachedAvatar = AvatarHandler.GetCachedAvatarData(avatarUrl);
         if (cachedAvatar != null)
         {
-            texture = CreateTextureFromImage(cachedAvatar);
+            texture = CreateTextureFromImageData(cachedAvatar);
             if (texture != null)
             {
                 _avatarTextures[avatarUrl] = texture;
@@ -1373,22 +1373,20 @@ public class LobbyScreen : ScreenBase
         if (_avatarTextures.ContainsKey(avatarUrl))
             return;
 
-        var cachedAvatar = AvatarHandler.GetCachedAvatar(avatarUrl);
+        var cachedAvatar = AvatarHandler.GetCachedAvatarData(avatarUrl);
         if (cachedAvatar == null)
             return;
 
-        var texture = CreateTextureFromImage(cachedAvatar);
+        var texture = CreateTextureFromImageData(cachedAvatar);
         if (texture != null)
             _avatarTextures[avatarUrl] = texture;
     }
 
-    private Texture2D? CreateTextureFromImage(System.Drawing.Image image)
+    private Texture2D? CreateTextureFromImageData(byte[] imageData)
     {
         try
         {
-            using var ms = new MemoryStream();
-            image.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-            ms.Position = 0;
+            using var ms = new MemoryStream(imageData);
             return Texture2D.FromStream(Game.GraphicsDevice, ms);
         }
         catch
@@ -1399,30 +1397,7 @@ public class LobbyScreen : ScreenBase
 
     private Texture2D? GetEmojiTexture(string emoji)
     {
-        if (_emojiTextures.TryGetValue(emoji, out var cached))
-            return cached;
-
-        try
-        {
-            using var bitmap = new System.Drawing.Bitmap(EmojiButtonSize, EmojiButtonSize, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-            using var graphics = System.Drawing.Graphics.FromImage(bitmap);
-            graphics.Clear(System.Drawing.Color.Transparent);
-            graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-            using var font = new System.Drawing.Font("Segoe UI Emoji", 23f, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Pixel);
-            using var brush = new System.Drawing.SolidBrush(System.Drawing.Color.White);
-            graphics.DrawString(emoji, font, brush, new System.Drawing.PointF(-3f, -1f));
-
-            using var ms = new MemoryStream();
-            bitmap.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-            ms.Position = 0;
-            var texture = Texture2D.FromStream(Game.GraphicsDevice, ms);
-            _emojiTextures[emoji] = texture;
-            return texture;
-        }
-        catch
-        {
-            return null;
-        }
+        return null;
     }
 
     private static bool IsPlayerSlotOccupied(string text)

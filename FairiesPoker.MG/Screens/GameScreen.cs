@@ -1815,10 +1815,10 @@ public class GameScreen : ScreenBase
         if (_avatarTextures.TryGetValue(avatarUrl, out var texture))
             return texture;
 
-        var cachedAvatar = AvatarHandler.GetCachedAvatar(avatarUrl);
+        var cachedAvatar = AvatarHandler.GetCachedAvatarData(avatarUrl);
         if (cachedAvatar != null)
         {
-            texture = CreateTextureFromImage(cachedAvatar);
+            texture = CreateTextureFromImageData(cachedAvatar);
             if (texture != null)
             {
                 _avatarTextures[avatarUrl] = texture;
@@ -1841,22 +1841,20 @@ public class GameScreen : ScreenBase
         if (_avatarTextures.ContainsKey(avatarUrl))
             return;
 
-        var cachedAvatar = AvatarHandler.GetCachedAvatar(avatarUrl);
+        var cachedAvatar = AvatarHandler.GetCachedAvatarData(avatarUrl);
         if (cachedAvatar == null)
             return;
 
-        var texture = CreateTextureFromImage(cachedAvatar);
+        var texture = CreateTextureFromImageData(cachedAvatar);
         if (texture != null)
             _avatarTextures[avatarUrl] = texture;
     }
 
-    private Texture2D? CreateTextureFromImage(System.Drawing.Image image)
+    private Texture2D? CreateTextureFromImageData(byte[] imageData)
     {
         try
         {
-            using var ms = new MemoryStream();
-            image.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-            ms.Position = 0;
+            using var ms = new MemoryStream(imageData);
             return Texture2D.FromStream(Game.GraphicsDevice, ms);
         }
         catch

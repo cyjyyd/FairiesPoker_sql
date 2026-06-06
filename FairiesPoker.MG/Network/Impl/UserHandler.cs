@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using Protocol.Code;
 using Protocol.Dto;
 using FairiesPoker;
+using FairiesPoker.MG.Core;
 using System.IO;
-using System.Windows.Forms;
 
 namespace FairiesPoker.MG.Network.Impl
 {
@@ -81,7 +81,7 @@ public class UserHandler : HandlerBase
     {
         try
         {
-            string tempPath = System.IO.Path.Combine(Application.StartupPath, "temp_avatar.dat");
+            string tempPath = ConfigManager.GetUserDataPath("temp_avatar.dat");
             if (System.IO.File.Exists(tempPath))
             {
                 byte[] avatarData = System.IO.File.ReadAllBytes(tempPath);

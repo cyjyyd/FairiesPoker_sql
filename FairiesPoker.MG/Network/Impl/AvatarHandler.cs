@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -15,9 +13,9 @@ namespace FairiesPoker.MG.Network.Impl
 public class AvatarHandler : HandlerBase
 {
     /// <summary>
-    /// 头像缓存：URL -> Image
+    /// 头像缓存：URL -> image bytes
     /// </summary>
-    private static Dictionary<string, Image> _avatarCache = new Dictionary<string, Image>();
+    private static Dictionary<string, byte[]> _avatarCache = new Dictionary<string, byte[]>();
 
     /// <summary>
     /// 正在下载中的头像URL
@@ -84,13 +82,9 @@ public class AvatarHandler : HandlerBase
         {
             try
             {
-                using (var ms = new MemoryStream(dto.ImageData))
+                lock (_avatarCache)
                 {
-                    var image = Image.FromStream(ms);
-                    lock (_avatarCache)
-                    {
-                        _avatarCache[dto.AvatarUrl] = new Bitmap(image);
-                    }
+                    _avatarCache[dto.AvatarUrl] = dto.ImageData.ToArray();
                 }
 
                 // 触发头像加载完成事件
@@ -138,15 +132,15 @@ public class AvatarHandler : HandlerBase
     /// <summary>
     /// 获取缓存的头像图片
     /// </summary>
-    public static Image GetCachedAvatar(string avatarUrl)
+    public static byte[] GetCachedAvatarData(string avatarUrl)
     {
         if (string.IsNullOrEmpty(avatarUrl))
             return null;
 
         lock (_avatarCache)
         {
-            if (_avatarCache.TryGetValue(avatarUrl, out var image))
-                return image;
+            if (_avatarCache.TryGetValue(avatarUrl, out var imageData))
+                return imageData;
         }
         return null;
     }
@@ -158,10 +152,6 @@ public class AvatarHandler : HandlerBase
     {
         lock (_avatarCache)
         {
-            foreach (var image in _avatarCache.Values)
-            {
-                image?.Dispose();
-            }
             _avatarCache.Clear();
         }
     }

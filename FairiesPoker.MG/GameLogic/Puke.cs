@@ -1,20 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
 namespace FairiesPoker
 {
     class Puke
     {
-        public Puke(int size, Image image)
+        public Puke(int size, object image)
             : this(size, 0, image)
         {
         }
 
-        public Puke(int size, int color, Image image)
+        public Puke(int size, int color, object image)
         {
             this.color = color;
             this.size = size;
@@ -29,9 +22,9 @@ namespace FairiesPoker
             set { index = value; }
         }
 
-        private static Image backImage;//背面图，静态
+        private static object backImage;//背面图，静态
 
-        public static Image BackImage
+        public static object BackImage
         {
             get { return Puke.backImage; }
             set { Puke.backImage = value; }
@@ -44,9 +37,9 @@ namespace FairiesPoker
             get { return color; }
         }
 
-        private Image image;//牌的正面图
+        private object image;//牌的正面图
 
-        public Image Image
+        public object Image
         {
             get { return image; }
         }
