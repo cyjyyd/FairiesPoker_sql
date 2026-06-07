@@ -43,4 +43,18 @@
     <Compile Remove="FontTest\**" />
     <None Include="FontTest\**" />
   </ItemGroup>
+  <Target Name="CreateMacOSAppBundle" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'osx-x64' Or '$(RuntimeIdentifier)' == 'osx-arm64'">
+    <PropertyGroup>
+      <MacOSAppBundleDir>$(PublishDir)FairiesPoker.app</MacOSAppBundleDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <MacOSAppSourceFiles Include="$(PublishDir)**\*" Exclude="$(MacOSAppBundleDir)\**\*" />
+      <MacOSAppDirectories Include="@(MacOSAppSourceFiles->'$(MacOSAppBundleDir)\Contents\MacOS\%(RecursiveDir)')" />
+    </ItemGroup>
+    <RemoveDir Directories="$(MacOSAppBundleDir)" />
+    <MakeDir Directories="$(MacOSAppBundleDir)\Contents\MacOS;$(MacOSAppBundleDir)\Contents\Resources;@(MacOSAppDirectories)" />
+    <Copy SourceFiles="@(MacOSAppSourceFiles)" DestinationFiles="@(MacOSAppSourceFiles->'$(MacOSAppBundleDir)\Contents\MacOS\%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Copy SourceFiles="MacOS\Info.plist" DestinationFiles="$(MacOSAppBundleDir)\Contents\Info.plist" />
+    <Copy SourceFiles="MacOS\FairiesPoker.icns" DestinationFiles="$(MacOSAppBundleDir)\Contents\Resources\FairiesPoker.icns" />
+  </Target>
 </Project>
