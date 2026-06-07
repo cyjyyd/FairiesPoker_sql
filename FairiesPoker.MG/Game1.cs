@@ -32,6 +32,8 @@ public class Game1 : Game
 
     protected override void Initialize()
     {
+        Window.Title = "FairiesPoker";
+        WindowIconManager.Apply(this);
         DisplayManager.Update(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
         TextureManager.Initialize(GraphicsDevice);
         UIResourceManager.Initialize(GraphicsDevice, ConfigManager.UITheme);

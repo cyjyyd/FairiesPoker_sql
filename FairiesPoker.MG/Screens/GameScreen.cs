@@ -1108,6 +1108,7 @@ public class GameScreen : ScreenBase
         {
             _turnNum = 2;
             // 地主(juese1)先出牌
+            SetOfflineTurnPrompt(_juese1);
             ComputerChuPai(_juese1);
             _bl_isFirst = true;
         }
@@ -1118,13 +1119,14 @@ public class GameScreen : ScreenBase
             ButtonSet(4, true);
             _state = GameState.MY_TURN;
             _bl_isFirst = true;
-            _lblStatus.Text = "请出牌";
+            SetOfflineTurnPrompt(_juese2);
             return;
         }
         else if (landlordPos == 3)
         {
             _turnNum = 3;
             // 地主(juese3)先出牌
+            SetOfflineTurnPrompt(_juese3);
             ComputerChuPai(_juese3);
             _bl_isFirst = true;
         }
@@ -1132,6 +1134,31 @@ public class GameScreen : ScreenBase
         // 进入出牌循环
         _state = GameState.AI_TURN;
         _aiAccumulator = 0;
+    }
+
+    private void SetOfflineTurnPrompt(Juese juese)
+    {
+        _lblStatus.Visible = true;
+        if (juese == _juese2)
+        {
+            _lblStatus.Text = "请出牌";
+        }
+        else if (juese == _juese1)
+        {
+            _lblStatus.Text = "电脑1出牌中";
+        }
+        else if (juese == _juese3)
+        {
+            _lblStatus.Text = "电脑2出牌中";
+        }
+    }
+
+    private void SetOnlineTurnPrompt(int userId)
+    {
+        _lblStatus.Visible = true;
+        _lblStatus.Text = IsMyTurn(userId)
+            ? "请出牌"
+            : $"等待{GetPlayerDisplayName(userId)}出牌";
     }
 
     private void UpdateGrabbing(float dt)
@@ -2106,6 +2133,7 @@ public class GameScreen : ScreenBase
         {
             case 1:
                 // juese1(左AI)出牌
+                SetOfflineTurnPrompt(_juese1);
                 _turnNum++;
                 if (_buChuPai == 2)
                 {
@@ -2123,6 +2151,7 @@ public class GameScreen : ScreenBase
 
             case 2:
                 // juese3(右AI)出牌
+                SetOfflineTurnPrompt(_juese3);
                 _turnNum++;
                 if (_buChuPai == 2)
                 {
@@ -2150,7 +2179,7 @@ public class GameScreen : ScreenBase
                     ButtonSet(2, true); // 显示所有出牌按钮
                 }
                 _state = GameState.MY_TURN;
-                _lblStatus.Text = "请出牌";
+                SetOfflineTurnPrompt(_juese2);
                 // 清空状态标签（对应原this.label1.Text = ""）
                 _lblMyStatus.Text = "";
                 _lblMyStatus.Visible = false;
@@ -3175,21 +3204,20 @@ public class GameScreen : ScreenBase
             {
                 // 首出
                 ButtonSet(4, true);
-                _lblStatus.Text = "请出牌";
             }
             else
             {
                 // 接牌
                 ButtonSet(2, true);
-                _lblStatus.Text = "请出牌";
             }
+            SetOnlineTurnPrompt(userId);
             _state = GameState.MY_TURN;
         }
         else
         {
             // 其他玩家出牌
             _state = GameState.AI_TURN; // 用AI_TURN表示等待其他玩家
-            _lblStatus.Text = "";
+            SetOnlineTurnPrompt(userId);
 
             // 在对应位置显示思考状态
             if (userId == Models.GameModel.GetLeftUserId())
