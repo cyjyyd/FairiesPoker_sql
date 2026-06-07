@@ -573,6 +573,7 @@ public static class FontManager
         string[] fontFiles =
         {
             IOPath.Combine(AppContext.BaseDirectory, "Fonts", "NotoSansCJK-Regular.ttc"),
+            IOPath.Combine(AppContext.BaseDirectory, "Fonts", "NotoSansCJKsc-Regular.otf"),
             IOPath.Combine(AppContext.BaseDirectory, "Fonts", "NotoSansSC-Regular.otf"),
             "/System/Library/Fonts/PingFang.ttc",
             "/System/Library/Fonts/STHeiti Light.ttc",
