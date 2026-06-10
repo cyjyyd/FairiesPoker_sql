@@ -17,7 +17,7 @@ internal static class WindowIconManager
         if (game?.Window == null || game.GraphicsDevice == null || game.Window.Handle == IntPtr.Zero)
             return;
 
-        string iconPath = IOPath.Combine(AppContext.BaseDirectory, IconPath);
+        string iconPath = IOPath.Combine(ConfigManager.ResourceBaseDirectory, IconPath);
         if (!File.Exists(iconPath))
             return;
 

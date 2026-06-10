@@ -7,6 +7,8 @@ using Microsoft.Xna.Framework.Input;
 using Protocol.Code;
 using Protocol.Dto;
 using System;
+using System.Globalization;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -23,6 +25,10 @@ public class RegisterScreen : ScreenBase
     private Texture2D? _btnNormalTexture;
     private Texture2D? _btnPressedTexture;
     private Texture2D? _defaultAvatarTexture; // Pla.jpg默认头像
+    private Texture2D? _avatarPreviewTexture;
+    private byte[]? _customAvatarData;
+    private byte[]? _pendingAvatarPreviewData;
+    private readonly object _avatarLock = new();
 
     // UI控件数据
     private string _username = "";
@@ -80,6 +86,8 @@ public class RegisterScreen : ScreenBase
     public override void UnloadContent()
     {
         Models.OnRegisterResult -= OnRegisterResult;
+        _avatarPreviewTexture?.Dispose();
+        _avatarPreviewTexture = null;
     }
 
     public override void Update(GameTime gameTime)
@@ -96,6 +104,8 @@ public class RegisterScreen : ScreenBase
                 ScreenManager.Pop();
             }
         }
+
+        ConsumePendingAvatarPreview();
 
         // 光标闪烁
         _cursorBlinkTimer += (float)gameTime.ElapsedGameTime.TotalSeconds;
@@ -185,9 +195,10 @@ public class RegisterScreen : ScreenBase
         }
 
         // 绘制头像预览 (pictureBox1: 99,123, 尺寸80x80)
-        if (_defaultAvatarTexture != null)
+        Texture2D? avatarTexture = _avatarPreviewTexture ?? _defaultAvatarTexture;
+        if (avatarTexture != null)
         {
-            spriteBatch.Draw(_defaultAvatarTexture,
+            spriteBatch.Draw(avatarTexture,
                 new Rectangle(offsetX + 99, offsetY + 123, 80, 80), Color.White * Opacity);
         }
         else
@@ -251,14 +262,23 @@ public class RegisterScreen : ScreenBase
         {
             // 输入框点击
             if (new Rectangle(99, 20, 223, 25).Contains(localMousePos))
+            {
                 _focusedField = 1;
+                BeginMobileTextInput(1);
+            }
             else if (new Rectangle(99, 53, 223, 25).Contains(localMousePos))
+            {
                 _focusedField = 2;
+                BeginMobileTextInput(2);
+            }
             else if (new Rectangle(99, 86, 223, 25).Contains(localMousePos))
+            {
                 _focusedField = 3;
+                BeginMobileTextInput(3);
+            }
             else if (new Rectangle(187, 178, 135, 25).Contains(localMousePos))
             {
-                // TODO: 上传头像功能
+                BeginAvatarPick();
             }
             else if (new Rectangle(99, 220, 223, 30).Contains(localMousePos))
             {
@@ -285,6 +305,9 @@ public class RegisterScreen : ScreenBase
 
     private void HandleTextInput(InputManager input)
     {
+        if (PlatformTextInputService.IsShowing)
+            return;
+
         string activeText = _focusedField == 1 ? _username :
                            _focusedField == 2 ? _password : _confirmPassword;
 
@@ -343,6 +366,44 @@ public class RegisterScreen : ScreenBase
         if (_focusedField == 1) _username = activeText;
         else if (_focusedField == 2) _password = activeText;
         else _confirmPassword = activeText;
+    }
+
+    private void BeginMobileTextInput(int field)
+    {
+        string title = field switch
+        {
+            1 => "用户名",
+            2 => "密码",
+            3 => "确认密码",
+            _ => "输入"
+        };
+
+        string currentText = field switch
+        {
+            1 => _username,
+            2 => _password,
+            3 => _confirmPassword,
+            _ => string.Empty
+        };
+
+        PlatformTextInputService.Request(title, "请输入" + title, currentText, field != 1, value =>
+        {
+            string text = LimitTextElements(value, 16);
+            if (field == 1) _username = text;
+            else if (field == 2) _password = text;
+            else if (field == 3) _confirmPassword = text;
+        });
+    }
+
+    private static string LimitTextElements(string value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value) || maxLength <= 0)
+            return string.Empty;
+
+        var info = new StringInfo(value);
+        return info.LengthInTextElements <= maxLength
+            ? value
+            : info.SubstringByTextElements(0, maxLength);
     }
 
     private static char KeyToChar(Keys key, bool shift)
@@ -416,6 +477,7 @@ public class RegisterScreen : ScreenBase
     {
         if (success)
         {
+            SavePendingAvatar();
             _statusText = "注册成功!";
             _statusColor = Color.Green;
 
@@ -426,6 +488,87 @@ public class RegisterScreen : ScreenBase
         {
             _statusText = "注册失败，用户名可能已存在";
             _statusColor = Color.Red;
+        }
+    }
+
+    private void BeginAvatarPick()
+    {
+        if (!PlatformAvatarPicker.IsAvailable)
+        {
+            _statusText = "当前平台暂不支持选择头像";
+            _statusColor = Color.Red;
+            return;
+        }
+
+        _statusText = "请选择头像图片";
+        _statusColor = Color.Gray;
+        PlatformAvatarPicker.PickAvatar((data, error) =>
+        {
+            lock (_avatarLock)
+            {
+                if (data != null && data.Length > 0)
+                {
+                    _customAvatarData = data;
+                    _pendingAvatarPreviewData = data;
+                    _statusText = "头像已选择";
+                    _statusColor = Color.Green;
+                }
+                else
+                {
+                    _statusText = string.IsNullOrWhiteSpace(error) ? "未选择头像" : error;
+                    _statusColor = Color.Red;
+                }
+            }
+        });
+    }
+
+    private void ConsumePendingAvatarPreview()
+    {
+        byte[]? previewData = null;
+        lock (_avatarLock)
+        {
+            if (_pendingAvatarPreviewData != null)
+            {
+                previewData = _pendingAvatarPreviewData;
+                _pendingAvatarPreviewData = null;
+            }
+        }
+
+        if (previewData == null)
+            return;
+
+        try
+        {
+            using var ms = new MemoryStream(previewData);
+            var texture = Texture2D.FromStream(Game.GraphicsDevice, ms);
+            _avatarPreviewTexture?.Dispose();
+            _avatarPreviewTexture = texture;
+        }
+        catch
+        {
+            _statusText = "头像预览失败";
+            _statusColor = Color.Red;
+        }
+    }
+
+    private void SavePendingAvatar()
+    {
+        try
+        {
+            byte[]? avatarData;
+            lock (_avatarLock)
+            {
+                avatarData = _customAvatarData;
+            }
+
+            if (avatarData == null || avatarData.Length == 0)
+                return;
+
+            File.WriteAllBytes(ConfigManager.GetUserDataPath("temp_avatar.dat"), avatarData);
+        }
+        catch
+        {
+            // 注册已成功，头像稍后上传失败不阻断账号创建。
         }
     }
 

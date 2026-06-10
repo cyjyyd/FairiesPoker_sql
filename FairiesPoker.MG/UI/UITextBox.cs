@@ -39,8 +39,25 @@ public class UITextBox : UIControl
         {
             bool wasFocused = IsFocused;
             IsFocused = ContainsPoint(mousePos);
-            if (!wasFocused && IsFocused && PreferIme)
-                input.OpenIme();
+            if (IsFocused)
+            {
+                if (!wasFocused && PreferIme)
+                    input.OpenIme();
+
+                if (PlatformTextInputService.Request(
+                    string.IsNullOrWhiteSpace(Placeholder) ? "输入" : Placeholder,
+                    string.Empty,
+                    Text,
+                    IsPassword,
+                    value =>
+                    {
+                        Text = value;
+                        OnTextChanged?.Invoke(Text);
+                    }))
+                {
+                    return;
+                }
+            }
         }
 
         if (IsFocused)
@@ -52,6 +69,9 @@ public class UITextBox : UIControl
                 _cursorBlinkTimer = 0;
                 _cursorVisible = !_cursorVisible;
             }
+
+            if (PlatformTextInputService.IsShowing)
+                return;
 
             // 键盘输入
             foreach (Keys key in Enum.GetValues(typeof(Keys)))

@@ -1151,15 +1151,16 @@ public class LobbyScreen : ScreenBase
     public override void Draw(GameTime gameTime, SpriteBatch spriteBatch)
     {
         var tint = Color.White * Opacity;
+        Rectangle backgroundBounds = DisplayManager.FullViewportVirtualBounds;
 
         if (_backgroundTexture != null)
         {
-            spriteBatch.Draw(_backgroundTexture, new Rectangle(0, 0, 1280, 720), tint);
+            spriteBatch.Draw(_backgroundTexture, backgroundBounds, tint);
         }
         else
         {
             spriteBatch.Draw(CreateWhitePixel(),
-                new Rectangle(0, 0, 1280, 720),
+                backgroundBounds,
                 new Color(24, 26, 34) * Opacity);
         }
 
@@ -1397,7 +1398,7 @@ public class LobbyScreen : ScreenBase
 
     private Texture2D? GetEmojiTexture(string emoji)
     {
-        return null;
+        return FontManager.GetEmojiTexture(emoji);
     }
 
     private static bool IsPlayerSlotOccupied(string text)

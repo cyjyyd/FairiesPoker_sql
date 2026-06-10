@@ -7,6 +7,7 @@ using Microsoft.Xna.Framework.Input;
 using Protocol.Code;
 using Protocol.Dto;
 using System;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -348,11 +349,13 @@ public class LoginScreen : ScreenBase
             {
                 _usernameBox.IsFocused = true;
                 _passwordBox.IsFocused = false;
+                BeginMobileTextInput(_usernameBox, "用户名", "请输入用户名", false, 32);
             }
             else if (PasswordBoxRect.Contains(localMousePos))
             {
                 _usernameBox.IsFocused = false;
                 _passwordBox.IsFocused = true;
+                BeginMobileTextInput(_passwordBox, "密码", "请输入密码", true, 64);
             }
             else if (RegisterLinkRect.Contains(localMousePos))
             {
@@ -456,6 +459,9 @@ public class LoginScreen : ScreenBase
 
     private void HandleTextInput(InputManager input)
     {
+        if (PlatformTextInputService.IsShowing)
+            return;
+
         UITextBox activeBox = _usernameBox.IsFocused ? _usernameBox : _passwordBox;
 
         // 处退格
@@ -509,6 +515,25 @@ public class LoginScreen : ScreenBase
                 }
             }
         }
+    }
+
+    private static void BeginMobileTextInput(UITextBox box, string title, string description, bool password, int maxLength)
+    {
+        PlatformTextInputService.Request(title, description, box.Text, password, value =>
+        {
+            box.Text = LimitTextElements(value, maxLength);
+        });
+    }
+
+    private static string LimitTextElements(string value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value) || maxLength <= 0)
+            return string.Empty;
+
+        var info = new StringInfo(value);
+        return info.LengthInTextElements <= maxLength
+            ? value
+            : info.SubstringByTextElements(0, maxLength);
     }
 
     private void OnLogin()

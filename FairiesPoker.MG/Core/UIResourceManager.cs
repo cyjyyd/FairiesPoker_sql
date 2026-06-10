@@ -30,7 +30,7 @@ public static class UIResourceManager
     public static string ThemeFolderName => GetThemeFolderName(_currentTheme);
 
     /// <summary>主题文件夹完整路径</summary>
-    public static string ThemePath => System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ThemeFolderName);
+    public static string ThemePath => System.IO.Path.Combine(ConfigManager.ResourceBaseDirectory, ThemeFolderName);
 
     /// <summary>正常状态按钮纹理</summary>
     public static Texture2D? ButtonNormal => _btnNormal;
@@ -75,11 +75,9 @@ public static class UIResourceManager
     {
         if (_graphicsDevice == null) return;
 
-        string themePath = ThemePath;
-
         // 加载按钮图片
-        string btn1Path = System.IO.Path.Combine(themePath, "btn1.png");
-        string btn2Path = System.IO.Path.Combine(themePath, "btn2.png");
+        string btn1Path = ConfigManager.ResolveResourcePath(System.IO.Path.Combine(ThemeFolderName, "btn1.png"));
+        string btn2Path = ConfigManager.ResolveResourcePath(System.IO.Path.Combine(ThemeFolderName, "btn2.png"));
 
         if (File.Exists(btn1Path))
         {
@@ -113,7 +111,7 @@ public static class UIResourceManager
 
         if (_graphicsDevice == null) return null;
 
-        string path = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", resourceName);
+        string path = ConfigManager.ResolveResourcePath(System.IO.Path.Combine("Resources", resourceName));
         if (!File.Exists(path)) return null;
 
         try
@@ -140,9 +138,9 @@ public static class UIResourceManager
 
         if (_graphicsDevice == null) return null;
 
-        string path = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Results", _currentTheme.ToString(), imageName);
+        string path = ConfigManager.ResolveResourcePath(System.IO.Path.Combine("Results", _currentTheme.ToString(), imageName));
         if (!File.Exists(path) && _currentTheme != 5)
-            path = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Results", "5", imageName);
+            path = ConfigManager.ResolveResourcePath(System.IO.Path.Combine("Results", "5", imageName));
         if (!File.Exists(path)) return null;
 
         try

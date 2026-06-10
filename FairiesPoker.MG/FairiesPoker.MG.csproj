@@ -1,16 +1,36 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFrameworks>net9.0;net10.0-android</TargetFrameworks>
     <RollForward>Major</RollForward>
     <PublishReadyToRun>false</PublishReadyToRun>
     <TieredCompilation>false</TieredCompilation>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <OutputType>WinExe</OutputType>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Icon.ico</ApplicationIcon>
   </PropertyGroup>
-  <ItemGroup>
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-android'">
+    <OutputType>Exe</OutputType>
+    <SupportedOSPlatformVersion>24</SupportedOSPlatformVersion>
+    <ApplicationId>com.cyjyyd.fairiespoker</ApplicationId>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <AndroidManifest>Android\AndroidManifest.xml</AndroidManifest>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <PublishTrimmed>false</PublishTrimmed>
+    <RunAOTCompilation>false</RunAOTCompilation>
+    <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
+    <AndroidEnableMarshalMethods>false</AndroidEnableMarshalMethods>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
     <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.*" />
     <PackageReference Include="MonoGame.Content.Builder.Task" Version="3.8.*" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-android'">
+    <PackageReference Include="MonoGame.Framework.Android" Version="3.8.*" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="protobuf-net" Version="3.0.0" />
     <PackageReference Include="SpriteFontPlus" Version="0.7.1.24" />
@@ -19,16 +39,8 @@
   <ItemGroup>
     <ProjectReference Include="..\FairiesPoker\Protocol\Protocol.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <Content Include="..\FairiesPoker\Resources\main seq.jpg" Link="Resources\main seq.jpg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\FairiesPoker\Resources\ChatHall1.jpg" Link="Resources\ChatHall1.jpg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\FairiesPoker\Resources\backIMG.png" Link="Resources\backIMG.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\FairiesPoker\Resources\AppIcon.png" Link="Resources\AppIcon.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\FairiesPoker\Resources\Pla.jpg" Link="Resources\Pla.jpg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\FairiesPoker\Resources\FP.png" Link="Resources\FP.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\FairiesPoker\Resources\FPR.png" Link="Resources\FPR.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\FairiesPoker\Resources\prf.jpg" Link="Resources\prf.jpg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\FairiesPoker\Resources\*.wav" Link="Resources\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <Content Include="..\FairiesPoker\Resources\**\*.*" Link="Resources\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\FairiesPoker\UI_TB\**\*.*" Link="UI_TB\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\FairiesPoker\UI_LT\**\*.*" Link="UI_LT\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\FairiesPoker\UI_FR\**\*.*" Link="UI_FR\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
@@ -42,6 +54,28 @@
   <ItemGroup>
     <Compile Remove="FontTest\**" />
     <None Include="FontTest\**" />
+    <Compile Remove="Android\**\*.cs" Condition="'$(TargetFramework)' == 'net9.0'" />
+    <Compile Remove="Program.cs" Condition="'$(TargetFramework)' == 'net10.0-android'" />
+    <Compile Remove="Core\WindowIconManager.cs" Condition="'$(TargetFramework)' == 'net10.0-android'" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-android'">
+    <AndroidResource Include="Android\Resources\**\*.*" Link="Resources\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AndroidAsset Include="..\FairiesPoker\Resources\**\*.*" Exclude="..\FairiesPoker\Resources\捕获.PNG;..\FairiesPoker\Resources\图层 46814644561761.png" Link="Resources\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AndroidAsset Include="..\FairiesPoker\Resources\捕获.PNG" Link="Resources\capture.png" />
+    <AndroidAsset Include="..\FairiesPoker\Resources\图层 46814644561761.png" Link="Resources\layer-46814644561761.png" />
+    <AndroidAsset Include="..\FairiesPoker\UI_TB\**\*.*" Link="UI_TB\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AndroidAsset Include="..\FairiesPoker\UI_LT\**\*.*" Link="UI_LT\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AndroidAsset Include="..\FairiesPoker\UI_FR\**\*.*" Link="UI_FR\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AndroidAsset Include="..\FairiesPoker\UI_SW\**\*.*" Link="UI_SW\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AndroidAsset Include="..\FairiesPoker\UI_PF\**\*.*" Link="UI_PF\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AndroidAsset Include="..\FairiesPoker\UI_LN\**\*.*" Link="UI_LN\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AndroidAsset Include="..\FairiesPoker\Pokers\**\*.*" Exclude="..\FairiesPoker\Pokers\牌背3.png;..\FairiesPoker\Pokers\5\牌背.png;..\FairiesPoker\Pokers\5\牌背2.png;..\FairiesPoker\Pokers\5\牌背3.png" Link="Pokers\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AndroidAsset Include="..\FairiesPoker\Pokers\牌背3.png" Link="Pokers\card-back-3.png" />
+    <AndroidAsset Include="..\FairiesPoker\Pokers\5\牌背.png" Link="Pokers\5\card-back.png" />
+    <AndroidAsset Include="..\FairiesPoker\Pokers\5\牌背2.png" Link="Pokers\5\card-back-2.png" />
+    <AndroidAsset Include="..\FairiesPoker\Pokers\5\牌背3.png" Link="Pokers\5\card-back-3.png" />
+    <AndroidAsset Include="..\FairiesPoker\Results\**\*.*" Link="Results\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AndroidAsset Include="Fonts\**\*.*" Link="Fonts\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
   <Target Name="CreateMacOSAppBundle" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'osx-x64' Or '$(RuntimeIdentifier)' == 'osx-arm64'">
     <PropertyGroup>

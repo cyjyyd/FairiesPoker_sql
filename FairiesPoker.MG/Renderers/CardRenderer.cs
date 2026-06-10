@@ -23,6 +23,7 @@ public class CardRenderer
     /// </summary>
     public static void LoadCardBack(string backImagePath)
     {
+        backImagePath = ConfigManager.ResolveResourcePath(backImagePath);
         if (File.Exists(backImagePath))
             _cardBack = TextureManager.Load("_cardback", backImagePath);
     }
@@ -49,9 +50,9 @@ public class CardRenderer
             _ => $"{huase}{size}"
         };
 
-        string path = System.IO.Path.Combine(ConfigManager.CardImagePath, fileName + ".png");
+        string path = ConfigManager.ResolveResourcePath(System.IO.Path.Combine(ConfigManager.CardImagePath, fileName + ".png"));
         if (!File.Exists(path))
-            path = System.IO.Path.Combine(ConfigManager.DefaultCardImagePath, fileName + ".png");
+            path = ConfigManager.ResolveResourcePath(System.IO.Path.Combine(ConfigManager.DefaultCardImagePath, fileName + ".png"));
         return TextureManager.Load(key, path);
     }
 

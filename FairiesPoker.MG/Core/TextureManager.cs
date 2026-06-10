@@ -27,12 +27,13 @@ public static class TextureManager
 
         if (_graphicsDevice == null)
             throw new InvalidOperationException("TextureManager is not initialized.");
-        if (!System.IO.File.Exists(filePath))
+        string resolvedPath = ResolveTexturePath(filePath);
+        if (!System.IO.File.Exists(resolvedPath))
             return GetPlaceholder();
 
         try
         {
-            using var fs = System.IO.File.OpenRead(filePath);
+            using var fs = System.IO.File.OpenRead(resolvedPath);
             var texture = Texture2D.FromStream(_graphicsDevice, fs);
             _textures[key] = texture;
             return texture;
@@ -42,6 +43,14 @@ public static class TextureManager
             // 返回一个1x1白色占位纹理
             return GetPlaceholder();
         }
+    }
+
+    private static string ResolveTexturePath(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath) || System.IO.File.Exists(filePath))
+            return filePath;
+
+        return ConfigManager.ResolveResourcePath(filePath);
     }
 
     /// <summary>

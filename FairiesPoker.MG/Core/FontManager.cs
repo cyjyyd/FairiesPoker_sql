@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -21,10 +22,13 @@ public static class FontManager
     private static readonly Dictionary<string, GlyphTexture> _fallbackGlyphTextures = new();
     private static readonly HashSet<char> _bakedCharacters = BuildInitialCharacterSet();
     private static GraphicsDevice? _graphicsDevice;
+    private static string? _cachedFontPath;
+    private static byte[]? _cachedFontBytes;
     private static float _currentFontSize;
 
     private const float BaseFontSize = 20f;
     private const float MaxFontSize = 32f;
+    private const int AndroidAtlasSize = 1024;
     private const int DefaultAtlasSize = 2048;
     private const int LargeAtlasSize = 4096;
 
@@ -42,8 +46,11 @@ public static class FontManager
         "房间信息状态人数最大满移除候选最终实际获得仅剩清零封顶平分完整单张牌型双顺三顺三不带对儿权值花色方片合法非法" +
         "数据库初始化连接新增字段会话记录批量指定拒绝无效停止监听命令开启自动审核待审核列表通过找到离线下线配置文件创建默认错误" +
         "微软雅黑宋体黑体不可用不完整未安装丢失物理分辨率超过保存设置确认提示退出登录返回上一级" +
+        "另幽残" +
         "与且个串临为举也争些交仍从他代们价份优估似但住你佳使供依便倒假偏做偶储充先光克免兜共具兼写冲况减函切删判别剧力助势区半占卡厂压原去参友反叠只台向吗员响唯善因圈场址垂域基堆填处外够央夹它守客容宽导射少尝就尽尾局层居展属工币布帧帮常幕广废延异弃引强归形往径循志忽思性总您悬意慢截才扑打扣执扩扫把抽拆拓拖拥择括拼拽按捕排控描插搜携操收放料旦早星映昵显普智替期杂来松板构枚果柄某染查栈校样根案桌检概橙此步殊毁每毫水求没沿洗活流浮淡深添渲源滑滚激烁焦然父特独环现生由电画略白盖盘直矩短础禁种秒空立第策签简类粘索累纯纳纹组细绑给络绪维综绿缀缓编缘缩网罩翻考者耗聚脑至般节若英荐虑行被覆视觉角触言订让访证评识询详读谁调豆象负责质资赛赢足跑距路跳践踪身转较辅辑达运还这进远迟迫追适逃透逐递造逻遍遮避采释里金钮链销锁键门闪阅阈队阶阻降随隐隔集需露静项顿颜额风首验黄鼠齐" +
         "绘制补偿虚拟坐标尺寸比例烘焙更变该";
+
+    private const string CommonSymbolText = "\u00A0→▲▼●☹✌✓✗";
 
     /// <summary>
     /// 当前默认字体相对于1280x720设计字体的绘制补偿。
@@ -70,19 +77,34 @@ public static class FontManager
     /// <summary>
     /// 默认字体
     /// </summary>
-    public static SpriteFont Default => _fonts.TryGetValue("default", out var f) ? f : _fonts.Values.First();
+    public static SpriteFont Default
+    {
+        get
+        {
+            if (_fonts.TryGetValue("default", out var f))
+                return f;
+
+            if (_graphicsDevice != null)
+                UpdateForDisplayScale(DisplayManager.Scale);
+
+            if (_fonts.TryGetValue("default", out f))
+                return f;
+
+            throw new InvalidOperationException("Default font is not available.");
+        }
+    }
 
     public static void UpdateForDisplayScale(float displayScale)
     {
         if (_graphicsDevice == null) return;
 
-        float targetSize = Math.Clamp(BaseFontSize * Math.Max(1f, displayScale), BaseFontSize, MaxFontSize);
+        float targetSize = OperatingSystem.IsAndroid()
+            ? BaseFontSize
+            : Math.Clamp(BaseFontSize * Math.Max(1f, displayScale), BaseFontSize, MaxFontSize);
         if (Math.Abs(targetSize - _currentFontSize) < 0.5f && _fonts.ContainsKey("default"))
             return;
 
-        if (TryBakeDefaultFont(targetSize, DefaultAtlasSize) ||
-            TryBakeDefaultFont(targetSize, LargeAtlasSize) ||
-            TryBakeDefaultFont(BaseFontSize, DefaultAtlasSize))
+        if (TryBakeDefaultFont(targetSize, GetPreferredAtlasSizes()))
         {
             return;
         }
@@ -180,12 +202,20 @@ public static class FontManager
 
     private static bool NeedsTextureForTextElement(string textElement)
     {
-        return IsEmojiTextElement(textElement) || !IsBakedTextElement(textElement);
+        if (IsEmojiTextElement(textElement) || !IsBakedTextElement(textElement))
+            return true;
+
+        return textElement.Length == 1 &&
+            _fonts.TryGetValue("default", out var font) &&
+            !CanMeasure(font, textElement[0]);
     }
 
     private static void EnsureTextGlyphsBaked(string text)
     {
         if (_graphicsDevice == null || string.IsNullOrEmpty(text))
+            return;
+
+        if (OperatingSystem.IsAndroid())
             return;
 
         var addedCharacters = new List<char>();
@@ -208,10 +238,7 @@ public static class FontManager
             return;
 
         float targetSize = _currentFontSize > 0f ? _currentFontSize : BaseFontSize;
-        bool rebaked =
-            TryBakeDefaultFont(targetSize, DefaultAtlasSize) ||
-            TryBakeDefaultFont(targetSize, LargeAtlasSize) ||
-            TryBakeDefaultFont(BaseFontSize, DefaultAtlasSize);
+        bool rebaked = TryBakeDefaultFont(targetSize, GetPreferredAtlasSizes());
 
         if (rebaked)
             return;
@@ -266,7 +293,7 @@ public static class FontManager
             if (NeedsTextureForTextElement(element))
             {
                 FlushTextRun();
-                x += GetInlineTextureAdvance(font, scale);
+                x += MeasureInlineTextElement(font, element, scale);
                 continue;
             }
 
@@ -311,22 +338,36 @@ public static class FontManager
             if (NeedsTextureForTextElement(element))
             {
                 FlushTextRun();
-                var texture = IsEmojiTextElement(element)
-                    ? GetEmojiTexture(element)
-                    : GetFallbackGlyphTexture(element)?.Texture;
-                if (texture != null)
+                if (IsEmojiTextElement(element))
                 {
-                    var rect = new Rectangle(
-                        (int)Math.Round(cursor.X),
-                        (int)Math.Round(cursor.Y + Math.Max(0f, (lineHeight - inlineTextureSize) / 2f)),
-                        (int)Math.Ceiling(inlineTextureSize),
-                        (int)Math.Ceiling(inlineTextureSize));
-                    spriteBatch.Draw(texture, rect, color);
-                    cursor.X += inlineTextureSize;
+                    var texture = GetEmojiTexture(element);
+                    if (texture != null)
+                    {
+                        var rect = new Rectangle(
+                            (int)Math.Round(cursor.X),
+                            (int)Math.Round(cursor.Y + Math.Max(0f, (lineHeight - inlineTextureSize) / 2f)),
+                            (int)Math.Ceiling(inlineTextureSize),
+                            (int)Math.Ceiling(inlineTextureSize));
+                        spriteBatch.Draw(texture, rect, color);
+                        cursor.X += inlineTextureSize;
+                    }
+                    else
+                    {
+                        textRun.Append('?');
+                    }
                 }
                 else
                 {
-                    textRun.Append('?');
+                    var glyph = GetFallbackGlyphTexture(element);
+                    if (glyph != null)
+                    {
+                        DrawTextRun(spriteBatch, glyph.Font, element, cursor, color, scale);
+                        cursor.X += MeasureTextRun(glyph.Font, element).X * RenderScale * scale;
+                    }
+                    else
+                    {
+                        textRun.Append('?');
+                    }
                 }
                 continue;
             }
@@ -372,6 +413,18 @@ public static class FontManager
         return GetScaledLineHeight(font, scale);
     }
 
+    private static float MeasureInlineTextElement(SpriteFont font, string textElement, float scale)
+    {
+        if (IsEmojiTextElement(textElement))
+            return GetInlineTextureAdvance(font, scale);
+
+        var glyph = GetFallbackGlyphTexture(textElement);
+        if (glyph == null)
+            return GetInlineTextureAdvance(font, scale);
+
+        return MeasureTextRun(glyph.Font, textElement).X * RenderScale * scale;
+    }
+
     private static bool IsLineBreak(string textElement)
     {
         return textElement == "\n" || textElement == "\r" || textElement == "\r\n";
@@ -413,14 +466,109 @@ public static class FontManager
         return false;
     }
 
-    private static Texture2D? GetEmojiTexture(string emoji)
+    public static Texture2D? GetEmojiTexture(string emoji)
     {
+#if ANDROID
+        if (_graphicsDevice == null || string.IsNullOrEmpty(emoji))
+            return null;
+
+        if (_emojiTextures.TryGetValue(emoji, out var cached))
+            return cached;
+
+        try
+        {
+            const int textureSize = 64;
+            using var bitmap = global::Android.Graphics.Bitmap.CreateBitmap(
+                textureSize,
+                textureSize,
+                global::Android.Graphics.Bitmap.Config.Argb8888);
+            using var canvas = new global::Android.Graphics.Canvas(bitmap);
+            canvas.DrawColor(global::Android.Graphics.Color.Transparent, global::Android.Graphics.PorterDuff.Mode.Clear);
+
+            using var paint = new global::Android.Graphics.Paint(
+                global::Android.Graphics.PaintFlags.AntiAlias |
+                global::Android.Graphics.PaintFlags.FilterBitmap |
+                global::Android.Graphics.PaintFlags.SubpixelText);
+            paint.TextSize = 48f;
+            paint.TextAlign = global::Android.Graphics.Paint.Align.Center;
+            paint.Color = global::Android.Graphics.Color.White;
+            paint.SetTypeface(global::Android.Graphics.Typeface.Default);
+
+            var metrics = paint.GetFontMetrics();
+            float baseline = textureSize / 2f - (metrics.Ascent + metrics.Descent) / 2f;
+            canvas.DrawText(emoji, textureSize / 2f, baseline, paint);
+
+            var pixels = new int[textureSize * textureSize];
+            bitmap.GetPixels(pixels, 0, textureSize, 0, 0, textureSize, textureSize);
+
+            var data = new Color[pixels.Length];
+            bool hasVisiblePixel = false;
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                int argb = pixels[i];
+                byte a = (byte)((argb >> 24) & 0xFF);
+                byte r = (byte)((argb >> 16) & 0xFF);
+                byte g = (byte)((argb >> 8) & 0xFF);
+                byte b = (byte)(argb & 0xFF);
+                if (a > 0)
+                    hasVisiblePixel = true;
+                data[i] = new Color(r, g, b, a);
+            }
+
+            if (!hasVisiblePixel)
+                return null;
+
+            var texture = new Texture2D(_graphicsDevice, textureSize, textureSize);
+            texture.SetData(data);
+            _emojiTextures[emoji] = texture;
+            return texture;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to render emoji '{emoji}': {ex.Message}");
+        }
+#endif
         return null;
     }
 
     private static GlyphTexture? GetFallbackGlyphTexture(string textElement)
     {
-        return null;
+        if (_graphicsDevice == null || string.IsNullOrEmpty(textElement) || textElement.Length != 1)
+            return null;
+
+        char c = textElement[0];
+        if (char.IsControl(c) || IsVariationSelector(c))
+            return null;
+
+        string key = c.ToString();
+        if (_fallbackGlyphTextures.TryGetValue(key, out var cached))
+            return cached;
+
+        if (!TryGetFontBytes(out var fontBytes))
+            return null;
+
+        try
+        {
+            float size = _currentFontSize > 0f ? _currentFontSize : BaseFontSize;
+            var result = TtfFontBaker.Bake(
+                fontBytes,
+                size,
+                128,
+                128,
+                new[] { new CharacterRange(c, c) });
+
+            var font = result.CreateSpriteFont(_graphicsDevice);
+            if (font.MeasureString(key).X <= 0)
+                return null;
+
+            var glyph = new GlyphTexture(font);
+            _fallbackGlyphTextures[key] = glyph;
+            return glyph;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static string SanitizeForSpriteFont(string text, SpriteFont? font = null)
@@ -484,6 +632,12 @@ public static class FontManager
         AddCharacterRange(chars, 0xFF00, 0xFFEF);
 
         foreach (char c in CommonChineseText)
+        {
+            if (!char.IsControl(c))
+                chars.Add(c);
+        }
+
+        foreach (char c in CommonSymbolText)
         {
             if (!char.IsControl(c))
                 chars.Add(c);
@@ -558,47 +712,54 @@ public static class FontManager
 
     private sealed class GlyphTexture
     {
-        public GlyphTexture(Texture2D texture)
+        public GlyphTexture(SpriteFont font)
         {
-            Texture = texture;
+            Font = font;
         }
 
-        public Texture2D Texture { get; }
+        public SpriteFont Font { get; }
+        public Texture2D Texture => Font.Texture;
+    }
+
+    private static int[] GetPreferredAtlasSizes()
+    {
+        return OperatingSystem.IsAndroid()
+            ? new[] { DefaultAtlasSize, LargeAtlasSize }
+            : new[] { DefaultAtlasSize, LargeAtlasSize };
+    }
+
+    private static bool TryBakeDefaultFont(float size, IEnumerable<int> atlasSizes)
+    {
+        foreach (int atlasSize in atlasSizes)
+        {
+            if (TryBakeDefaultFont(size, atlasSize))
+                return true;
+        }
+
+        if (Math.Abs(size - BaseFontSize) >= 0.5f)
+        {
+            foreach (int atlasSize in atlasSizes)
+            {
+                if (TryBakeDefaultFont(BaseFontSize, atlasSize))
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool TryBakeDefaultFont(float size, int atlasSize)
     {
         if (_graphicsDevice == null) return false;
 
-        string[] fontFiles =
+        foreach (var ttfPath in GetCandidateFontFiles())
         {
-            IOPath.Combine(AppContext.BaseDirectory, "Fonts", "NotoSansCJK-Regular.ttc"),
-            IOPath.Combine(AppContext.BaseDirectory, "Fonts", "NotoSansCJKsc-Regular.otf"),
-            IOPath.Combine(AppContext.BaseDirectory, "Fonts", "NotoSansSC-Regular.otf"),
-            "/System/Library/Fonts/PingFang.ttc",
-            "/System/Library/Fonts/STHeiti Light.ttc",
-            "/System/Library/Fonts/Supplemental/Songti.ttc",
-            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.otf",
-            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-            "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-            "C:\\WINDOWS\\Fonts\\msyh.ttc",
-            "C:\\WINDOWS\\Fonts\\STKAITI.TTF",
-            "C:\\WINDOWS\\Fonts\\simhei.ttf",
-            "C:\\WINDOWS\\Fonts\\STXIHEI.TTF",
-            "C:\\WINDOWS\\Fonts\\SIMYOU.TTF",
-        };
-
-        foreach (var ttfPath in fontFiles)
-        {
-            if (!File.Exists(ttfPath)) continue;
+            if (!TryReadFontBytes(ttfPath, out var fontBytes)) continue;
 
             try
             {
                 var result = TtfFontBaker.Bake(
-                    File.ReadAllBytes(ttfPath),
+                    fontBytes,
                     size,
                     atlasSize,
                     atlasSize,
@@ -623,5 +784,127 @@ public static class FontManager
         }
 
         return false;
+    }
+
+    private static bool TryGetFontBytes(out byte[] fontBytes)
+    {
+        foreach (string path in GetCandidateFontFiles())
+        {
+            if (TryReadFontBytes(path, out fontBytes))
+                return true;
+        }
+
+        fontBytes = Array.Empty<byte>();
+        return false;
+    }
+
+    private static bool TryReadFontBytes(string path, out byte[] fontBytes)
+    {
+        if (string.Equals(_cachedFontPath, path, StringComparison.OrdinalIgnoreCase) && _cachedFontBytes != null)
+        {
+            fontBytes = _cachedFontBytes;
+            return true;
+        }
+
+        fontBytes = Array.Empty<byte>();
+
+        try
+        {
+            if (!File.Exists(path))
+            {
+#if ANDROID
+                if (TryReadAndroidAssetFont(path, out fontBytes))
+                {
+                    _cachedFontPath = path;
+                    _cachedFontBytes = fontBytes;
+                    return true;
+                }
+#endif
+                return false;
+            }
+
+            _cachedFontPath = path;
+            _cachedFontBytes = File.ReadAllBytes(path);
+            fontBytes = _cachedFontBytes;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to read font '{path}': {ex.Message}");
+            _cachedFontPath = null;
+            _cachedFontBytes = null;
+            return false;
+        }
+    }
+
+#if ANDROID
+    private static bool TryReadAndroidAssetFont(string path, out byte[] fontBytes)
+    {
+        fontBytes = Array.Empty<byte>();
+        string assetPath = GetAndroidFontAssetPath(path);
+        if (string.IsNullOrWhiteSpace(assetPath))
+            return false;
+
+        try
+        {
+            using Stream input = global::Android.App.Application.Context.Assets.Open(assetPath);
+            using var memory = new MemoryStream();
+            input.CopyTo(memory);
+            fontBytes = memory.ToArray();
+            return fontBytes.Length > 0;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to read Android font asset '{assetPath}': {ex.Message}");
+            return false;
+        }
+    }
+
+    private static string GetAndroidFontAssetPath(string path)
+    {
+        string normalizedPath = path.Replace('\\', '/');
+        int fontsIndex = normalizedPath.LastIndexOf("/Fonts/", StringComparison.OrdinalIgnoreCase);
+        if (fontsIndex >= 0)
+            return normalizedPath[(fontsIndex + 1)..];
+
+        if (normalizedPath.StartsWith("Fonts/", StringComparison.OrdinalIgnoreCase))
+            return normalizedPath;
+
+        string fileName = IOPath.GetFileName(normalizedPath);
+        if (string.Equals(fileName, "NotoSansCJK-Regular.ttc", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(fileName, "HarmonyOS_Sans_SC_Regular.ttf", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(fileName, "NotoSansCJKsc-Regular.otf", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(fileName, "NotoSansSC-Regular.otf", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Fonts/" + fileName;
+        }
+
+        return string.Empty;
+    }
+#endif
+
+    private static string[] GetCandidateFontFiles()
+    {
+        return new[]
+        {
+            IOPath.Combine(ConfigManager.ResourceBaseDirectory, "Fonts", "HarmonyOS_Sans_SC_Regular.ttf"),
+            IOPath.Combine(ConfigManager.ResourceBaseDirectory, "Fonts", "NotoSansCJK-Regular.ttc"),
+            IOPath.Combine(ConfigManager.ResourceBaseDirectory, "Fonts", "NotoSansCJKsc-Regular.otf"),
+            IOPath.Combine(ConfigManager.ResourceBaseDirectory, "Fonts", "NotoSansSC-Regular.otf"),
+            "/System/Library/Fonts/PingFang.ttc",
+            "/System/Library/Fonts/STHeiti Light.ttc",
+            "/System/Library/Fonts/Supplemental/Songti.ttc",
+            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.otf",
+            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+            "C:\\WINDOWS\\Fonts\\msyh.ttc",
+            "C:\\WINDOWS\\Fonts\\STKAITI.TTF",
+            "C:\\WINDOWS\\Fonts\\simhei.ttf",
+            "C:\\WINDOWS\\Fonts\\STXIHEI.TTF",
+            "C:\\WINDOWS\\Fonts\\SIMYOU.TTF",
+        };
     }
 }

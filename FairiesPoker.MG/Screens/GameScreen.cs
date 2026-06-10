@@ -574,19 +574,19 @@ public class GameScreen : ScreenBase
     private void InitUI()
     {
         // 背景
-        string bgPath = System.IO.Path.Combine(ConfigManager.ThemePath, "main seq.jpg");
+        string bgPath = ConfigManager.ResolveResourcePath(System.IO.Path.Combine(ConfigManager.ThemePath, "main seq.jpg"));
         if (File.Exists(bgPath))
             _bgTexture = TextureManager.Load("_game_bg", bgPath);
         _defaultAvatarTexture = UIResourceManager.LoadResource("Pla.jpg");
-        string cardBackPath = System.IO.Path.Combine(ConfigManager.ThemePath, "牌背3.png");
+        string cardBackPath = ConfigManager.ResolveResourcePath(System.IO.Path.Combine(ConfigManager.ThemePath, ConfigManager.CardBackImageFileName));
         if (!File.Exists(cardBackPath))
-            cardBackPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Pokers", "牌背3.png");
+            cardBackPath = ConfigManager.ResolveResourcePath(System.IO.Path.Combine("Pokers", ConfigManager.CardBackImageFileName));
         if (File.Exists(cardBackPath))
             _cardBackTexture = TextureManager.Load("_cardback", cardBackPath);
 
         // 按钮纹理
-        string btnNormalPath = System.IO.Path.Combine(ConfigManager.ThemePath, "btn1.png");
-        string btnPressedPath = System.IO.Path.Combine(ConfigManager.ThemePath, "btn2.png");
+        string btnNormalPath = ConfigManager.ResolveResourcePath(System.IO.Path.Combine(ConfigManager.ThemePath, "btn1.png"));
+        string btnPressedPath = ConfigManager.ResolveResourcePath(System.IO.Path.Combine(ConfigManager.ThemePath, "btn2.png"));
         Texture2D? btnNormal = File.Exists(btnNormalPath) ? TextureManager.Load("_btn_normal", btnNormalPath) : null;
         Texture2D? btnPressed = File.Exists(btnPressedPath) ? TextureManager.Load("_btn_pressed", btnPressedPath) : null;
 
@@ -1235,14 +1235,15 @@ public class GameScreen : ScreenBase
     public override void Draw(GameTime gameTime, SpriteBatch spriteBatch)
     {
         // 背景
+        Rectangle backgroundBounds = DisplayManager.FullViewportVirtualBounds;
         if (_bgTexture != null)
         {
-            spriteBatch.Draw(_bgTexture, new Rectangle(0, 0, 1280, 720), Color.White);
+            spriteBatch.Draw(_bgTexture, backgroundBounds, Color.White);
         }
         else
         {
             spriteBatch.Draw(TextureManager.Get("_white") ?? CreateWhitePixel(),
-                new Rectangle(0, 0, 1280, 720), new Color(30, 80, 30));
+                backgroundBounds, new Color(30, 80, 30));
         }
 
         if (!_isOnline)

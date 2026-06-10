@@ -19,6 +19,24 @@ public static class DisplayManager
 
     public static Rectangle VirtualBounds => new(0, 0, DesignWidth, DesignHeight);
 
+    public static Rectangle FullViewportVirtualBounds
+    {
+        get
+        {
+            float safeScale = Scale > 0f && !float.IsNaN(Scale) && !float.IsInfinity(Scale) ? Scale : 1f;
+            float x = -Offset.X / safeScale;
+            float y = -Offset.Y / safeScale;
+            float width = BackBufferWidth / safeScale;
+            float height = BackBufferHeight / safeScale;
+
+            return new Rectangle(
+                (int)Math.Floor(x),
+                (int)Math.Floor(y),
+                (int)Math.Ceiling(width),
+                (int)Math.Ceiling(height));
+        }
+    }
+
     public static void Update(int backBufferWidth, int backBufferHeight)
     {
         BackBufferWidth = Math.Max(1, backBufferWidth);

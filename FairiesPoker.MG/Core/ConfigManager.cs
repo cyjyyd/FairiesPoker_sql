@@ -18,6 +18,7 @@ public static class ConfigManager
     public const int DefaultWindowHeight = 720;
     public const string DefaultServerIP = "www.fairybcd.top";
     public const int DefaultServerPort = 40960;
+    public static bool UseDeviceResolution => OperatingSystem.IsAndroid();
 
     public static readonly (int Width, int Height)[] ResolutionPresets =
     {
@@ -45,6 +46,18 @@ public static class ConfigManager
     public static string ServerIP { get; set; } = DefaultServerIP;
     public static int ServerPort { get; set; } = DefaultServerPort;
 
+    private static string _resourceBaseDirectory = AppContext.BaseDirectory;
+
+    public static string ResourceBaseDirectory => _resourceBaseDirectory;
+
+    public static void SetResourceBaseDirectory(string directory)
+    {
+        if (string.IsNullOrWhiteSpace(directory))
+            return;
+
+        _resourceBaseDirectory = IOPath.GetFullPath(directory);
+    }
+
     public static string UserDataDirectory
     {
         get
@@ -59,17 +72,19 @@ public static class ConfigManager
 
     public static string ConfigFilePath => ResolveConfigFilePath();
 
+    public static string CardBackImageFileName => OperatingSystem.IsAndroid() ? "card-back-3.png" : "牌背3.png";
+
     // 卡牌图像路径
-    public static string DefaultCardImagePath => IOPath.Combine(AppContext.BaseDirectory, "Pokers", "5");
+    public static string DefaultCardImagePath => IOPath.Combine(ResourceBaseDirectory, "Pokers", "5");
     public static string CardImagePath => ResolveDirectory(
-        IOPath.Combine(AppContext.BaseDirectory, "Pokers", UITheme.ToString()),
+        IOPath.Combine(ResourceBaseDirectory, "Pokers", UITheme.ToString()),
         DefaultCardImagePath);
 
     // 主题资源路径
-    public static string ThemePath => IOPath.Combine(AppContext.BaseDirectory, "UI_" + GetThemeSuffix(UITheme));
+    public static string ThemePath => IOPath.Combine(ResourceBaseDirectory, "UI_" + GetThemeSuffix(UITheme));
     public static string ThemeMusicPath => ResolveFile(
         IOPath.Combine(ThemePath, "background.mp3"),
-        IOPath.Combine(AppContext.BaseDirectory, "UI_PF", "background.mp3"));
+        IOPath.Combine(ResourceBaseDirectory, "UI_PF", "background.mp3"));
 
     // 加载配置
     public static void Load()
@@ -117,10 +132,13 @@ public static class ConfigManager
             SetIniValue(data, "Settings", "BackMusicVolume", BackMusicVolume.ToString("0.00", CultureInfo.InvariantCulture));
             SetIniValue(data, "Settings", "SoundFXVolume", SoundFXVolume.ToString("0.00", CultureInfo.InvariantCulture));
             SetIniValue(data, "Settings", "UI", UITheme.ToString(CultureInfo.InvariantCulture));
-            SetIniValue(data, "Settings", "Width", WindowWidth.ToString(CultureInfo.InvariantCulture));
-            SetIniValue(data, "Settings", "Height", WindowHeight.ToString(CultureInfo.InvariantCulture));
-            SetIniValue(data, "Settings", "Borderless", BorderlessWindow ? "1" : "0");
-            SetIniValue(data, "Settings", "FullScreen", FullScreen ? "1" : "0");
+            if (!UseDeviceResolution)
+            {
+                SetIniValue(data, "Settings", "Width", WindowWidth.ToString(CultureInfo.InvariantCulture));
+                SetIniValue(data, "Settings", "Height", WindowHeight.ToString(CultureInfo.InvariantCulture));
+                SetIniValue(data, "Settings", "Borderless", BorderlessWindow ? "1" : "0");
+                SetIniValue(data, "Settings", "FullScreen", FullScreen ? "1" : "0");
+            }
             SetIniValue(data, "Network", "IP", ServerIP);
             SetIniValue(data, "Network", "Port", ServerPort.ToString(CultureInfo.InvariantCulture));
             WriteIniFile(path, data);
@@ -137,14 +155,130 @@ public static class ConfigManager
         return IOPath.Combine(UserDataDirectory, fileName);
     }
 
+    public static string ResolveResourcePath(string relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath) || File.Exists(relativePath))
+            return relativePath;
+
+        if (IOPath.IsPathRooted(relativePath))
+        {
+            if (TryGetResourceRelativePath(relativePath, out string rootedRelativePath) &&
+                TryEnsureAndroidResource(rootedRelativePath, out string extractedRootedPath))
+            {
+                return extractedRootedPath;
+            }
+
+            return relativePath;
+        }
+
+        string normalizedPath = relativePath.Replace('\\', '/');
+        if (OperatingSystem.IsAndroid() && TryGetAndroidAssetAlias(normalizedPath, out string aliasPath))
+            normalizedPath = aliasPath;
+
+        string resolvedPath = IOPath.Combine(ResourceBaseDirectory, normalizedPath.Replace('/', IOPath.DirectorySeparatorChar));
+        if (File.Exists(resolvedPath))
+            return resolvedPath;
+
+        if (TryEnsureAndroidResource(normalizedPath, out string extractedPath))
+            return extractedPath;
+
+        return resolvedPath;
+    }
+
+    private static bool TryGetResourceRelativePath(string path, out string relativePath)
+    {
+        relativePath = string.Empty;
+
+        try
+        {
+            string fullRoot = EnsureTrailingSeparator(IOPath.GetFullPath(ResourceBaseDirectory));
+            string fullPath = IOPath.GetFullPath(path);
+            if (!fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            relativePath = IOPath.GetRelativePath(fullRoot, fullPath).Replace('\\', '/');
+            return !string.IsNullOrWhiteSpace(relativePath) && !relativePath.StartsWith("..", StringComparison.Ordinal);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryEnsureAndroidResource(string normalizedPath, out string resolvedPath)
+    {
+#if ANDROID
+        if (TryGetAndroidAssetAlias(normalizedPath, out string aliasPath))
+            normalizedPath = aliasPath;
+#endif
+        resolvedPath = IOPath.Combine(ResourceBaseDirectory, normalizedPath.Replace('/', IOPath.DirectorySeparatorChar));
+#if ANDROID
+        if (File.Exists(resolvedPath))
+            return true;
+
+        if (FairiesPoker.MG.AndroidPlatform.AndroidAssetExtractor.TryExtractAsset(normalizedPath) && File.Exists(resolvedPath))
+            return true;
+#endif
+        return File.Exists(resolvedPath);
+    }
+
+    private static string EnsureTrailingSeparator(string path)
+    {
+        char separator = IOPath.DirectorySeparatorChar;
+        return path.EndsWith(separator) ? path : path + separator;
+    }
+
     private static string ResolveConfigFilePath()
     {
-        string localConfig = IOPath.Combine(AppContext.BaseDirectory, "config.ini");
+        string localConfig = IOPath.Combine(ResourceBaseDirectory, "config.ini");
         if (File.Exists(localConfig))
             return localConfig;
 
         Directory.CreateDirectory(UserDataDirectory);
         return IOPath.Combine(UserDataDirectory, "config.ini");
+    }
+
+    private static bool TryGetAndroidAssetAlias(string normalizedPath, out string aliasPath)
+    {
+        if (string.Equals(normalizedPath, "Resources/捕获.PNG", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalizedPath, "Resources/捕获.png", StringComparison.OrdinalIgnoreCase))
+        {
+            aliasPath = "Resources/capture.png";
+            return true;
+        }
+
+        if (string.Equals(normalizedPath, "Resources/图层 46814644561761.png", StringComparison.OrdinalIgnoreCase))
+        {
+            aliasPath = "Resources/layer-46814644561761.png";
+            return true;
+        }
+
+        if (string.Equals(normalizedPath, "Pokers/牌背3.png", StringComparison.OrdinalIgnoreCase))
+        {
+            aliasPath = "Pokers/card-back-3.png";
+            return true;
+        }
+
+        if (string.Equals(normalizedPath, "Pokers/5/牌背.png", StringComparison.OrdinalIgnoreCase))
+        {
+            aliasPath = "Pokers/5/card-back.png";
+            return true;
+        }
+
+        if (string.Equals(normalizedPath, "Pokers/5/牌背2.png", StringComparison.OrdinalIgnoreCase))
+        {
+            aliasPath = "Pokers/5/card-back-2.png";
+            return true;
+        }
+
+        if (string.Equals(normalizedPath, "Pokers/5/牌背3.png", StringComparison.OrdinalIgnoreCase))
+        {
+            aliasPath = "Pokers/5/card-back-3.png";
+            return true;
+        }
+
+        aliasPath = string.Empty;
+        return false;
     }
 
     public static void NormalizeWindowSize()
@@ -154,6 +288,13 @@ public static class ConfigManager
         SoundFXVolume = Clamp01(SoundFXVolume);
         if (WindowWidth <= 0) WindowWidth = DefaultWindowWidth;
         if (WindowHeight <= 0) WindowHeight = DefaultWindowHeight;
+        if (UseDeviceResolution)
+        {
+            WindowWidth = DefaultWindowWidth;
+            WindowHeight = DefaultWindowHeight;
+            BorderlessWindow = false;
+            FullScreen = true;
+        }
         if (string.IsNullOrWhiteSpace(ServerIP)) ServerIP = DefaultServerIP;
         if (ServerPort <= 0 || ServerPort > 65535) ServerPort = DefaultServerPort;
         if (FullScreen) BorderlessWindow = false;
@@ -195,7 +336,11 @@ public static class ConfigManager
 
     private static string ResolveFile(string preferred, string fallback)
     {
-        return File.Exists(preferred) ? preferred : fallback;
+        string resolvedPreferred = ResolveResourcePath(preferred);
+        if (File.Exists(resolvedPreferred))
+            return resolvedPreferred;
+
+        return ResolveResourcePath(fallback);
     }
 
     private static string GetThemeSuffix(int theme)

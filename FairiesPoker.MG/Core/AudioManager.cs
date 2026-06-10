@@ -23,6 +23,9 @@ public class AudioManager : IDisposable
 {
     private readonly Dictionary<string, SoundEffect> _sfxCache = new(StringComparer.OrdinalIgnoreCase);
     private Song? _bgmSong;
+#if ANDROID
+    private global::Android.Media.MediaPlayer? _androidBgmPlayer;
+#endif
     private float _bgmVolume = 0.5f;
     private float _sfxVolume = 0.8f;
 
@@ -35,7 +38,7 @@ public class AudioManager : IDisposable
         set
         {
             _bgmVolume = Clamp01(value);
-            MediaPlayer.Volume = _bgmVolume;
+            TrySetMediaPlayerVolume(_bgmVolume);
         }
     }
 
@@ -65,14 +68,18 @@ public class AudioManager : IDisposable
     {
         StopBgm();
 
+        filePath = ConfigManager.ResolveResourcePath(filePath);
         if (!BackMusicEnabled || !File.Exists(filePath))
             return;
 
+#if ANDROID
+        PlayAndroidBgm(filePath, loop);
+#else
         try
         {
-            _bgmSong = Song.FromUri(IOPath.GetFileNameWithoutExtension(filePath), new Uri(IOPath.GetFullPath(filePath)));
-            MediaPlayer.IsRepeating = loop;
-            MediaPlayer.Volume = BgmVolume;
+            _bgmSong = Song.FromUri(IOPath.GetFileNameWithoutExtension(filePath), CreateFileUri(filePath));
+            TrySetMediaPlayerRepeating(loop);
+            TrySetMediaPlayerVolume(BgmVolume);
             MediaPlayer.Play(_bgmSong);
         }
         catch (Exception ex)
@@ -80,10 +87,14 @@ public class AudioManager : IDisposable
             Debug.WriteLine($"Failed to play background music '{filePath}': {ex.Message}");
             StopBgm();
         }
+#endif
     }
 
     public void StopBgm()
     {
+#if ANDROID
+        StopAndroidBgm();
+#else
         try
         {
             MediaPlayer.Stop();
@@ -94,6 +105,7 @@ public class AudioManager : IDisposable
 
         _bgmSong?.Dispose();
         _bgmSong = null;
+#endif
     }
 
     public void PlaySfx(SoundCue cue)
@@ -145,7 +157,7 @@ public class AudioManager : IDisposable
             _ => "click.wav"
         };
 
-        return IOPath.Combine(AppContext.BaseDirectory, "Resources", fileName);
+        return ConfigManager.ResolveResourcePath(IOPath.Combine("Resources", fileName));
     }
 
     private static float GetCueGain(SoundCue cue)
@@ -157,6 +169,105 @@ public class AudioManager : IDisposable
             _ => 1f
         };
     }
+
+    private static Uri CreateFileUri(string filePath)
+    {
+        string fullPath = IOPath.GetFullPath(filePath).Replace('\\', '/');
+        if (!fullPath.StartsWith("/", StringComparison.Ordinal))
+            fullPath = "/" + fullPath;
+
+        return new Uri("file://" + fullPath);
+    }
+
+    private static void TrySetMediaPlayerRepeating(bool loop)
+    {
+#if ANDROID
+        _ = loop;
+#else
+        try
+        {
+            MediaPlayer.IsRepeating = loop;
+        }
+        catch
+        {
+        }
+#endif
+    }
+
+    private void TrySetMediaPlayerVolume(float volume)
+    {
+#if ANDROID
+        TrySetAndroidBgmVolume(volume);
+#else
+        try
+        {
+            MediaPlayer.Volume = volume;
+        }
+        catch
+        {
+        }
+#endif
+    }
+
+#if ANDROID
+    private void PlayAndroidBgm(string filePath, bool loop)
+    {
+        try
+        {
+            StopAndroidBgm();
+            var player = new global::Android.Media.MediaPlayer();
+            player.SetDataSource(filePath);
+            player.Looping = loop;
+            player.SetVolume(BgmVolume, BgmVolume);
+            player.Prepare();
+            player.Start();
+            _androidBgmPlayer = player;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to play Android background music '{filePath}': {ex.Message}");
+            StopAndroidBgm();
+        }
+    }
+
+    private void StopAndroidBgm()
+    {
+        var player = _androidBgmPlayer;
+        _androidBgmPlayer = null;
+        if (player == null)
+            return;
+
+        try
+        {
+            if (player.IsPlaying)
+                player.Stop();
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            player.Release();
+        }
+        catch
+        {
+        }
+
+        player.Dispose();
+    }
+
+    private void TrySetAndroidBgmVolume(float volume)
+    {
+        try
+        {
+            _androidBgmPlayer?.SetVolume(volume, volume);
+        }
+        catch
+        {
+        }
+    }
+#endif
 
     private static float Clamp01(float value)
     {

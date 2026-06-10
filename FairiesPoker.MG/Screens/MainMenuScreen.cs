@@ -41,9 +41,9 @@ public class MainMenuScreen : ScreenBase
         LoadBackground(ConfigManager.UITheme);
 
         // Logo
-        string logoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "FP.png");
+        string logoPath = ConfigManager.ResolveResourcePath(System.IO.Path.Combine("Resources", "FP.png"));
         _logoTexture = TextureManager.Load("_logo", logoPath);
-        string logoHoverPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "FPR.png");
+        string logoHoverPath = ConfigManager.ResolveResourcePath(System.IO.Path.Combine("Resources", "FPR.png"));
         _logoHoverTexture = System.IO.File.Exists(logoHoverPath)
             ? TextureManager.Load("_logo_hover", logoHoverPath)
             : _logoTexture;
@@ -99,15 +99,15 @@ public class MainMenuScreen : ScreenBase
     private void LoadBackground(int theme)
     {
         int normalizedTheme = theme >= 1 && theme <= ConfigManager.ThemeCount ? theme : 5;
-        string bgPath = System.IO.Path.Combine(GetThemePath(normalizedTheme), "main seq.jpg");
+        string bgPath = ConfigManager.ResolveResourcePath(System.IO.Path.Combine(GetThemePath(normalizedTheme), "main seq.jpg"));
         if (!System.IO.File.Exists(bgPath) && normalizedTheme != 5)
         {
-            bgPath = System.IO.Path.Combine(GetThemePath(5), "main seq.jpg");
+            bgPath = ConfigManager.ResolveResourcePath(System.IO.Path.Combine(GetThemePath(5), "main seq.jpg"));
         }
 
         if (!System.IO.File.Exists(bgPath))
         {
-            bgPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "main seq.jpg");
+            bgPath = ConfigManager.ResolveResourcePath(System.IO.Path.Combine("Resources", "main seq.jpg"));
         }
 
         _bgTexture = TextureManager.Load("_main_bg_" + normalizedTheme, bgPath);
@@ -127,7 +127,7 @@ public class MainMenuScreen : ScreenBase
             _ => "PF"
         };
 
-        return System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UI_" + suffix);
+        return System.IO.Path.Combine(ConfigManager.ResourceBaseDirectory, "UI_" + suffix);
     }
 
     public override void Update(GameTime gameTime)
@@ -141,9 +141,10 @@ public class MainMenuScreen : ScreenBase
         var color = Color.White * Opacity;
 
         // 背景
+        Rectangle backgroundBounds = DisplayManager.FullViewportVirtualBounds;
         if (_bgTexture != null)
         {
-            spriteBatch.Draw(_bgTexture, new Rectangle(0, 0, 1280, 720), color);
+            spriteBatch.Draw(_bgTexture, backgroundBounds, color);
         }
         else
         {
@@ -152,7 +153,7 @@ public class MainMenuScreen : ScreenBase
             if (white != null)
             {
                 // 深绿色背景(扑克桌风格)
-                spriteBatch.Draw(white, new Rectangle(0, 0, 1280, 720),
+                spriteBatch.Draw(white, backgroundBounds,
                     new Color(20, 60, 20) * Opacity);
                 // 菜单选项区域半透明背景
                 spriteBatch.Draw(white, new Rectangle(161, 335, 387, 106),
@@ -185,7 +186,7 @@ public class MainMenuScreen : ScreenBase
         _mousePos = new Point((int)input.MousePosition.X, (int)input.MousePosition.Y);
 
         // 窗口拖拽 (与原Main.cs MouseDown/MouseMove逻辑一致)
-        if (input.LeftMouseClicked && _mousePos.Y < 90)
+        if (!OperatingSystem.IsAndroid() && input.LeftMouseClicked && _mousePos.Y < 90)
         {
             _isDragging = true;
             _dragOffset = input.MousePosition;

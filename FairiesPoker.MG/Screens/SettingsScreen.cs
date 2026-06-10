@@ -68,6 +68,11 @@ public class SettingsScreen : ScreenBase
 
         // 读取当前设置
         _toggleValues = new bool[] { ConfigManager.BackMusic, ConfigManager.SoundFX, ConfigManager.BorderlessWindow, ConfigManager.FullScreen };
+        if (ConfigManager.UseDeviceResolution)
+        {
+            _toggleValues[2] = false;
+            _toggleValues[3] = true;
+        }
         _selectedBgmVolume = ConfigManager.BackMusicVolume;
         _selectedSfxVolume = ConfigManager.SoundFXVolume;
         _selectedTheme = ConfigManager.UITheme;
@@ -147,7 +152,7 @@ public class SettingsScreen : ScreenBase
 
         // 分辨率选择器
         _resolutionLabel.Position = WindowPosition(79, 362);
-        _resolutionLabel.Text = "窗口分辨率:";
+        _resolutionLabel.Text = ConfigManager.UseDeviceResolution ? "设备分辨率:" : "窗口分辨率:";
         _resolutionLabel.TextColor = Color.White;
         _resolutionLabel.Size = new Vector2(120, 30);
 
@@ -155,6 +160,8 @@ public class SettingsScreen : ScreenBase
         _resolutionUp.Size = new Vector2(30, 30);
         _resolutionUp.Text = "▲";
         _resolutionUp.TextColor = Color.White;
+        _resolutionUp.Visible = !ConfigManager.UseDeviceResolution;
+        _resolutionUp.Enabled = !ConfigManager.UseDeviceResolution;
         _resolutionUp.OnClick = () => { SelectPreviousResolution(); };
 
         _resolutionValue.Position = WindowPosition(310, 362);
@@ -166,6 +173,8 @@ public class SettingsScreen : ScreenBase
         _resolutionDown.Size = new Vector2(30, 30);
         _resolutionDown.Text = "▼";
         _resolutionDown.TextColor = Color.White;
+        _resolutionDown.Visible = !ConfigManager.UseDeviceResolution;
+        _resolutionDown.Enabled = !ConfigManager.UseDeviceResolution;
         _resolutionDown.OnClick = () => { SelectNextResolution(); };
         RefreshResolution();
 
@@ -260,6 +269,21 @@ public class SettingsScreen : ScreenBase
         _resolutionOptions.Clear();
 
         var displayMode = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode;
+        if (ConfigManager.UseDeviceResolution)
+        {
+            int width = displayMode.Width >= displayMode.Height ? displayMode.Width : displayMode.Height;
+            int height = displayMode.Width >= displayMode.Height ? displayMode.Height : displayMode.Width;
+            if (width <= 0 || height <= 0)
+            {
+                width = ConfigManager.DefaultWindowWidth;
+                height = ConfigManager.DefaultWindowHeight;
+            }
+
+            AddResolutionOption(width, height, $"设备 {width} x {height}");
+            _selectedResolutionIndex = 0;
+            return;
+        }
+
         AddResolutionOption(displayMode.Width, displayMode.Height, $"当前 {displayMode.Width} x {displayMode.Height}");
 
         foreach (var preset in ConfigManager.ResolutionPresets)
@@ -290,6 +314,7 @@ public class SettingsScreen : ScreenBase
 
     private void SelectPreviousResolution()
     {
+        if (ConfigManager.UseDeviceResolution) return;
         if (_resolutionOptions.Count == 0) return;
         _selectedResolutionIndex = (_selectedResolutionIndex + _resolutionOptions.Count - 1) % _resolutionOptions.Count;
         RefreshResolution();
@@ -297,6 +322,7 @@ public class SettingsScreen : ScreenBase
 
     private void SelectNextResolution()
     {
+        if (ConfigManager.UseDeviceResolution) return;
         if (_resolutionOptions.Count == 0) return;
         _selectedResolutionIndex = (_selectedResolutionIndex + 1) % _resolutionOptions.Count;
         RefreshResolution();
@@ -347,14 +373,22 @@ public class SettingsScreen : ScreenBase
         ConfigManager.BackMusicVolume = _selectedBgmVolume;
         ConfigManager.SoundFXVolume = _selectedSfxVolume;
         ConfigManager.UITheme = _selectedTheme;
-        ConfigManager.BorderlessWindow = _toggleValues[2];
-        ConfigManager.FullScreen = _toggleValues[3];
-
-        if (_resolutionOptions.Count > 0)
+        if (ConfigManager.UseDeviceResolution)
         {
-            var resolution = _resolutionOptions[_selectedResolutionIndex];
-            ConfigManager.WindowWidth = resolution.Width;
-            ConfigManager.WindowHeight = resolution.Height;
+            ConfigManager.BorderlessWindow = false;
+            ConfigManager.FullScreen = true;
+        }
+        else
+        {
+            ConfigManager.BorderlessWindow = _toggleValues[2];
+            ConfigManager.FullScreen = _toggleValues[3];
+
+            if (_resolutionOptions.Count > 0)
+            {
+                var resolution = _resolutionOptions[_selectedResolutionIndex];
+                ConfigManager.WindowWidth = resolution.Width;
+                ConfigManager.WindowHeight = resolution.Height;
+            }
         }
 
         ConfigManager.Save();
