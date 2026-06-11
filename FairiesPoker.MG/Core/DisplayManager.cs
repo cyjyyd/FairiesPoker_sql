@@ -14,6 +14,8 @@ public static class DisplayManager
     public static int BackBufferWidth { get; private set; } = DesignWidth;
     public static int BackBufferHeight { get; private set; } = DesignHeight;
     public static float Scale { get; private set; } = 1f;
+    public static float ScaleX { get; private set; } = 1f;
+    public static float ScaleY { get; private set; } = 1f;
     public static Vector2 Offset { get; private set; } = Vector2.Zero;
     public static Matrix TransformMatrix { get; private set; } = Matrix.Identity;
 
@@ -23,11 +25,12 @@ public static class DisplayManager
     {
         get
         {
-            float safeScale = Scale > 0f && !float.IsNaN(Scale) && !float.IsInfinity(Scale) ? Scale : 1f;
-            float x = -Offset.X / safeScale;
-            float y = -Offset.Y / safeScale;
-            float width = BackBufferWidth / safeScale;
-            float height = BackBufferHeight / safeScale;
+            float safeScaleX = IsValidScale(ScaleX) ? ScaleX : 1f;
+            float safeScaleY = IsValidScale(ScaleY) ? ScaleY : 1f;
+            float x = -Offset.X / safeScaleX;
+            float y = -Offset.Y / safeScaleY;
+            float width = BackBufferWidth / safeScaleX;
+            float height = BackBufferHeight / safeScaleY;
 
             return new Rectangle(
                 (int)Math.Floor(x),
@@ -42,14 +45,25 @@ public static class DisplayManager
         BackBufferWidth = Math.Max(1, backBufferWidth);
         BackBufferHeight = Math.Max(1, backBufferHeight);
 
+        if (OperatingSystem.IsAndroid())
+        {
+            ScaleX = BackBufferWidth / (float)DesignWidth;
+            ScaleY = BackBufferHeight / (float)DesignHeight;
+            if (!IsValidScale(ScaleX)) ScaleX = 1f;
+            if (!IsValidScale(ScaleY)) ScaleY = 1f;
+
+            Scale = Math.Min(ScaleX, ScaleY);
+            Offset = Vector2.Zero;
+            TransformMatrix = Matrix.CreateScale(ScaleX, ScaleY, 1f);
+            return;
+        }
+
         Scale = Math.Min(
             BackBufferWidth / (float)DesignWidth,
             BackBufferHeight / (float)DesignHeight);
-
-        if (Scale <= 0f || float.IsNaN(Scale) || float.IsInfinity(Scale))
-        {
-            Scale = 1f;
-        }
+        if (!IsValidScale(Scale)) Scale = 1f;
+        ScaleX = Scale;
+        ScaleY = Scale;
 
         Offset = new Vector2(
             (BackBufferWidth - DesignWidth * Scale) / 2f,
@@ -63,7 +77,12 @@ public static class DisplayManager
     public static Vector2 ToVirtual(Vector2 screenPosition)
     {
         return new Vector2(
-            (screenPosition.X - Offset.X) / Scale,
-            (screenPosition.Y - Offset.Y) / Scale);
+            (screenPosition.X - Offset.X) / (IsValidScale(ScaleX) ? ScaleX : 1f),
+            (screenPosition.Y - Offset.Y) / (IsValidScale(ScaleY) ? ScaleY : 1f));
+    }
+
+    private static bool IsValidScale(float scale)
+    {
+        return scale > 0f && !float.IsNaN(scale) && !float.IsInfinity(scale);
     }
 }

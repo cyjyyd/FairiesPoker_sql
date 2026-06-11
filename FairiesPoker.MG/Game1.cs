@@ -138,8 +138,26 @@ public class Game1 : Game
 #if ANDROID
     private static Point GetAndroidBackBufferSize()
     {
-        int width = ConfigManager.DefaultWindowWidth;
-        int height = ConfigManager.DefaultWindowHeight;
+        int width = 0;
+        int height = 0;
+
+        try
+        {
+            Point androidSize = AndroidPlatform.MainActivity.Current?.GetLandscapeDisplaySize() ?? Point.Zero;
+            width = androidSize.X;
+            height = androidSize.Y;
+        }
+        catch
+        {
+            width = 0;
+            height = 0;
+        }
+
+        if (width <= 0 || height <= 0)
+        {
+            width = ConfigManager.DefaultWindowWidth;
+            height = ConfigManager.DefaultWindowHeight;
+        }
 
         try
         {

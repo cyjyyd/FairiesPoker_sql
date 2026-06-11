@@ -30,9 +30,7 @@ public sealed class MainActivity : AndroidGameActivity
         base.OnCreate(bundle);
         Current = this;
 
-        Window?.AddFlags(
-            global::Android.Views.WindowManagerFlags.Fullscreen |
-            global::Android.Views.WindowManagerFlags.KeepScreenOn);
+        ApplyImmersiveFullScreen();
 
         string filesDir = FilesDir?.AbsolutePath
             ?? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
@@ -46,6 +44,7 @@ public sealed class MainActivity : AndroidGameActivity
             throw new InvalidOperationException("MonoGame did not provide an Android game view.");
 
         SetContentView(view);
+        ApplyImmersiveFullScreen();
         _game.Run();
     }
 
@@ -78,6 +77,82 @@ public sealed class MainActivity : AndroidGameActivity
                 CompleteAvatarPick(null, $"无法打开图片选择器: {ex.Message}");
             }
         });
+    }
+
+    public Point GetLandscapeDisplaySize()
+    {
+        int width = 0;
+        int height = 0;
+
+        try
+        {
+            var size = new global::Android.Graphics.Point();
+            WindowManager?.DefaultDisplay?.GetRealSize(size);
+            width = size.X;
+            height = size.Y;
+        }
+        catch
+        {
+            width = 0;
+            height = 0;
+        }
+
+        if (width <= 0 || height <= 0)
+        {
+            try
+            {
+                var metrics = Resources?.DisplayMetrics;
+                if (metrics != null)
+                {
+                    width = metrics.WidthPixels;
+                    height = metrics.HeightPixels;
+                }
+            }
+            catch
+            {
+                width = 0;
+                height = 0;
+            }
+        }
+
+        if (height > width)
+            (width, height) = (height, width);
+
+        return new Point(Math.Max(1, width), Math.Max(1, height));
+    }
+
+    private void ApplyImmersiveFullScreen()
+    {
+        Window?.AddFlags(
+            global::Android.Views.WindowManagerFlags.Fullscreen |
+            global::Android.Views.WindowManagerFlags.KeepScreenOn |
+            global::Android.Views.WindowManagerFlags.LayoutNoLimits);
+
+        if (Window == null)
+            return;
+
+        if (global::Android.OS.Build.VERSION.SdkInt >= global::Android.OS.BuildVersionCodes.R)
+        {
+            Window.SetDecorFitsSystemWindows(false);
+            var controller = Window.DecorView?.WindowInsetsController;
+            if (controller != null)
+            {
+                controller.Hide(
+                    global::Android.Views.WindowInsets.Type.StatusBars() |
+                    global::Android.Views.WindowInsets.Type.NavigationBars());
+                controller.SystemBarsBehavior =
+                    (int)global::Android.Views.WindowInsetsControllerBehavior.ShowTransientBarsBySwipe;
+            }
+        }
+
+        Window.DecorView.SystemUiVisibility =
+            global::Android.Views.StatusBarVisibility.Hidden |
+            (global::Android.Views.StatusBarVisibility)global::Android.Views.SystemUiFlags.Fullscreen |
+            (global::Android.Views.StatusBarVisibility)global::Android.Views.SystemUiFlags.HideNavigation |
+            (global::Android.Views.StatusBarVisibility)global::Android.Views.SystemUiFlags.ImmersiveSticky |
+            (global::Android.Views.StatusBarVisibility)global::Android.Views.SystemUiFlags.LayoutFullscreen |
+            (global::Android.Views.StatusBarVisibility)global::Android.Views.SystemUiFlags.LayoutHideNavigation |
+            (global::Android.Views.StatusBarVisibility)global::Android.Views.SystemUiFlags.LayoutStable;
     }
 
     protected override void OnActivityResult(
