@@ -8,6 +8,6 @@
     <ProjectGuid>{7113320D-7E95-4463-8193-DD6FD55F4F53}</ProjectGuid>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="protobuf-net" Version="3.0.0" />
+    <PackageReference Include="protobuf-net" Version="3.2.56" />
   </ItemGroup>
 </Project>

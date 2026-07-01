@@ -93,10 +93,41 @@ namespace FPServer
                 Console.WriteLine("  exit         - 停止服务器");
                 Console.WriteLine();
 
-                // 命令处理循环
+                // 命令处理循环。生产环境作为后台服务运行时，stdin 可能一直返回 null；
+                // 需要退避等待，避免空转占满一个 CPU 核心。
+                bool inputUnavailableLogged = false;
                 while (true)
                 {
-                    var input = Console.ReadLine()?.Trim();
+                    string rawInput;
+                    try
+                    {
+                        rawInput = Console.ReadLine();
+                    }
+                    catch (IOException ex)
+                    {
+                        if (!inputUnavailableLogged)
+                        {
+                            logger.LogWarning(ex, "控制台输入不可用，命令循环进入低频等待模式");
+                            inputUnavailableLogged = true;
+                        }
+
+                        await Task.Delay(1000);
+                        continue;
+                    }
+
+                    if (rawInput == null)
+                    {
+                        if (!inputUnavailableLogged)
+                        {
+                            logger.LogWarning("控制台输入已关闭，命令循环进入低频等待模式");
+                            inputUnavailableLogged = true;
+                        }
+
+                        await Task.Delay(1000);
+                        continue;
+                    }
+
+                    var input = rawInput.Trim();
 
                     if (string.IsNullOrEmpty(input)) continue;
 

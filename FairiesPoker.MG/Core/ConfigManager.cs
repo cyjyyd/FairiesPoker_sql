@@ -18,6 +18,8 @@ public static class ConfigManager
     public const int DefaultWindowHeight = 720;
     public const string DefaultServerIP = "www.fairybcd.top";
     public const int DefaultServerPort = 40960;
+    public const string ThemeBackgroundFileName = "main seq.jpg";
+    public const string UltrawideThemeBackgroundFileName = "main seq.ultrawide.jpg";
     public static bool UseDeviceResolution => OperatingSystem.IsAndroid();
 
     public static readonly (int Width, int Height)[] ResolutionPresets =
@@ -85,6 +87,18 @@ public static class ConfigManager
     public static string ThemeMusicPath => ResolveFile(
         IOPath.Combine(ThemePath, "background.mp3"),
         IOPath.Combine(ResourceBaseDirectory, "UI_PF", "background.mp3"));
+
+    public static string ResolveThemeBackgroundPath(string themePath)
+    {
+        if (DisplayManager.IsUltrawide)
+        {
+            string ultrawidePath = ResolveResourcePath(IOPath.Combine(themePath, UltrawideThemeBackgroundFileName));
+            if (File.Exists(ultrawidePath))
+                return ultrawidePath;
+        }
+
+        return ResolveResourcePath(IOPath.Combine(themePath, ThemeBackgroundFileName));
+    }
 
     // 加载配置
     public static void Load()

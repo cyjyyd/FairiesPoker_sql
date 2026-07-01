@@ -183,7 +183,13 @@ public class LobbyScreen : ScreenBase
     {
         base.LoadContent();
 
-        _backgroundTexture = UIResourceManager.LoadResource("main seq.jpg")
+        string themeBackgroundPath = ConfigManager.ResolveThemeBackgroundPath(ConfigManager.ThemePath);
+        _backgroundTexture = File.Exists(themeBackgroundPath)
+            ? TextureManager.Load(
+                "_lobby_bg_" + ConfigManager.UITheme + "_" + (DisplayManager.IsUltrawide ? "wide" : "std"),
+                themeBackgroundPath)
+            : null;
+        _backgroundTexture ??= UIResourceManager.LoadResource("main seq.jpg")
             ?? UIResourceManager.LoadResource("ChatHall1.jpg")
             ?? UIResourceManager.LoadResource("backIMG.png");
         _defaultAvatarTexture = UIResourceManager.LoadResource("Pla.jpg");
@@ -1155,7 +1161,7 @@ public class LobbyScreen : ScreenBase
 
         if (_backgroundTexture != null)
         {
-            spriteBatch.Draw(_backgroundTexture, backgroundBounds, tint);
+            DisplayManager.DrawFullViewportBackground(spriteBatch, _backgroundTexture, tint);
         }
         else
         {

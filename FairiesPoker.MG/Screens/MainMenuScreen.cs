@@ -99,10 +99,10 @@ public class MainMenuScreen : ScreenBase
     private void LoadBackground(int theme)
     {
         int normalizedTheme = theme >= 1 && theme <= ConfigManager.ThemeCount ? theme : 5;
-        string bgPath = ConfigManager.ResolveResourcePath(System.IO.Path.Combine(GetThemePath(normalizedTheme), "main seq.jpg"));
+        string bgPath = ConfigManager.ResolveThemeBackgroundPath(GetThemePath(normalizedTheme));
         if (!System.IO.File.Exists(bgPath) && normalizedTheme != 5)
         {
-            bgPath = ConfigManager.ResolveResourcePath(System.IO.Path.Combine(GetThemePath(5), "main seq.jpg"));
+            bgPath = ConfigManager.ResolveThemeBackgroundPath(GetThemePath(5));
         }
 
         if (!System.IO.File.Exists(bgPath))
@@ -110,7 +110,8 @@ public class MainMenuScreen : ScreenBase
             bgPath = ConfigManager.ResolveResourcePath(System.IO.Path.Combine("Resources", "main seq.jpg"));
         }
 
-        _bgTexture = TextureManager.Load("_main_bg_" + normalizedTheme, bgPath);
+        string cacheKey = "_main_bg_" + normalizedTheme + "_" + (DisplayManager.IsUltrawide ? "wide" : "std");
+        _bgTexture = TextureManager.Load(cacheKey, bgPath);
         _loadedTheme = ConfigManager.UITheme;
     }
 
@@ -144,7 +145,7 @@ public class MainMenuScreen : ScreenBase
         Rectangle backgroundBounds = DisplayManager.FullViewportVirtualBounds;
         if (_bgTexture != null)
         {
-            spriteBatch.Draw(_bgTexture, backgroundBounds, color);
+            DisplayManager.DrawFullViewportBackground(spriteBatch, _bgTexture, color);
         }
         else
         {

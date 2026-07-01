@@ -162,6 +162,8 @@ public class GameScreen : ScreenBase
     private static readonly Rectangle OnlineRightInfoRect = new(1045, 105, 220, 76);
     private const int OnlineAvatarSize = 50;
     private const string LandlordBadgeText = "地主";
+    private const float SideUiMargin = 18f;
+    private const float SidePlayedCardsShiftRatio = 0.65f;
 
     public GameScreen(Game1 game, ScreenManager screenManager, bool isOnline = false)
         : base(game, screenManager)
@@ -574,9 +576,11 @@ public class GameScreen : ScreenBase
     private void InitUI()
     {
         // 背景
-        string bgPath = ConfigManager.ResolveResourcePath(System.IO.Path.Combine(ConfigManager.ThemePath, "main seq.jpg"));
+        string bgPath = ConfigManager.ResolveThemeBackgroundPath(ConfigManager.ThemePath);
         if (File.Exists(bgPath))
-            _bgTexture = TextureManager.Load("_game_bg", bgPath);
+            _bgTexture = TextureManager.Load(
+                "_game_bg_" + ConfigManager.UITheme + "_" + (DisplayManager.IsUltrawide ? "wide" : "std"),
+                bgPath);
         _defaultAvatarTexture = UIResourceManager.LoadResource("Pla.jpg");
         string cardBackPath = ConfigManager.ResolveResourcePath(System.IO.Path.Combine(ConfigManager.ThemePath, ConfigManager.CardBackImageFileName));
         if (!File.Exists(cardBackPath))
@@ -724,6 +728,59 @@ public class GameScreen : ScreenBase
         _lblLeftStatus.Visible = false;
         _lblRightStatus.Visible = false;
         _lblMyStatus.Visible = false;
+    }
+
+    private static float LeftSideX(float defaultX)
+    {
+        return DisplayManager.AnchorToVisibleLeft(defaultX, SideUiMargin);
+    }
+
+    private static float RightSideX(float defaultX, float width)
+    {
+        return DisplayManager.AnchorToVisibleRight(defaultX, width, SideUiMargin);
+    }
+
+    private static Rectangle LeftSideRect(Rectangle rect)
+    {
+        return new Rectangle((int)Math.Round(LeftSideX(rect.X)), rect.Y, rect.Width, rect.Height);
+    }
+
+    private static Rectangle RightSideRect(Rectangle rect)
+    {
+        return new Rectangle((int)Math.Round(RightSideX(rect.X, rect.Width)), rect.Y, rect.Width, rect.Height);
+    }
+
+    private static Vector2 LeftSidePosition(float defaultX, float y)
+    {
+        return new Vector2(LeftSideX(defaultX), y);
+    }
+
+    private static Vector2 RightSidePosition(float defaultX, float y, float width)
+    {
+        return new Vector2(RightSideX(defaultX, width), y);
+    }
+
+    private static Vector2 GetLeftPlayedCardsOffset()
+    {
+        float edgeShift = CardLayoutManager.GetLeftPlayerSingleBackPosition().X - 20f;
+        return new Vector2(-200f + edgeShift * SidePlayedCardsShiftRatio, 0f);
+    }
+
+    private static Vector2 GetRightPlayedCardsOffset()
+    {
+        float edgeShift = CardLayoutManager.GetRightPlayerSingleBackPosition().X - 1110f;
+        return new Vector2(200f + edgeShift * SidePlayedCardsShiftRatio, 0f);
+    }
+
+    private void UpdateSideStatusLabelPositions()
+    {
+        float leftShift = LeftSideX(20f) - 20f;
+        _lblLeftStatus.Position = new Vector2(20f + leftShift, 185f);
+        _lblLeftRemain.Position = new Vector2(125f + leftShift, 185f);
+
+        float rightShift = RightSideX(1045f, 220f) - 1045f;
+        _lblRightStatus.Position = new Vector2(1045f + rightShift, 185f);
+        _lblRightRemain.Position = new Vector2(1155f + rightShift, 185f);
     }
 
     /// <summary>
@@ -1238,7 +1295,7 @@ public class GameScreen : ScreenBase
         Rectangle backgroundBounds = DisplayManager.FullViewportVirtualBounds;
         if (_bgTexture != null)
         {
-            spriteBatch.Draw(_bgTexture, backgroundBounds, Color.White);
+            DisplayManager.DrawFullViewportBackground(spriteBatch, _bgTexture, Color.White);
         }
         else
         {
@@ -1289,16 +1346,18 @@ public class GameScreen : ScreenBase
         // 左侧玩家牌背
         if (_leftCardCount > 0 && _cardBackTexture != null)
         {
+            Vector2 cardPosition = CardLayoutManager.GetLeftPlayerSingleBackPosition();
             spriteBatch.Draw(_cardBackTexture,
-                new Rectangle(20, 220, CardRenderer.CardWidth, CardRenderer.CardHeight),
+                new Rectangle((int)cardPosition.X, (int)cardPosition.Y, CardRenderer.CardWidth, CardRenderer.CardHeight),
                 Color.White);
         }
 
         // 右侧玩家牌背
         if (_rightCardCount > 0 && _cardBackTexture != null)
         {
+            Vector2 cardPosition = CardLayoutManager.GetRightPlayerSingleBackPosition();
             spriteBatch.Draw(_cardBackTexture,
-                new Rectangle(1110, 220, CardRenderer.CardWidth, CardRenderer.CardHeight),
+                new Rectangle((int)cardPosition.X, (int)cardPosition.Y, CardRenderer.CardWidth, CardRenderer.CardHeight),
                 Color.White);
         }
 
@@ -1306,9 +1365,10 @@ public class GameScreen : ScreenBase
         if (_leftPlayedCards.Count > 0)
         {
             var lp = CardLayoutManager.CalculatePlayedCardPositions(_leftPlayedCards.Count);
+            Vector2 offset = GetLeftPlayedCardsOffset();
             for (int i = 0; i < _leftPlayedCards.Count; i++)
             {
-                CardRenderer.DrawCard(spriteBatch, lp[i] - new Vector2(200, 0), _leftPlayedCards[i].huase, _leftPlayedCards[i].size);
+                CardRenderer.DrawCard(spriteBatch, lp[i] + offset, _leftPlayedCards[i].huase, _leftPlayedCards[i].size);
             }
         }
 
@@ -1316,9 +1376,10 @@ public class GameScreen : ScreenBase
         if (_rightPlayedCards.Count > 0)
         {
             var rp = CardLayoutManager.CalculatePlayedCardPositions(_rightPlayedCards.Count);
+            Vector2 offset = GetRightPlayedCardsOffset();
             for (int i = 0; i < _rightPlayedCards.Count; i++)
             {
-                CardRenderer.DrawCard(spriteBatch, rp[i] + new Vector2(200, 0), _rightPlayedCards[i].huase, _rightPlayedCards[i].size);
+                CardRenderer.DrawCard(spriteBatch, rp[i] + offset, _rightPlayedCards[i].huase, _rightPlayedCards[i].size);
             }
         }
 
@@ -1503,22 +1564,22 @@ public class GameScreen : ScreenBase
     {
         if (_isOnline)
         {
-            DrawPlayerName(spriteBatch, _leftName, new Vector2(20, 450), _juese1.Dizhu);
+            DrawPlayerName(spriteBatch, _leftName, LeftSidePosition(20f, 450f), _juese1.Dizhu);
         }
         else if (_juese1.Dizhu)
         {
-            DrawLandlordBadge(spriteBatch, new Vector2(20, 424));
+            DrawLandlordBadge(spriteBatch, LeftSidePosition(20f, 424f));
         }
 
-        DrawPlayerName(spriteBatch, _selfName, new Vector2(1005, 630), _juese2.Dizhu);
+        DrawPlayerName(spriteBatch, _selfName, RightSidePosition(1005f, 630f, 150f), _juese2.Dizhu);
 
         if (_isOnline)
         {
-            DrawPlayerName(spriteBatch, _rightName, new Vector2(1110, 130), _juese3.Dizhu);
+            DrawPlayerName(spriteBatch, _rightName, RightSidePosition(1110f, 130f, 150f), _juese3.Dizhu);
         }
         else if (_juese3.Dizhu)
         {
-            DrawLandlordBadge(spriteBatch, new Vector2(1110, 104));
+            DrawLandlordBadge(spriteBatch, RightSidePosition(1110f, 104f, 50f));
         }
     }
 
@@ -1564,16 +1625,18 @@ public class GameScreen : ScreenBase
         // 4. 左侧玩家牌背
         if (_leftCardBackCount > 0 && _cardBackTexture != null)
         {
+            Vector2 cardPosition = CardLayoutManager.GetLeftPlayerSingleBackPosition();
             spriteBatch.Draw(_cardBackTexture,
-                new Rectangle(20, 220, CardRenderer.CardWidth, CardRenderer.CardHeight),
+                new Rectangle((int)cardPosition.X, (int)cardPosition.Y, CardRenderer.CardWidth, CardRenderer.CardHeight),
                 Color.White);
         }
 
         // 5. 右侧玩家牌背
         if (_rightCardBackCount > 0 && _cardBackTexture != null)
         {
+            Vector2 cardPosition = CardLayoutManager.GetRightPlayerSingleBackPosition();
             spriteBatch.Draw(_cardBackTexture,
-                new Rectangle(1110, 220, CardRenderer.CardWidth, CardRenderer.CardHeight),
+                new Rectangle((int)cardPosition.X, (int)cardPosition.Y, CardRenderer.CardWidth, CardRenderer.CardHeight),
                 Color.White);
         }
 
@@ -1685,9 +1748,10 @@ public class GameScreen : ScreenBase
         if (_leftPlayedCards.Count > 0)
         {
             var lp = CardLayoutManager.CalculatePlayedCardPositions(_leftPlayedCards.Count);
+            Vector2 offset = GetLeftPlayedCardsOffset();
             for (int i = 0; i < _leftPlayedCards.Count; i++)
             {
-                CardRenderer.DrawCard(spriteBatch, lp[i] - new Vector2(200, 0),
+                CardRenderer.DrawCard(spriteBatch, lp[i] + offset,
                     _leftPlayedCards[i].huase, _leftPlayedCards[i].size);
             }
         }
@@ -1696,9 +1760,10 @@ public class GameScreen : ScreenBase
         if (_rightPlayedCards.Count > 0)
         {
             var rp = CardLayoutManager.CalculatePlayedCardPositions(_rightPlayedCards.Count);
+            Vector2 offset = GetRightPlayedCardsOffset();
             for (int i = 0; i < _rightPlayedCards.Count; i++)
             {
-                CardRenderer.DrawCard(spriteBatch, rp[i] + new Vector2(200, 0),
+                CardRenderer.DrawCard(spriteBatch, rp[i] + offset,
                     _rightPlayedCards[i].huase, _rightPlayedCards[i].size);
             }
         }
@@ -1756,9 +1821,9 @@ public class GameScreen : ScreenBase
         int selfUserId = GetMyUserId();
         int rightUserId = Models.GameModel.GetRightUserId();
 
-        DrawOnlinePlayerInfo(spriteBatch, OnlineLeftInfoRect, leftName, leftAvatarUrl, leftUserId, _landlordId == leftUserId);
-        DrawOnlinePlayerInfo(spriteBatch, OnlineSelfInfoRect, selfName, selfAvatarUrl, selfUserId, _landlordId == selfUserId);
-        DrawOnlinePlayerInfo(spriteBatch, OnlineRightInfoRect, rightName, rightAvatarUrl, rightUserId, _landlordId == rightUserId);
+        DrawOnlinePlayerInfo(spriteBatch, LeftSideRect(OnlineLeftInfoRect), leftName, leftAvatarUrl, leftUserId, _landlordId == leftUserId);
+        DrawOnlinePlayerInfo(spriteBatch, RightSideRect(OnlineSelfInfoRect), selfName, selfAvatarUrl, selfUserId, _landlordId == selfUserId);
+        DrawOnlinePlayerInfo(spriteBatch, RightSideRect(OnlineRightInfoRect), rightName, rightAvatarUrl, rightUserId, _landlordId == rightUserId);
     }
 
     private void DrawOnlinePlayerInfo(SpriteBatch spriteBatch, Rectangle panelRect, string name, string avatarUrl, int userId, bool isLandlord)
@@ -1894,6 +1959,7 @@ public class GameScreen : ScreenBase
     private void DrawUI(SpriteBatch spriteBatch)
     {
         UpdateWindowControlButtons();
+        UpdateSideStatusLabelPositions();
 
         _btnStart.Draw(spriteBatch);
         _btnAction.Draw(spriteBatch);
@@ -2007,7 +2073,13 @@ public class GameScreen : ScreenBase
         bool showCustomWindowButtons = Game.Window.IsBorderless;
         _btnMinimize.Visible = showCustomWindowButtons;
         _btnClose.Visible = showCustomWindowButtons;
-        _btnBack.Position = showCustomWindowButtons ? new Vector2(1202, 12) : new Vector2(1238, 12);
+
+        float closeX = RightSideX(1238f, 30f);
+        _btnClose.Position = new Vector2(closeX, 12f);
+        _btnMinimize.Position = new Vector2(closeX - 72f, 12f);
+        _btnBack.Position = showCustomWindowButtons
+            ? new Vector2(closeX - 36f, 12f)
+            : new Vector2(closeX, 12f);
     }
 
     private bool IsPointerOverGameButton(Point point)

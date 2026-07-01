@@ -1,3 +1,4 @@
+using FairiesPoker.MG.Core;
 using Microsoft.Xna.Framework;
 using System.Collections.Generic;
 
@@ -17,10 +18,15 @@ public static class CardLayoutManager
     private const int LeftPlayerCardX = 20;
     private const int LeftPlayerCardStartY = 220;
     private const int RightPlayerCardX = 1060;
+    private const int RightPlayerSingleCardX = 1110;
     private const int RightPlayerCardStartY = 220;
     private const int TableCardStartX = 440;
     private const int TableCardY = 6;
     private const int TableCardSpacing = 140;
+    private const int SidePlayerMargin = 24;
+    private const int SideCardsPerRow = 6;
+    private const int SideRowSpacing = 65;
+    private const int SideColSpacing = 15;
 
     /// <summary>
     /// 计算手牌位置(玩家自己的牌)
@@ -58,17 +64,15 @@ public static class CardLayoutManager
     public static Vector2[] CalculateLeftPlayerBackPositions(int cardCount)
     {
         var positions = new Vector2[cardCount];
-        int cardsPerRow = 6;
-        int rowSpacing = 65;
-        int colSpacing = 15;
+        float startX = DisplayManager.AnchorToVisibleLeft(LeftPlayerCardX, SidePlayerMargin);
 
         for (int i = 0; i < cardCount; i++)
         {
-            int row = i / cardsPerRow;
-            int col = i % cardsPerRow;
+            int row = i / SideCardsPerRow;
+            int col = i % SideCardsPerRow;
             positions[i] = new Vector2(
-                LeftPlayerCardX + col * colSpacing,
-                LeftPlayerCardStartY + row * rowSpacing
+                startX + col * SideColSpacing,
+                LeftPlayerCardStartY + row * SideRowSpacing
             );
         }
         return positions;
@@ -80,20 +84,33 @@ public static class CardLayoutManager
     public static Vector2[] CalculateRightPlayerBackPositions(int cardCount)
     {
         var positions = new Vector2[cardCount];
-        int cardsPerRow = 6;
-        int rowSpacing = 65;
-        int colSpacing = 15;
+        int clusterWidth = CardRenderer.CardWidth + (SideCardsPerRow - 1) * SideColSpacing;
+        float startX = DisplayManager.AnchorToVisibleRight(RightPlayerCardX, clusterWidth, SidePlayerMargin);
 
         for (int i = 0; i < cardCount; i++)
         {
-            int row = i / cardsPerRow;
-            int col = i % cardsPerRow;
+            int row = i / SideCardsPerRow;
+            int col = i % SideCardsPerRow;
             positions[i] = new Vector2(
-                RightPlayerCardX + col * colSpacing,
-                RightPlayerCardStartY + row * rowSpacing
+                startX + col * SideColSpacing,
+                RightPlayerCardStartY + row * SideRowSpacing
             );
         }
         return positions;
+    }
+
+    public static Vector2 GetLeftPlayerSingleBackPosition()
+    {
+        return new Vector2(
+            DisplayManager.AnchorToVisibleLeft(LeftPlayerCardX, SidePlayerMargin),
+            LeftPlayerCardStartY);
+    }
+
+    public static Vector2 GetRightPlayerSingleBackPosition()
+    {
+        return new Vector2(
+            DisplayManager.AnchorToVisibleRight(RightPlayerSingleCardX, CardRenderer.CardWidth, SidePlayerMargin),
+            RightPlayerCardStartY);
     }
 
     /// <summary>
@@ -130,7 +147,9 @@ public static class CardLayoutManager
     /// </summary>
     public static Vector2 GetDealStartPos()
     {
-        return new Vector2(RightPlayerCardX, RightPlayerCardStartY);
+        return new Vector2(
+            DisplayManager.AnchorToVisibleRight(RightPlayerCardX, CardRenderer.CardWidth, SidePlayerMargin),
+            RightPlayerCardStartY);
     }
 
     /// <summary>

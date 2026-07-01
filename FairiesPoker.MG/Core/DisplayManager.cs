@@ -1,5 +1,6 @@
 using System;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 
 namespace FairiesPoker.MG.Core;
 
@@ -20,6 +21,8 @@ public static class DisplayManager
     public static Matrix TransformMatrix { get; private set; } = Matrix.Identity;
 
     public static Rectangle VirtualBounds => new(0, 0, DesignWidth, DesignHeight);
+    public static float ViewportAspect => BackBufferHeight > 0 ? BackBufferWidth / (float)BackBufferHeight : DesignWidth / (float)DesignHeight;
+    public static bool IsUltrawide => ViewportAspect > DesignWidth / (float)DesignHeight + 0.15f;
 
     public static Rectangle FullViewportVirtualBounds
     {
@@ -45,19 +48,6 @@ public static class DisplayManager
         BackBufferWidth = Math.Max(1, backBufferWidth);
         BackBufferHeight = Math.Max(1, backBufferHeight);
 
-        if (OperatingSystem.IsAndroid())
-        {
-            ScaleX = BackBufferWidth / (float)DesignWidth;
-            ScaleY = BackBufferHeight / (float)DesignHeight;
-            if (!IsValidScale(ScaleX)) ScaleX = 1f;
-            if (!IsValidScale(ScaleY)) ScaleY = 1f;
-
-            Scale = Math.Min(ScaleX, ScaleY);
-            Offset = Vector2.Zero;
-            TransformMatrix = Matrix.CreateScale(ScaleX, ScaleY, 1f);
-            return;
-        }
-
         Scale = Math.Min(
             BackBufferWidth / (float)DesignWidth,
             BackBufferHeight / (float)DesignHeight);
@@ -79,6 +69,48 @@ public static class DisplayManager
         return new Vector2(
             (screenPosition.X - Offset.X) / (IsValidScale(ScaleX) ? ScaleX : 1f),
             (screenPosition.Y - Offset.Y) / (IsValidScale(ScaleY) ? ScaleY : 1f));
+    }
+
+    public static float AnchorToVisibleLeft(float defaultX, float margin)
+    {
+        if (!IsUltrawide)
+            return defaultX;
+
+        return Math.Min(defaultX, FullViewportVirtualBounds.Left + margin);
+    }
+
+    public static float AnchorToVisibleRight(float defaultX, float elementWidth, float margin)
+    {
+        if (!IsUltrawide)
+            return defaultX;
+
+        return Math.Max(defaultX, FullViewportVirtualBounds.Right - margin - elementWidth);
+    }
+
+    public static void DrawFullViewportBackground(SpriteBatch spriteBatch, Texture2D texture, Color color)
+    {
+        Rectangle bounds = FullViewportVirtualBounds;
+        spriteBatch.Draw(texture, bounds, GetCoverSourceRectangle(texture, bounds), color);
+    }
+
+    private static Rectangle GetCoverSourceRectangle(Texture2D texture, Rectangle destination)
+    {
+        if (destination.Width <= 0 || destination.Height <= 0 || texture.Width <= 0 || texture.Height <= 0)
+            return new Rectangle(0, 0, Math.Max(1, texture.Width), Math.Max(1, texture.Height));
+
+        float destinationAspect = destination.Width / (float)destination.Height;
+        float textureAspect = texture.Width / (float)texture.Height;
+
+        if (textureAspect > destinationAspect)
+        {
+            int sourceWidth = Math.Max(1, (int)Math.Round(texture.Height * destinationAspect));
+            int sourceX = Math.Max(0, (texture.Width - sourceWidth) / 2);
+            return new Rectangle(sourceX, 0, Math.Min(sourceWidth, texture.Width - sourceX), texture.Height);
+        }
+
+        int sourceHeight = Math.Max(1, (int)Math.Round(texture.Width / destinationAspect));
+        int sourceY = Math.Max(0, (texture.Height - sourceHeight) / 2);
+        return new Rectangle(0, sourceY, texture.Width, Math.Min(sourceHeight, texture.Height - sourceY));
     }
 
     private static bool IsValidScale(float scale)
