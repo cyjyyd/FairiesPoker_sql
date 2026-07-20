@@ -33,7 +33,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="protobuf-net" Version="3.0.0" />
+    <PackageReference Include="protobuf-net" Version="3.2.56" />
     <PackageReference Include="SpriteFontPlus" Version="0.7.1.24" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.5" />
   </ItemGroup>

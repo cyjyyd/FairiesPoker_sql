@@ -12,11 +12,10 @@
 
   <ItemGroup>
     <PackageReference Include="MySqlConnector" Version="2.3.5" />
-    <PackageReference Include="protobuf-net" Version="3.0.0" />
+    <PackageReference Include="protobuf-net" Version="3.2.56" />
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
-    <PackageReference Include="System.Net.Sockets" Version="4.3.0" />
   </ItemGroup>
 
   <ItemGroup>

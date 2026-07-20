@@ -109,25 +109,24 @@ namespace FPServer.Network
         private void ProcessReceive()
         {
             _isProcessing = true;
-            byte[] data = EncodeTool.DecodePacket(ref _dataCache);
-            if (data == null)
+            while (true)
             {
-                _isProcessing = false;
-                return;
-            }
+                byte[] data = EncodeTool.DecodePacket(ref _dataCache);
+                if (data == null)
+                    break;
 
-            try
-            {
-                var msg = EncodeTool.DecodeMsg(data);
-                LastActiveTime = DateTime.Now;
-                _server.HandleMessage(this, msg);
+                try
+                {
+                    var msg = EncodeTool.DecodeMsg(data);
+                    LastActiveTime = DateTime.Now;
+                    _server.HandleMessage(this, msg);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "处理消息失败");
+                }
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "处理消息失败");
-            }
-
-            ProcessReceive();
+            _isProcessing = false;
         }
 
         /// <summary>
