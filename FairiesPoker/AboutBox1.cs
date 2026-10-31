@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
@@ -11,9 +11,6 @@ namespace FairiesPoker
 {
     partial class AboutBox1 : Form
     {
-        private const string ClassicCopyrightText = "Copyright (C) 2026 FairiesPoker. All rights reserved.";
-        private const string CopyrightWarningText =
-            "警告：本计算机程序受著作权法和国际条约保护。如未经授权而擅自复制或传播本程序（或其中任何部分），将受到严厉的民事及刑事制裁，并将在法律许可范围内受到最大程度的起诉";
 
         public AboutBox1()
         {
@@ -21,11 +18,10 @@ namespace FairiesPoker
             this.Text = String.Format("关于 {0}", AssemblyTitle);
             this.labelProductName.Text = AssemblyProduct;
             this.labelVersion.Text = String.Format("版本 {0}", AssemblyVersion);
-            this.labelCopyright.Text = string.IsNullOrWhiteSpace(AssemblyCopyright)
-                ? ClassicCopyrightText
-                : AssemblyCopyright;
-            this.labelCompanyName.Text = AssemblyCompany;
-            this.textBoxDescription.Text = CopyrightWarningText;
+            this.labelCopyright.Text = ProjectInfo.CodeLicense;
+            this.labelCompanyName.Text = ProjectInfo.Identity;
+            this.textBoxDescription.Text = ProjectInfo.AboutStatement.Replace("\n", Environment.NewLine);
+            this.logoPictureBox.SizeMode = PictureBoxSizeMode.Zoom;
         }
 
         #region 程序集特性访问器

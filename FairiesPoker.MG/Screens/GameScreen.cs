@@ -1,5 +1,6 @@
 using FairiesPoker;
 using FairiesPoker.MG.Core;
+using FairiesPoker.MG.Core.Effects;
 using FairiesPoker.MG.Network;
 using FairiesPoker.MG.Network.Impl;
 using FairiesPoker.MG.Renderers;
@@ -120,6 +121,7 @@ public class GameScreen : ScreenBase
 
     // === 新动画系统 ===
     private AnimationManager _animManager = new();
+    private readonly PlayEffectManager _playEffects = new();
     private bool _showDealingCards;  // 是否显示正在飞行的发牌动画
     private bool _showPlayingCards;  // 是否显示正在飞行的出牌动画
 
@@ -223,6 +225,7 @@ public class GameScreen : ScreenBase
 
     public override void UnloadContent()
     {
+        _playEffects.Dispose();
         if (_isOnline)
         {
             Models.OnGetCards -= OnGetCardsReceived;
@@ -801,6 +804,11 @@ public class GameScreen : ScreenBase
 
     #region 更新与渲染
 
+    public override void UpdatePresentation(GameTime gameTime)
+    {
+        _playEffects.Update((float)gameTime.ElapsedGameTime.TotalMilliseconds);
+    }
+
     public override void Update(GameTime gameTime)
     {
         float dt = (float)gameTime.ElapsedGameTime.TotalMilliseconds;
@@ -1255,6 +1263,7 @@ public class GameScreen : ScreenBase
             DrawOnline(spriteBatch);
         }
 
+        _playEffects.Draw(spriteBatch);
         DrawUI(spriteBatch);
     }
 
@@ -2293,6 +2302,7 @@ public class GameScreen : ScreenBase
         if (_chupai.PaiType == (int)Guize.炸弹 || _chupai.PaiType == (int)Guize.天炸)
             DoubleOfflineMultiple();
         PlaySound(SoundCue.Deal);
+        _playEffects.Trigger(PlayEffectMapping.FromOffline((Guize)_chupai.PaiType), GetPlayEffectOrigin(juese.WeiZhi));
 
         // 更新显示
         var playedList = juese.WeiZhi == 1 ? _leftPlayedCards : (juese.WeiZhi == 3 ? _rightPlayedCards : _myPlayedCards);
@@ -2717,6 +2727,7 @@ public class GameScreen : ScreenBase
     /// </summary>
     private void ResetForNewGame()
     {
+        _playEffects.Clear();
         _state = GameState.WAITING;
 
         // 清空显示列表
@@ -2960,6 +2971,7 @@ public class GameScreen : ScreenBase
     /// </summary>
     private void OnGetCardsReceived(List<CardDto> cardList)
     {
+        _playEffects.Clear();
         RefreshOnlinePlayerInfo();
         _landlordId = -1;
         _currentMultiple = 1;
@@ -3255,6 +3267,8 @@ public class GameScreen : ScreenBase
 
         // 开始出牌动画
         StartOnlineDealAnimation(dealDto);
+        int seat = IsSelf(dealDto.UserId) ? 2 : (IsLeftPlayer(dealDto.UserId) ? 1 : 3);
+        _playEffects.Trigger(PlayEffectMapping.FromOnline(dealDto.Type), GetPlayEffectOrigin(seat));
     }
 
     /// <summary>
@@ -3803,6 +3817,8 @@ public class GameScreen : ScreenBase
     private int _rightCardBackCount = 17;
 
     private static Texture2D? _whitePixel;
+    private static Vector2 GetPlayEffectOrigin(int seat) => new(seat == 1 ? 440 : seat == 3 ? 840 : 640, 310);
+
     private static Texture2D CreateWhitePixel()
     {
         if (_whitePixel != null) return _whitePixel;

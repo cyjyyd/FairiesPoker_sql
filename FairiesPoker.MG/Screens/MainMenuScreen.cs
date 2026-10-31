@@ -23,6 +23,7 @@ public class MainMenuScreen : ScreenBase
     private readonly UILabel _multiPlayer = new();
     private readonly UILabel _settingsLabel = new();
     private readonly UILabel _quitLabel = new();
+    private readonly UIButton _effectsButton = new();
     private static readonly Rectangle LogoBounds = new(157, 90, 968, 195);
 
     private Point _mousePos;
@@ -76,6 +77,14 @@ public class MainMenuScreen : ScreenBase
         _quitLabel.TextColor = Color.OrangeRed;
         _quitLabel.TextAlignment = UILabel.AlignmentType.Center;
         _quitLabel.Scale = 1.2f;
+
+        _effectsButton.Position = new Vector2(550, 640);
+        _effectsButton.Size = new Vector2(180, 42);
+        _effectsButton.Text = "特效预览";
+        _effectsButton.UseThemeTextures = false;
+        _effectsButton.TextColor = new Color(255, 225, 155);
+        _effectsButton.BorderColor = new Color(169, 143, 86);
+        _effectsButton.OnClick = () => ScreenManager.Push(new EffectsPreviewScreen(Game, ScreenManager));
     }
 
     public override void UnloadContent()
@@ -179,10 +188,12 @@ public class MainMenuScreen : ScreenBase
         _multiPlayer.Draw(spriteBatch);
         _settingsLabel.Draw(spriteBatch);
         _quitLabel.Draw(spriteBatch);
+        _effectsButton.Draw(spriteBatch);
     }
 
     public override void HandleInput(InputManager input)
     {
+        _effectsButton.Update(input);
         _mousePos = new Point((int)input.MousePosition.X, (int)input.MousePosition.Y);
 
         // 窗口拖拽 (与原Main.cs MouseDown/MouseMove逻辑一致)

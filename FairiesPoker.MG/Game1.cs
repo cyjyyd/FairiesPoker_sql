@@ -14,6 +14,8 @@ public class Game1 : Game
     private SpriteBatch _spriteBatch = null!;
     private int _themeBgmStartDelayFrames;
 
+    public string StartupView { get; set; } = "";
+
     public ScreenManager ScreenManager { get; private set; } = null!;
     public InputManager InputManager { get; private set; } = null!;
     public AudioManager AudioManager { get; private set; } = null!;
@@ -79,6 +81,8 @@ public class Game1 : Game
 
         // 压入第一个屏幕
         ScreenManager.Push(new Screens.MainMenuScreen(this, ScreenManager));
+        if (StartupView == "effects") ScreenManager.Push(new Screens.EffectsPreviewScreen(this, ScreenManager));
+        if (StartupView == "about") ScreenManager.Push(new Screens.AboutScreen(this, ScreenManager));
     }
 
     protected override void Update(GameTime gameTime)

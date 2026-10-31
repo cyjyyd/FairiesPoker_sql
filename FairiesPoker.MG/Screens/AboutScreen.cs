@@ -11,9 +11,6 @@ public class AboutScreen : ScreenBase
 {
     private const int WindowWidth = 773;
     private const int WindowHeight = 506;
-    private const string CopyrightText = "Copyright (C) 2026 FairiesPoker. All rights reserved.";
-    private const string CopyrightWarningText =
-        "警告：本计算机程序受著作权法和国际条约保护。如未经授权而擅自复制或传播本程序（或其中任何部分），将受到严厉的民事及刑事制裁，并将在法律许可范围内受到最大程度的起诉";
 
     private static readonly Rectangle LogoRect = new(33, 33, 308, 440);
     private static readonly Rectangle CloseButtonRect = new(690, 18, 70, 31);
@@ -30,8 +27,7 @@ public class AboutScreen : ScreenBase
 
     public override void LoadContent()
     {
-        _logoTexture = UIResourceManager.LoadResource("prf.jpg")
-            ?? UIResourceManager.LoadResource("Pla.jpg");
+        _logoTexture = UIResourceManager.LoadResource(ProjectInfo.AboutArt);
     }
 
     public override void Update(GameTime gameTime)
@@ -49,7 +45,13 @@ public class AboutScreen : ScreenBase
 
         var logoScreenRect = layout.ToScreenRectangle(LogoRect);
         if (_logoTexture != null)
-            spriteBatch.Draw(_logoTexture, logoScreenRect, Color.White * Opacity);
+        {
+            float scale = Math.Min(logoScreenRect.Width / (float)_logoTexture.Width, logoScreenRect.Height / (float)_logoTexture.Height);
+            var size = new Vector2(_logoTexture.Width, _logoTexture.Height) * scale;
+            spriteBatch.Draw(_logoTexture, new Rectangle(
+                logoScreenRect.Center.X - (int)size.X / 2, logoScreenRect.Center.Y - (int)size.Y / 2,
+                (int)size.X, (int)size.Y), Color.White * Opacity);
+        }
         else
             spriteBatch.Draw(UIResourceManager.WhitePixel, logoScreenRect, new Color(35, 45, 60, 220) * Opacity);
 
@@ -106,12 +108,12 @@ public class AboutScreen : ScreenBase
 
         string version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0.0";
 
-        DrawLine(spriteBatch, layout, "产品名称  FairiesPoker", new Vector2(358, 44));
-        DrawLine(spriteBatch, layout, $"版本 {version}", new Vector2(358, 89));
-        DrawLine(spriteBatch, layout, "版权  Copyright (C) 2026 FairiesPoker.", new Vector2(358, 134), 0.85f);
-        DrawLine(spriteBatch, layout, "All rights reserved.", new Vector2(358, 158), 0.85f);
-        DrawLine(spriteBatch, layout, "公司名称  FairiesPoker", new Vector2(358, 194));
-        DrawWrappedText(spriteBatch, layout, CopyrightWarningText, new Vector2(358, 246), 342, 0.88f);
+        DrawLine(spriteBatch, layout, ProjectInfo.Name, new Vector2(358, 44), 1.4f);
+        DrawLine(spriteBatch, layout, ProjectInfo.Identity, new Vector2(358, 88), 0.9f);
+        DrawLine(spriteBatch, layout, $"版本 {version}", new Vector2(358, 126), 0.85f);
+        DrawLine(spriteBatch, layout, ProjectInfo.CodeLicense, new Vector2(358, 158), 0.85f);
+        DrawWrappedText(spriteBatch, layout, ProjectInfo.AboutStatement, new Vector2(358, 204), 342, 0.8f);
+        DrawLine(spriteBatch, layout, "点击左侧插画欣赏牌面", new Vector2(358, 460), 0.78f);
     }
 
     private void DrawLine(SpriteBatch spriteBatch, WindowLayout layout, string text, Vector2 localPosition, float scale = 1f)
@@ -127,7 +129,7 @@ public class AboutScreen : ScreenBase
         {
             FontManager.DrawString(spriteBatch, FontManager.Default, line, layout.ToScreen(new Vector2(localPosition.X, y)),
                 Color.WhiteSmoke * Opacity, scale * layout.Scale);
-            y += 28;
+            y += 22;
         }
     }
 

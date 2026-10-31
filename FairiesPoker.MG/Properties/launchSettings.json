@@ -1,0 +1,15 @@
+{
+  "profiles": {
+    "FairiesPoker.MG": {
+      "commandName": "Project"
+    },
+    "Effects preview": {
+      "commandName": "Project",
+      "commandLineArgs": "--effects-preview"
+    },
+    "About": {
+      "commandName": "Project",
+      "commandLineArgs": "--about"
+    }
+  }
+}

@@ -12,6 +12,7 @@ namespace FairiesPoker.MG.UI;
 public class UIButton : UIControl
 {
     public string Text { get; set; } = "";
+    public bool UseThemeTextures { get; set; } = true;
     public Texture2D? NormalTexture { get; set; }
     public Texture2D? HoverTexture { get; set; }
     public Texture2D? PressedTexture { get; set; }
@@ -83,11 +84,13 @@ public class UIButton : UIControl
     {
         if (!Visible) return;
 
+        var themeNormal = UseThemeTextures ? UIResourceManager.ButtonNormal : null;
+        var themePressed = UseThemeTextures ? UIResourceManager.ButtonPressed : null;
         Texture2D? texture = IsPressed
-            ? PressedTexture ?? UIResourceManager.ButtonPressed ?? NormalTexture ?? UIResourceManager.ButtonNormal
+            ? PressedTexture ?? themePressed ?? NormalTexture ?? themeNormal
             : IsHovered
-                ? HoverTexture ?? NormalTexture ?? UIResourceManager.ButtonNormal
-                : NormalTexture ?? UIResourceManager.ButtonNormal;
+                ? HoverTexture ?? NormalTexture ?? themeNormal
+                : NormalTexture ?? themeNormal;
 
         if (texture != null)
         {

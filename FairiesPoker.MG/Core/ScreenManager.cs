@@ -98,6 +98,9 @@ public class ScreenManager
             action();
         _pendingActions.Clear();
 
+        foreach (var screen in _screens)
+            screen.UpdatePresentation(gameTime);
+
         // 只更新最顶层屏幕
         if (_screens.Count > 0)
         {

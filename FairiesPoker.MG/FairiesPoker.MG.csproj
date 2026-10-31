@@ -1,13 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net9.0;net10.0-android</TargetFrameworks>
+    <!-- Opening/building the desktop solution must not require mobile workloads. -->
+    <TargetFrameworks>net9.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(EnableAndroidTarget)' == 'true'">net9.0;net10.0-android</TargetFrameworks>
     <RollForward>Major</RollForward>
     <PublishReadyToRun>false</PublishReadyToRun>
     <TieredCompilation>false</TieredCompilation>
   </PropertyGroup>
   <PropertyGroup Condition="'$(TargetFramework)' == 'net9.0'">
     <OutputType>WinExe</OutputType>
-    <RuntimeIdentifiers>win-x64;linux-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Icon.ico</ApplicationIcon>
   </PropertyGroup>
@@ -25,11 +26,11 @@
     <AndroidEnableMarshalMethods>false</AndroidEnableMarshalMethods>
   </PropertyGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.*" />
-    <PackageReference Include="MonoGame.Content.Builder.Task" Version="3.8.*" />
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.6" />
+    <!-- Textures and fonts are loaded/baked at runtime; no XNB content is consumed. -->
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-android'">
-    <PackageReference Include="MonoGame.Framework.Android" Version="3.8.*" />
+    <PackageReference Include="MonoGame.Framework.Android" Version="3.8.6" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
@@ -39,6 +40,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FairiesPoker\Protocol\Protocol.csproj" />
+    <Compile Include="..\FairiesPoker\ProjectInfo.cs" Link="Core\ProjectInfo.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
     <Content Include="..\FairiesPoker\Resources\**\*.*" Link="Resources\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

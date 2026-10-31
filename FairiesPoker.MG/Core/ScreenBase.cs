@@ -24,6 +24,9 @@ public abstract class ScreenBase
     public virtual void LoadContent() { }
     public virtual void UnloadContent() { }
 
+    /// <summary>Decorative updates also run while an overlay is on top; do not advance gameplay here.</summary>
+    public virtual void UpdatePresentation(GameTime gameTime) { }
+
     /// <summary>
     /// 每帧更新逻辑
     /// </summary>
