@@ -94,7 +94,15 @@ public sealed class EffectsPreviewScreen : ScreenBase
         batch.Draw(pixel, new Rectangle(110, 140, 1060, 1), new Color(144, 123, 77));
         batch.Draw(pixel, new Rectangle(110, 499, 1060, 1), new Color(144, 123, 77));
         FontManager.DrawString(batch, "出牌特效预览", new Vector2(110, 52), new Color(255, 225, 155), 1.5f);
-        FontManager.DrawString(batch, "金色光尘 · 翡翠柔光 · 原创程序特效", new Vector2(110, 102), new Color(160, 197, 182), 0.85f);
+        string subtitle = _selected switch
+        {
+            PlayEffectKind.Airplane => "金色仙尘 · 羽翼流光 · 粉尘拖尾",
+            PlayEffectKind.ConsecutivePairs => "金色仙尘 · 成对光环 · 依次绽放",
+            _ => "金色光尘 · 翡翠柔光 · 原创程序特效"
+        };
+        var subtitleColor = _selected is PlayEffectKind.Airplane or PlayEffectKind.ConsecutivePairs
+            ? new Color(225, 195, 128) : new Color(160, 197, 182);
+        FontManager.DrawString(batch, subtitle, new Vector2(110, 102), subtitleColor, 0.85f);
         // Neutral card shapes make the preview independent of third-party card art.
         for (int i = 0; i < 5; i++)
         {

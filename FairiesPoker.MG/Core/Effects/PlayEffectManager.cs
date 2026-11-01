@@ -86,48 +86,104 @@ public sealed class PlayEffectManager : IDisposable
 
     private void DrawPairs(SpriteBatch batch, EffectInstance effect, float t, float opacity)
     {
+        // A travelling wave of paired dust vortices. Every visible mark is a dust grain.
         for (int pair = 0; pair < 5; pair++)
         {
-            float phase = MathHelper.Clamp((t - pair * 0.075f) * 3, 0, 1);
+            float phase = (t - pair * 0.075f) / 0.7f;
             if (phase <= 0) continue;
-            var center = effect.Origin + new Vector2((pair - 2) * 80, 10 - MathF.Sin(phase * MathF.PI) * 12);
-            float a = opacity * Math.Min(1, phase * 4);
-            Glow(batch, center, 50, Mint, a * 0.2f);
+            float gather = MathHelper.SmoothStep(0, 1, MathHelper.Clamp(phase * 4, 0, 1));
+            float release = MathHelper.Clamp((phase - 0.62f) / 0.5f, 0, 1);
+            var center = effect.Origin + new Vector2((pair - 2) * 88, -15 - MathF.Sin(phase * MathF.PI) * 8);
+            float alpha = opacity * gather * (1 - release);
+
             for (int side = -1; side <= 1; side += 2)
             {
-                var p = center + new Vector2(side * 14, -phase * 20);
-                Petal(batch, p, side * (0.65f + phase * 0.4f), new Vector2(22, 10) * phase, Mint, a);
-                Spark(batch, p + new Vector2(side * 8, -16), 5 * phase, Gold, a, phase);
+                var orbitCenter = center + new Vector2(side * 17, 0);
+                Glow(batch, orbitCenter, 34, Gold, alpha * 0.08f);
+                for (int grain = 0; grain < 24; grain++)
+                {
+                    int seed = pair * 73 + grain * 3 + side + 2;
+                    float angle = grain * MathHelper.TwoPi / 24 + phase * side * 2.4f;
+                    float radius = (15 + Hash(seed) * 6) * gather + release * 15;
+                    var jitter = new Vector2(MathF.Sin(seed * 3.1f + t * 9), MathF.Cos(seed * 1.7f - t * 7)) * 2;
+                    var position = orbitCenter + Unit(angle) * radius + jitter +
+                        new Vector2(0, release * release * (12 + Hash(seed + 2) * 18));
+                    float shimmer = 0.55f + 0.45f * MathF.Sin(seed + t * 14) * MathF.Sin(seed + t * 14);
+                    Dust(batch, position, 1 + Hash(seed + 5) * 0.9f, alpha * shimmer, seed);
+                }
             }
-            Ring(batch, center, 28 * phase, Gold, a * (1 - phase) * 0.6f, 1.2f);
+        }
+
+        // Sparse dust threads connect the pairs as the wave advances.
+        for (int grain = 0; grain < 36; grain++)
+        {
+            float u = grain / 35f;
+            float visible = MathHelper.Clamp((t - u * 0.3f) * 5, 0, 1);
+            var position = effect.Origin + new Vector2((u - 0.5f) * 390,
+                13 + MathF.Sin(u * MathHelper.TwoPi * 2 - t * 6) * 8);
+            Dust(batch, position, 0.8f + Hash(grain) * 0.5f, opacity * visible * 0.5f, grain + 500);
         }
     }
 
     private void DrawAirplane(SpriteBatch batch, EffectInstance effect, float t, float opacity)
     {
         float u = MathHelper.Clamp(t * 1.12f, 0, 1);
-        var center = new Vector2(130 + 1020 * u, effect.Origin.Y - 22 - MathF.Sin(u * MathF.PI) * 65);
-        for (int i = 1; i <= 26; i++)
+        var center = DustFlightPosition(effect.Origin, u);
+
+        // A broad, gently dispersing comet trail, rather than a solid flying card.
+        for (int grain = 0; grain < 132; grain++)
         {
-            float trailU = u - i * 0.013f;
+            float age = grain / 131f;
+            float trailU = u - age * 0.42f;
             if (trailU < 0) continue;
-            var p = new Vector2(130 + 1020 * trailU,
-                effect.Origin.Y - 22 - MathF.Sin(trailU * MathF.PI) * 65 + MathF.Sin(i * 2 + t * 9) * 10);
-            Spark(batch, p, 4 * (1 - i / 28f), Gold, opacity * (1 - i / 28f), i);
+            float spread = 3 + age * 28;
+            var drift = new Vector2((Hash(grain + 13) - 0.5f) * spread,
+                MathF.Sin(grain * 1.9f - t * 12) * (3 + age * 6) +
+                (Hash(grain + 47) - 0.5f) * spread + age * age * 12);
+            var position = DustFlightPosition(effect.Origin, trailU) + drift;
+            float alpha = opacity * MathF.Pow(1 - age, 1.3f) * (0.4f + Hash(grain + 2) * 0.6f);
+            Dust(batch, position, 0.8f + Hash(grain + 5) * 1.1f, alpha, grain + 700);
         }
-        Glow(batch, center, 90, Mint, opacity * 0.18f);
-        float flap = 0.75f + MathF.Sin(t * 36) * 0.2f;
+
+        // Four wing-shaped dust orbits shimmer around the moving concentration of light.
+        // There are no opaque wings, petals, card rectangles or cool-coloured particles.
+        float flap = 0.85f + MathF.Sin(t * 28) * 0.13f;
         for (int side = -1; side <= 1; side += 2)
+        for (int lobe = 0; lobe < 2; lobe++)
+        for (int grain = 0; grain < 24; grain++)
         {
-            Petal(batch, center + new Vector2(side * 29, -12), side * 0.55f,
-                new Vector2(46 * flap, 18), Mint, opacity * 0.85f);
-            Petal(batch, center + new Vector2(side * 24, 15), -side * 0.55f,
-                new Vector2(33 * flap, 13), Gold, opacity * 0.75f);
+            int seed = grain + lobe * 53 + (side + 1) * 61;
+            float angle = grain * MathHelper.TwoPi / 24;
+            float reach = (1 - MathF.Cos(angle)) * (lobe == 0 ? 27 : 19) * flap;
+            float height = MathF.Sin(angle) * (lobe == 0 ? 22 : 14);
+            var position = center + new Vector2(side * reach,
+                (lobe == 0 ? -7 : 8) + height + reach * (lobe == 0 ? -0.15f : 0.15f));
+            position += new Vector2(MathF.Sin(seed + t * 11), MathF.Cos(seed * 3 - t * 9)) * 1.7f;
+            float shimmer = 0.55f + Hash(seed + 17) * 0.45f;
+            Dust(batch, position, 1.1f + Hash(seed + 19) * 0.8f, opacity * shimmer, seed + 1000);
         }
-        var rect = new Rectangle((int)center.X - 17, (int)center.Y - 25, 34, 50);
-        batch.Draw(_pixel, rect, Ivory * opacity);
-        Border(batch, rect, Gold * opacity);
-        Spark(batch, center, 9, Gold, opacity, MathF.PI / 4);
+
+        Glow(batch, center, 35, Gold, opacity * 0.16f);
+        for (int grain = 0; grain < 24; grain++)
+        {
+            float angle = grain * 2.399963f + t * 5;
+            float radius = 3 + Hash(grain + 3) * 13;
+            var position = center + new Vector2(MathF.Cos(angle) * radius * 0.55f, MathF.Sin(angle) * radius);
+            Dust(batch, position, 1 + Hash(grain + 7), opacity, grain + 1300);
+        }
+    }
+
+    private static Vector2 DustFlightPosition(Vector2 origin, float progress) =>
+        new(130 + 1020 * progress, origin.Y - 24 - MathF.Sin(progress * MathF.PI) * 45);
+
+    private void Dust(SpriteBatch batch, Vector2 position, float radius, float opacity, int seed)
+    {
+        // Amber, gold and champagne are all warm variations of the same fairy dust.
+        var color = Color.Lerp(new Color(255, 179, 65), new Color(255, 237, 168), Hash(seed + 31));
+        Glow(batch, position, radius * 4, color, opacity * 0.2f);
+        Glow(batch, position, radius * 1.6f, color, opacity);
+        if (seed % 23 == 0)
+            Spark(batch, position, radius * 2.1f, color, opacity * 0.75f, seed);
     }
 
     private void DrawBloom(SpriteBatch batch, EffectInstance effect, float t, float opacity)
@@ -224,14 +280,6 @@ public sealed class PlayEffectManager : IDisposable
         var d = end - start;
         batch.Draw(_pixel, start, null, color, MathF.Atan2(d.Y, d.X), new Vector2(0, 0.5f),
             new Vector2(d.Length(), thickness), SpriteEffects.None, 0);
-    }
-
-    private void Border(SpriteBatch batch, Rectangle rect, Color color)
-    {
-        batch.Draw(_pixel, new Rectangle(rect.X, rect.Y, rect.Width, 1), color);
-        batch.Draw(_pixel, new Rectangle(rect.X, rect.Bottom - 1, rect.Width, 1), color);
-        batch.Draw(_pixel, new Rectangle(rect.X, rect.Y, 1, rect.Height), color);
-        batch.Draw(_pixel, new Rectangle(rect.Right - 1, rect.Y, 1, rect.Height), color);
     }
 
     private static Vector2 Unit(float angle) => new(MathF.Cos(angle), MathF.Sin(angle));
